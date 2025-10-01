@@ -12,17 +12,36 @@ import com.falkordb.ResultSet;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Jena Graph implementation backed by a FalkorDB graph via the JFalkorDB driver.
+ * <p>
+ * This class implements the minimal GraphBase hooks to translate Jena Triple
+ * operations into FalkorDB (Cypher-like) queries using the JFalkorDB API.
+ */
 public class FalkorDBGraph extends GraphBase {
     private final Driver driver;
     private final Graph graph;
     private final String graphName;
     
+    /**
+     * Create a FalkorDB-backed graph for the given graph name using the
+     * default driver configuration (typically localhost:6379).
+     *
+     * @param graphName name of the FalkorDB graph to use
+     */
     public FalkorDBGraph(String graphName) {
         this.driver = FalkorDB.driver();
         this.graph = driver.graph(graphName);
         this.graphName = graphName;
     }
     
+    /**
+     * Create a FalkorDB-backed graph using an explicit host and port.
+     *
+     * @param host FalkorDB host
+     * @param port FalkorDB port
+     * @param graphName name of the FalkorDB graph to use
+     */
     public FalkorDBGraph(String host, int port, String graphName) {
         this.driver = FalkorDB.driver();
         this.graph = driver.graph(graphName);

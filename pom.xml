@@ -191,6 +191,15 @@
                     <maxAllowedViolations>500</maxAllowedViolations>
                     <violationSeverity>warning</violationSeverity>
                 </configuration>
+                <executions>
+                    <execution>
+                        <id>checkstyle</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
 
             <!-- SpotBugs for bug detection -->

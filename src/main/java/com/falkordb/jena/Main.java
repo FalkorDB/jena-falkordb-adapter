@@ -3,8 +3,19 @@ package com.falkordb.jena;
 import org.apache.jena.rdf.model.*;
 import org.apache.jena.vocabulary.RDF;
 
+/**
+ * Simple demo application that shows basic usage of the FalkorDB-Jena adapter.
+ * <p>
+ * This class is intended for local manual testing and examples; it connects to
+ * a FalkorDB instance, creates a small RDF dataset and prints the results.
+ */
 public class Main {
     
+    /**
+     * Demo entry point.
+     *
+     * @param args command line arguments (ignored)
+     */
     public static void main(String[] args) {
         System.out.println("FalkorDB-Jena Adapter Demo");
         System.out.println("==========================");

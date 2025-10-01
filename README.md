@@ -1,5 +1,8 @@
 # Jena-FalkorDB Adapter
 
+[![CI](https://github.com/FalkorDB/jena-falkordb-adapter/actions/workflows/ci.yml/badge.svg)](https://github.com/FalkorDB/jena-falkordb-adapter/actions/workflows/ci.yml)
+[![Maven Central](https://img.shields.io/maven-central/v/com.falkordb/jena-falkordb-adapter.svg)](https://central.sonatype.com/artifact/com.falkordb/jena-falkordb-adapter)
+
 A Java adapter that enables Apache Jena to work with FalkorDB graph database, allowing you to use SPARQL queries on data stored in FalkorDB.
 
 ## Features
@@ -9,6 +12,8 @@ A Java adapter that enables Apache Jena to work with FalkorDB graph database, al
 - ✅ Automatic translation of RDF triples to Cypher operations
 - ✅ Connection pooling for better performance
 - ✅ Easy-to-use factory pattern for model creation
+- ✅ Continuous integration with multi-version Java testing (11, 17, 21)
+- ✅ Automated publishing to Maven Central
 
 ## Prerequisites
 
@@ -474,6 +479,30 @@ integration.read("data2.rdf", "RDF/XML");
 String query = "SELECT * WHERE { ?s ?p ?o } LIMIT 100";
 ```
 
+## CI/CD
+
+This project uses GitHub Actions for continuous integration and deployment:
+
+### Continuous Integration
+
+The CI workflow automatically runs on every push and pull request to the `main` branch:
+- Tests against Java 11, 17, and 21
+- Runs full test suite against FalkorDB
+- Performs code quality checks
+- Uploads test results and build artifacts
+
+See [`.github/workflows/ci.yml`](.github/workflows/ci.yml) for details.
+
+### Publishing to Maven Central
+
+Releases are automatically published to Maven Central when you create a GitHub release. The publish workflow:
+- Builds and packages the library
+- Generates source and javadoc JARs
+- Signs artifacts with GPG
+- Deploys to OSSRH/Maven Central
+
+See [CICD_SETUP.md](CICD_SETUP.md) for detailed setup instructions.
+
 ## Changelog
 
 ### Version 1.0-SNAPSHOT
@@ -481,6 +510,8 @@ String query = "SELECT * WHERE { ?s ?p ?o } LIMIT 100";
 - Basic RDF to FalkorDB mapping
 - SPARQL query support
 - Connection pooling
+- CI/CD with GitHub Actions
+- Maven Central publishing support
 - Factory pattern for model creation
 
 ---

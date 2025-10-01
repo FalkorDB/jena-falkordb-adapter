@@ -13,6 +13,8 @@ on:
 jobs:
   publish:
     name: Publish to Maven Central
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     
     steps:

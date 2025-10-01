@@ -40,17 +40,22 @@ jobs:
         distribution: 'temurin'
         cache: 'maven'
     
+    - name: Install Redis CLI
+      run: sudo apt-get update && sudo apt-get install -y redis-tools
+    
     - name: Wait for FalkorDB to be ready
       run: |
+        echo "Waiting for FalkorDB to be ready..."
         for i in {1..30}; do
           if redis-cli -h localhost -p 6379 ping > /dev/null 2>&1; then
             echo "FalkorDB is ready!"
+            redis-cli -h localhost -p 6379 INFO server | grep redis_version || true
             exit 0
           fi
-          echo "Waiting for FalkorDB... ($i/30)"
+          echo "Attempt $i/30: FalkorDB not ready yet, waiting..."
           sleep 2
         done
-        echo "FalkorDB failed to start"
+        echo "ERROR: FalkorDB failed to start within 60 seconds"
         exit 1
     
     - name: Build with Maven

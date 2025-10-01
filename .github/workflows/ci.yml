@@ -38,6 +38,19 @@ jobs:
         distribution: 'temurin'
         cache: 'maven'
     
+    - name: Wait for FalkorDB to be ready
+      run: |
+        for i in {1..30}; do
+          if redis-cli -h localhost -p 6379 ping > /dev/null 2>&1; then
+            echo "FalkorDB is ready!"
+            exit 0
+          fi
+          echo "Waiting for FalkorDB... ($i/30)"
+          sleep 2
+        done
+        echo "FalkorDB failed to start"
+        exit 1
+    
     - name: Build with Maven
       run: mvn -B clean compile --file pom.xml
     
@@ -80,7 +93,7 @@ jobs:
         cache: 'maven'
     
     - name: Run Maven verify
-      run: mvn -B verify -DskipTests --file pom.xml
+      run: mvn -B verify -DskipTests -Dgpg.skip=true --file pom.xml
     
     - name: Check dependencies for vulnerabilities
       run: mvn dependency:analyze

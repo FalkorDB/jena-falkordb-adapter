@@ -187,9 +187,9 @@
                 <configuration>
                     <configLocation>sun_checks.xml</configLocation>
                     <consoleOutput>true</consoleOutput>
-                    <failOnViolation>false</failOnViolation>
-                    <maxAllowedViolations>500</maxAllowedViolations>
-                    <violationSeverity>warning</violationSeverity>
+                    <failOnViolation>true</failOnViolation>
+                    <maxAllowedViolations>0</maxAllowedViolations>
+                    <violationSeverity>error</violationSeverity>
                 </configuration>
                 <executions>
                     <execution>
@@ -211,7 +211,7 @@
                     <effort>Max</effort>
                     <threshold>Low</threshold>
                     <xmlOutput>true</xmlOutput>
-                    <failOnError>false</failOnError>
+                    <failOnError>true</failOnError>
                 </configuration>
                 <executions>
                     <execution>
@@ -234,7 +234,7 @@
                         <ruleset>/rulesets/java/quickstart.xml</ruleset>
                     </rulesets>
                     <printFailingErrors>true</printFailingErrors>
-                    <failOnViolation>false</failOnViolation>
+                    <failOnViolation>true</failOnViolation>
                 </configuration>
                 <executions>
                     <execution>

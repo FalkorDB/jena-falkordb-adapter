@@ -13,7 +13,8 @@ import org.apache.jena.vocabulary.RDF;
  * This class is intended for local manual testing and examples; it connects to
  * a FalkorDB instance, creates a small RDF dataset and prints the results.
  */
-public class Main {
+public final class Main {
+    /** Sample age used in the demo person resource. */
     private static final int SAMPLE_AGE = 30;
 
     /** Prevent instantiation of this utility/demo class. */
@@ -27,8 +28,8 @@ public class Main {
      * @param args command line arguments (ignored)
      */
     public static void main(final String[] args) {
-        System.out.println("FalkorDB-Jena Adapter Demo");
-        System.out.println("==========================");
+    System.out.println("FalkorDB-Jena Adapter Demo");
+    System.out.println("===============================================");
 
         try {
             // Create a model using JFalkorDB
@@ -69,7 +70,10 @@ public class Main {
 
         } catch (Exception e) {
             System.err.println("✗ Error: " + e.getMessage());
-            System.err.println("Make sure FalkorDB is running on localhost:" + FalkorDBModelFactory.DEFAULT_PORT);
+                System.err.println(
+                    "Make sure FalkorDB is running on localhost:"
+                    + FalkorDBModelFactory.DEFAULT_PORT
+                );
             e.printStackTrace();
         }
     }

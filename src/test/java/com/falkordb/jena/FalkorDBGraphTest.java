@@ -22,7 +22,10 @@ public class FalkorDBGraphTest {
     private Model createTestModel(String graphName) {
         Model model = FalkorDBModelFactory.createModel(graphName);
         assertNotNull(model, "Model should not be null after creation");
-        model.removeAll(); // Clean up any existing data
+        // Get the underlying graph and clear it completely
+        if (model.getGraph() instanceof FalkorDBGraph) {
+            ((FalkorDBGraph) model.getGraph()).clear();
+        }
         return model;
     }
     

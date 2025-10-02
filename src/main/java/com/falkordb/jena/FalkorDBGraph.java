@@ -65,6 +65,15 @@ public final class FalkorDBGraph extends GraphBase {
     }
 
     /**
+     * Clear all nodes and relationships from the graph.
+     */
+    @Override
+    public void clear() {
+        // Delete all nodes and relationships
+        graph.query("MATCH (n) DETACH DELETE n");
+    }
+
+    /**
      * Add a triple to the backing FalkorDB graph.
      *
      * This method translates a Jena Triple to a FalkorDB/Cypher create query.
@@ -74,15 +83,27 @@ public final class FalkorDBGraph extends GraphBase {
         // Translate RDF triple to Cypher CREATE/MERGE
         String subject = nodeToString(triple.getSubject());
         String predicate = nodeToString(triple.getPredicate());
-        String object = nodeToString(triple.getObject());
 
-        String cypher = String.format(
-            "MERGE (s:Resource {uri: '%s'}) "
-            + "MERGE (o:Resource {uri: '%s'}) "
-            + "MERGE (s)-[r:%s]->(o)",
-            escapeCypher(subject), escapeCypher(object),
-            sanitizeRelationType(predicate)
-        );
+        String cypher;
+        if (triple.getObject().isLiteral()) {
+            String objectValue = triple.getObject().getLiteralLexicalForm();
+            cypher = String.format(
+                "MERGE (s:Resource {uri: '%s'}) "
+                + "MERGE (o:Literal {value: '%s'}) "
+                + "MERGE (s)-[r:%s]->(o)",
+                escapeCypher(subject), escapeCypher(objectValue),
+                sanitizeRelationType(predicate)
+            );
+        } else {
+            String object = nodeToString(triple.getObject());
+            cypher = String.format(
+                "MERGE (s:Resource {uri: '%s'}) "
+                + "MERGE (o:Resource {uri: '%s'}) "
+                + "MERGE (s)-[r:%s]->(o)",
+                escapeCypher(subject), escapeCypher(object),
+                sanitizeRelationType(predicate)
+            );
+        }
 
         graph.query(cypher);
     }
@@ -92,14 +113,25 @@ public final class FalkorDBGraph extends GraphBase {
     public void performDelete(final Triple triple) {
         String subject = nodeToString(triple.getSubject());
         String predicate = nodeToString(triple.getPredicate());
-        String object = nodeToString(triple.getObject());
 
-        String cypher = String.format(
-            "MATCH (s:Resource {uri: '%s'})-[r:%s]->(o:Resource {uri: '%s'}) "
-            + "DELETE r",
-            escapeCypher(subject), sanitizeRelationType(predicate),
-            escapeCypher(object)
-        );
+        String cypher;
+        if (triple.getObject().isLiteral()) {
+            String objectValue = triple.getObject().getLiteralLexicalForm();
+            cypher = String.format(
+                "MATCH (s:Resource {uri: '%s'})-[r:%s]->"
+                + "(o:Literal {value: '%s'}) DELETE r",
+                escapeCypher(subject), sanitizeRelationType(predicate),
+                escapeCypher(objectValue)
+            );
+        } else {
+            String object = nodeToString(triple.getObject());
+            cypher = String.format(
+                "MATCH (s:Resource {uri: '%s'})-[r:%s]->"
+                + "(o:Resource {uri: '%s'}) DELETE r",
+                escapeCypher(subject), sanitizeRelationType(predicate),
+                escapeCypher(object)
+            );
+        }
 
         graph.query(cypher);
     }
@@ -167,13 +199,21 @@ public final class FalkorDBGraph extends GraphBase {
         String subjectUri = subjectNode.getProperty("uri").getValue()
             .toString();
         String predicateUri = edge.getRelationshipType();
-        String objectValue = objectNode.getProperty("uri").getValue()
-            .toString();
 
         Node subject = NodeFactory.createURI(subjectUri);
         Node predicate = NodeFactory.createURI(predicateUri);
-        // Note: literals are not yet handled; treat object as URI for now
-        Node object = NodeFactory.createURI(objectValue);
+
+        Node object;
+        // Check for literal by looking for 'value' property
+        if (objectNode.getProperty("value") != null) {
+            String literalValue = objectNode.getProperty("value")
+                .getValue().toString();
+            object = NodeFactory.createLiteral(literalValue);
+        } else {
+            String objectUri = objectNode.getProperty("uri").getValue()
+                .toString();
+            object = NodeFactory.createURI(objectUri);
+        }
 
         return Triple.create(subject, predicate, object);
     }
@@ -190,7 +230,12 @@ public final class FalkorDBGraph extends GraphBase {
     }
 
     private String sanitizeRelationType(final String uri) {
-        return uri.replaceAll("[^a-zA-Z0-9_]", "_");
+        // Convert URI to valid FalkorDB relationship type
+        // Use base64 encoding to ensure uniqueness and avoid collisions
+        return "rel_" + java.util.Base64.getEncoder()
+            .encodeToString(
+                uri.getBytes(java.nio.charset.StandardCharsets.UTF_8))
+            .replaceAll("[^a-zA-Z0-9_]", "_");
     }
 
     private String escapeCypher(final String value) {

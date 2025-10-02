@@ -35,51 +35,74 @@ Or install directly from: https://www.falkordb.com/
 
 ### 2. Clone and Build the Project
 
-```bash
-# Clone the repository (or create project structure)
-mkdir jena-falkordb-adapter
-cd jena-falkordb-adapter
+If you want to build the adapter from source, full build and run instructions are provided in the
+"Developing / Building from source" section further down in this README. For a quick start using the
+published artifact, see the "Using from Maven" section below.
 
-# Copy the provided files:
-# - pom.xml
-# - src/main/java/com/example/jena/falkordb/FalkorDBGraph.java
-# - src/main/java/com/example/jena/falkordb/FalkorDBModelFactory.java
-# - src/main/java/com/example/jena/falkordb/Main.java
+## Using from Maven
 
-# Build the project
-mvn clean install
+If the project artifacts are published to Maven Central or OSSRH snapshots, you can add
+the adapter as a dependency in your own project's `pom.xml`.
+
+For the snapshot (development) version:
+
+```xml
+<repositories>
+    <repository>
+        <id>ossrh</id>
+        <url>https://oss.sonatype.org/content/repositories/snapshots</url>
+    </repository>
+</repositories>
+
+<dependencies>
+    <dependency>
+        <groupId>com.falkordb</groupId>
+        <artifactId>jena-falkordb-adapter</artifactId>
+        <version>1.0-SNAPSHOT</version>
+    </dependency>
+</dependencies>
 ```
 
-### 3. Run the Demo
+For a released version available on Maven Central (replace `x.y.z` with the release):
 
-```bash
-mvn exec:java -Dexec.mainClass="com.falkordb.jena.Main"
+```xml
+<dependencies>
+    <dependency>
+        <groupId>com.falkordb</groupId>
+        <artifactId>jena-falkordb-adapter</artifactId>
+        <version>x.y.z</version>
+    </dependency>
+</dependencies>
 ```
 
-Or build and run the JAR:
+Gradle (Groovy) example:
 
-```bash
-mvn clean package
-java -jar target/jena-falkordb-adapter-1.0-SNAPSHOT.jar
+```groovy
+repositories {
+    mavenCentral()
+    maven { url 'https://oss.sonatype.org/content/repositories/snapshots' }
+}
+
+dependencies {
+    implementation 'com.falkordb:jena-falkordb-adapter:1.0-SNAPSHOT'
+}
 ```
 
-## Project Structure
+Gradle (Kotlin DSL) example:
 
+```kotlin
+repositories {
+    mavenCentral()
+    maven("https://oss.sonatype.org/content/repositories/snapshots")
+}
+
+dependencies {
+    implementation("com.falkordb:jena-falkordb-adapter:1.0-SNAPSHOT")
+}
 ```
-jena-falkordb-adapter/
-├── pom.xml
-├── README.md
-└── src/
-    └── main/
-        └── java/
-            └── com/
-                └── example/
-                    └── jena/
-                        └── falkordb/
-                            ├── FalkorDBGraph.java          # Core graph implementation
-                            ├── FalkorDBModelFactory.java   # Factory for creating models
-                            └── Main.java                   # Demo application
-```
+
+Note: snapshots live in the OSSRH snapshots repository; once a release is published to Maven Central you can rely on `mavenCentral()` without adding extra repositories.
+
 
 ## Usage Examples
 
@@ -203,7 +226,9 @@ This is a basic implementation with some limitations:
 
 1. **Query Translation**: Not all SPARQL features are fully translated to Cypher
 2. **Performance**: Translation overhead may impact performance for large datasets
-3. **Literal Storage**: Literals are currently stored as node properties rather than separate nodes
+3. **Literal Storage**: Literals are stored as dedicated `:Literal` nodes with properties such as
+    `value` (lexical form), and where available `datatype` and `language`. This preserves the
+    literal lexical form and metadata during round-trips between Jena and FalkorDB.
 4. **Complex Queries**: Advanced SPARQL features (OPTIONAL, UNION, nested queries) may not work as expected
 5. **Inference**: RDFS/OWL reasoning is not yet implemented
 
@@ -410,6 +435,43 @@ Run with:
 ```bash
 docker-compose up -d
 ```
+
+## Developing / Building from source
+
+If you want to modify the adapter or build it locally from source, follow these steps.
+
+1. Clone the repository and open it in your IDE of choice:
+
+```bash
+git clone https://github.com/FalkorDB/jena-falkordb-adapter.git
+cd jena-falkordb-adapter
+```
+
+2. Build with Maven (Java 11+ is required):
+
+```bash
+mvn clean install
+```
+
+3. Run unit tests (requires FalkorDB running on localhost:6379):
+
+```bash
+docker run -p 6379:6379 -d --rm --name falkordb falkordb/falkordb:latest
+mvn test
+```
+
+4. Build an executable JAR and run the demo:
+
+```bash
+mvn clean package
+java -jar target/jena-falkordb-adapter-1.0-SNAPSHOT.jar
+```
+
+Developer notes:
+
+- The main adapter code lives under `src/main/java/com/falkordb/jena/`.
+- Tests that interact with FalkorDB assume a local FalkorDB instance; tests use `FalkorDBGraph.clear()` to keep the test graph isolated.
+- CI publishes snapshots to OSSRH; see `.github/workflows` for publishing details.
 
 ## Contributing
 

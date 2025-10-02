@@ -1,65 +1,58 @@
-name: Publish to Maven Central
+name: Release
 
 on:
   release:
     types: [published]
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version to publish'
-        required: true
-        type: string
 
 jobs:
-  publish:
-    name: Publish to Maven Central
-    permissions:
-      contents: read
+  build:
     runs-on: ubuntu-latest
-    
+
+    # Service containers to run with `test-job`
+    services:
+      # Label used to access the service container
+      falkordb:
+        # Docker Hub image
+        image: falkordb/falkordb:edge
+        # Map port 6379 on the Docker host to port 6379 on the FalkorDB container
+        ports:
+          - 6379:6379
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Set up JDK 11
-      uses: actions/setup-java@v4
-      with:
-        java-version: '11'
-        distribution: 'temurin'
-        cache: 'maven'
-        server-id: ossrh
-        server-username: MAVEN_USERNAME
-        server-password: MAVEN_PASSWORD
-        gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
-        gpg-passphrase: GPG_PASSPHRASE
-    
-    - name: Set version from release tag
-      if: github.event_name == 'release'
-      run: |
-        VERSION=${GITHUB_REF#refs/tags/v}
-        echo "VERSION=$VERSION" >> $GITHUB_ENV
-        mvn versions:set -DnewVersion=$VERSION
-    
-    - name: Set version from input
-      if: github.event_name == 'workflow_dispatch'
-      run: |
-        echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_ENV
-        mvn versions:set -DnewVersion=${{ github.event.inputs.version }}
-    
-    - name: Build and test
-      run: mvn -B clean verify
-    
-    - name: Publish to Maven Central
-      run: mvn -B deploy -DskipTests
-      env:
-        MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
-        MAVEN_PASSWORD: ${{ secrets.OSSRH_TOKEN }}
-        GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-    
-    - name: Upload artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: maven-artifacts
-        path: |
-          target/*.jar
-          target/*.pom
+      - uses: actions/checkout@v5
+
+      - name: Get version from tag
+        id: get_version
+        run: |
+          realversion="${GITHUB_REF/refs\/tags\//}"
+          realversion="${realversion//v/}"
+          echo "VERSION=$realversion" >> $GITHUB_OUTPUT
+
+      - name: Set up JDK 11 for publishing to Maven Central
+        uses: actions/setup-java@v5
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+          cache: maven
+          server-id: central
+          server-username: MAVEN_CENTRAL_USERNAME
+          server-password: MAVEN_CENTRAL_TOKEN
+
+      - name: Update version in POM
+        run: mvn versions:set -DnewVersion=${{ steps.get_version.outputs.VERSION }}
+
+      - name: Import GPG key
+        uses: crazy-max/ghaction-import-gpg@v6
+        with:
+          gpg_private_key: ${{ secrets.OSSH_GPG_SECRET_KEY }}
+          passphrase: ${{ secrets.OSSH_GPG_SECRET_KEY_PASSWORD }}
+
+      - name: Build and deploy to Maven Central
+        run: |
+          mvn --no-transfer-progress \
+            --batch-mode \
+            clean deploy
+        env:
+          MAVEN_CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
+          MAVEN_CENTRAL_TOKEN: ${{ secrets.CENTRAL_TOKEN }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.OSSH_GPG_SECRET_KEY_PASSWORD }}

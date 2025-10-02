@@ -61,11 +61,17 @@ jobs:
     - name: Build with Maven
       run: mvn -B clean compile --file pom.xml
     
-    - name: Run tests
-      run: mvn -B test --file pom.xml
+    - name: Run tests and generate coverage report
+      run: mvn -B test jacoco:report --file pom.xml
       env:
         FALKORDB_HOST: localhost
         FALKORDB_PORT: 6379
+
+    - name: Upload coverage reports to Codecov
+      uses: codecov/codecov-action@v5
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        slug: FalkorDB/jena-falkordb-adapter
     
     - name: Package
       run: mvn -B package -DskipTests --file pom.xml

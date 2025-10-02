@@ -1,6 +1,5 @@
 package com.falkordb.jena;
 
-import org.apache.jena.graph.Graph;
 import org.apache.jena.rdf.model.Model;
 import org.apache.jena.rdf.model.ModelFactory;
 
@@ -8,99 +7,116 @@ import org.apache.jena.rdf.model.ModelFactory;
  * Factory and convenience methods for creating Jena {@link Model} instances
  * backed by a FalkorDB graph via the JFalkorDB driver.
  */
-public class FalkorDBModelFactory {
-    
+public final class FalkorDBModelFactory {
+    /** Default FalkorDB port. */
+    public static final int DEFAULT_PORT = 6379;
+
+    private FalkorDBModelFactory() {
+        throw new AssertionError("No instances");
+    }
+
     /**
-     * Create a new Jena Model backed by a FalkorDB graph on the specified host
+     * Create a {@link Model} backed by a FalkorDB instance at the given host
      * and port.
      *
      * @param host the FalkorDB host
      * @param port the FalkorDB port
-     * @param graphName the name of the FalkorDB graph
+     * @param graphName the FalkorDB graph name to use for the model
      * @return a Jena {@link Model} backed by FalkorDB
      */
-    public static Model createModel(String host, int port, String graphName) {
-        Graph graph = new FalkorDBGraph(host, port, graphName);
+    public static Model createModel(final String host,
+                                    final int port,
+                                    final String graphName) {
+        org.apache.jena.graph.Graph graph =
+            new FalkorDBGraph(host, port, graphName);
+
         return ModelFactory.createModelForGraph(graph);
     }
-    
+
     /**
-     * Create a new Jena Model backed by a FalkorDB graph on the default host
+     * Create a {@link Model} backed by a FalkorDB graph on the default host
      * and port.
      *
-     * @param graphName the name of the FalkorDB graph
-     * @return a Jena {@link Model}
+     * @param graphName the FalkorDB graph name to use for the model
+     * @return a Jena {@link Model} backed by FalkorDB
      */
-    public static Model createModel(String graphName) {
-        Graph graph = new FalkorDBGraph(graphName);
+    public static Model createModel(final String graphName) {
+        org.apache.jena.graph.Graph graph =
+            new FalkorDBGraph(graphName);
         return ModelFactory.createModelForGraph(graph);
     }
-    
+
     /**
-     * Create a Model with a default graph name ("rdf_graph").
+     * Create a {@link Model} backed by a FalkorDB graph using default graph
+     * name "rdf_graph".
      *
-     * @return a Jena {@link Model}
+     * @return a Jena {@link Model} backed by FalkorDB with the default graph
+     * name
      */
     public static Model createDefaultModel() {
         return createModel("rdf_graph");
     }
-    
+
     /**
-     * Obtain a builder for configuring a FalkorDB-backed Jena Model.
+     * Obtain a {@link Builder} to configure and create a FalkorDB-backed
+     * {@link Model}.
      *
      * @return a new {@link Builder}
      */
     public static Builder builder() {
         return new Builder();
     }
-    
+
     /**
-     * Builder for configuring host, port and graph name before creating a
-     * FalkorDB-backed Jena {@link Model}.
+     * Builder for creating FalkorDB-backed Jena {@link Model} instances.
      */
     public static class Builder {
+        /** FalkorDB host to connect to. */
         private String host = "localhost";
-        private int port = 6379;
+        /** FalkorDB port to connect to. */
+        private int port = DEFAULT_PORT;
+        /** Name of the FalkorDB graph to create the model for. */
         private String graphName = "rdf_graph";
-        
+
         /**
-         * Set the FalkorDB host for the builder.
+         * Set the FalkorDB host to connect to.
          *
-         * @param host the FalkorDB host
+         * @param value the FalkorDB host
          * @return this builder
          */
-        public Builder host(String host) {
-            this.host = host;
+        public Builder host(final String value) {
+            this.host = value;
             return this;
         }
-        
+
         /**
-         * Set the FalkorDB port for the builder.
+         * Set the FalkorDB port to connect to.
          *
-         * @param port the FalkorDB port
+         * @param value the FalkorDB port
          * @return this builder
          */
-        public Builder port(int port) {
-            this.port = port;
+        public Builder port(final int value) {
+            this.port = value;
             return this;
         }
-        
+
         /**
-         * Set the FalkorDB graph name for the builder.
+         * Set the FalkorDB graph name to use for the created model.
          *
-         * @param graphName the graph name
+         * @param name the graph name
          * @return this builder
          */
-        public Builder graphName(String graphName) {
-            this.graphName = graphName;
+        public Builder graphName(final String name) {
+            this.graphName = name;
             return this;
         }
-        
-        /**
-         * Build the configured Jena {@link Model} backed by FalkorDB.
-         *
-         * @return the configured Model
-         */
+
+    /**
+     * Build and return a Jena {@link Model} configured with the
+     * builder values.
+     *
+     * @return a FalkorDB-backed {@link Model}
+     */
         public Model build() {
             return createModel(host, port, graphName);
         }

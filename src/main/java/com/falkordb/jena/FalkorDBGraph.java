@@ -239,7 +239,8 @@ public final class FalkorDBGraph extends GraphBase {
     }
 
     private String escapeCypher(final String value) {
-        return value.replace("'", "\\'");
+        // Escape single quotes and backslashes for Cypher
+        return value.replace("\\", "\\\\").replace("'", "\\'");
     }
 
     @Override

@@ -19,6 +19,10 @@ A Java adapter that enables Apache Jena to work with FalkorDB graph database, al
 - ✅ Use Apache Jena's RDF API with FalkorDB backend
 - ✅ Execute SPARQL queries on FalkorDB data
 - ✅ Automatic translation of RDF triples to Cypher operations
+- ✅ **Efficient literal storage as node properties** (not separate nodes)
+- ✅ **rdf:type support with native graph labels**
+- ✅ **Automatic URI indexing** for optimal query performance
+- ✅ **Custom driver support** for advanced configuration
 - ✅ Connection pooling for better performance
 - ✅ Easy-to-use factory pattern for model creation
 - ✅ Continuous integration with multi-version Java testing (11, 17, 21)
@@ -154,6 +158,79 @@ Model model = FalkorDBModelFactory.builder()
 Model model = FalkorDBModelFactory.createModel("localhost", 6379, "my_graph");
 ```
 
+### Using Custom Driver
+
+For advanced configuration (authentication, timeouts, SSL, etc.), you can provide your own FalkorDB driver:
+
+```java
+import com.falkordb.Driver;
+import com.falkordb.FalkorDB;
+
+// Create a custom configured driver
+Driver customDriver = FalkorDB.driver("localhost", 6379);
+// Configure your driver as needed...
+
+// Use with factory
+Model model = FalkorDBModelFactory.createModel(customDriver, "my_graph");
+
+// Or use with builder
+Model model = FalkorDBModelFactory.builder()
+    .driver(customDriver)
+    .graphName("my_graph")
+    .build();
+
+// Or directly with the graph
+FalkorDBGraph graph = new FalkorDBGraph(customDriver, "my_graph");
+Model model = ModelFactory.createModelForGraph(graph);
+
+// Don't forget to close the driver when done
+customDriver.close();
+```
+
+### Understanding the Storage Model
+
+The adapter uses an efficient storage model that maps RDF to property graphs:
+
+#### Literals as Properties
+```java
+// When you add a literal property:
+person.addProperty(name, "Alice");
+
+// It's stored in FalkorDB as:
+// MERGE (s:Resource {uri: "http://example.org/person1"}) 
+// SET s.`http://xmlns.com/foaf/0.1/name` = "Alice"
+
+// Not as a separate node! This is much more efficient.
+```
+
+#### rdf:type as Labels
+```java
+// When you add a type:
+person.addProperty(RDF.type, personType);
+
+// It creates a label on the node:
+// MERGE (s:Resource:`http://xmlns.com/foaf/0.1/Person` {uri: "http://example.org/alice"})
+
+// You can then query by type efficiently
+```
+
+#### Resources as Relationships
+```java
+// When you connect resources:
+alice.addProperty(knows, bob);
+
+// It creates a relationship:
+// MERGE (s:Resource {uri: "...alice"})
+// MERGE (o:Resource {uri: "...bob"})
+// MERGE (s)-[r:`http://xmlns.com/foaf/0.1/knows`]->(o)
+```
+
+This storage model provides:
+- ✅ **Better Performance**: Literals stored as properties reduce graph complexity
+- ✅ **Efficient Queries**: Labels enable fast type-based filtering
+- ✅ **Readable URIs**: Backtick notation preserves URIs without encoding
+- ✅ **Automatic Indexing**: `Resource.uri` is indexed automatically
+
 ### SPARQL Queries
 
 ```java
@@ -209,16 +286,43 @@ alice.addProperty(foafKnows, bob);
 model.close();
 ```
 
+## Why This Adapter is Efficient
+
+### Storage Comparison
+
+**Traditional Approach** (separate nodes for literals):
+```cypher
+// 3 nodes + 2 relationships for simple properties
+(person:Resource {uri: "..."})
+(name:Literal {value: "Alice"})
+(age:Literal {value: "30"})
+(person)-[:name]->(name)
+(person)-[:age]->(age)
+```
+
+**Our Approach** (properties on nodes):
+```cypher
+// 1 node with properties
+(person:Resource:Person {
+  uri: "...",
+  `http://xmlns.com/foaf/0.1/name`: "Alice",
+  `http://xmlns.com/foaf/0.1/age`: 30
+})
+```
+
+**Result**: 
+- ⚡ **3x fewer nodes**
+- ⚡ **Direct property access** (no relationship traversal)
+- ⚡ **Native type filtering** with labels
+- ⚡ **Automatic indexing** on URI
+
 ## Configuration
 
 ### Connection Pool Settings
 
-The adapter uses Jedis connection pooling. Default settings:
-- Max Total Connections: 10
-- Max Idle Connections: 5
-- Min Idle Connections: 1
+The adapter uses JFalkorDB driver with connection pooling. Default settings are optimized for most use cases.
 
-To customize, modify `FalkorDBGraph.java` constructor.
+To customize connection settings, create your own driver and pass it to the factory (see "Using Custom Driver" section above).
 
 ### Graph Names
 
@@ -235,29 +339,37 @@ This is a basic implementation with some limitations:
 
 1. **Query Translation**: Not all SPARQL features are fully translated to Cypher
 2. **Performance**: Translation overhead may impact performance for large datasets
-3. **Literal Storage**: Literals are stored as dedicated `:Literal` nodes with properties such as
-    `value` (lexical form), and where available `datatype` and `language`. This preserves the
-    literal lexical form and metadata during round-trips between Jena and FalkorDB.
-4. **Complex Queries**: Advanced SPARQL features (OPTIONAL, UNION, nested queries) may not work as expected
-5. **Inference**: RDFS/OWL reasoning is not yet implemented
+3. **Complex Queries**: Advanced SPARQL features (OPTIONAL, UNION, nested queries) may not work as expected
+4. **Inference**: RDFS/OWL reasoning is not yet implemented
 
 ## Architecture
 
 ### How It Works
 
 1. **RDF to Property Graph Mapping**:
-   - RDF subjects → FalkorDB nodes with `uri` property
-   - RDF predicates → FalkorDB relationships or node properties
-   - RDF objects (URIs) → FalkorDB nodes
-   - RDF objects (literals) → Node properties
+   - RDF subjects → FalkorDB nodes (`:Resource` label) with `uri` property
+   - RDF predicates → FalkorDB relationships (for resources) or node properties (for literals)
+   - RDF objects (URIs) → FalkorDB nodes with relationships
+   - **RDF objects (literals) → Stored as properties directly on subject nodes** (efficient!)
+   - **rdf:type → Creates labels on nodes** (e.g., `:Resource:Person`)
+   - **Automatic index on Resource.uri** for fast lookups
 
-2. **Query Translation**:
+2. **Storage Optimizations**:
+   - **Literals as Properties**: Instead of creating separate nodes for literal values, they are stored as properties on the subject node using the predicate URI as the property name
+   - **Backtick Notation**: URIs can be used directly as property names and relationship types using Cypher backtick notation
+   - **Type Labels**: `rdf:type` triples create native graph labels, enabling efficient type-based queries
+   - **Parameterized Queries**: All Cypher queries use parameters to prevent injection and improve performance
+
+3. **Query Translation**:
    - SPARQL queries are parsed by Jena
    - Triple patterns are translated to Cypher MATCH clauses
+   - Literal queries search node properties
+   - Type queries search node labels
    - Results are converted back to RDF triples
 
-3. **Connection Management**:
-   - Jedis connection pool for efficient resource usage
+4. **Connection Management**:
+   - JFalkorDB driver with connection pooling
+   - Custom driver support for advanced configuration
    - Automatic connection cleanup
 
 ## Troubleshooting
@@ -414,11 +526,14 @@ mvn test
 
 ## Performance Tips
 
-1. **Use Connection Pooling**: Already configured by default
-2. **Batch Operations**: Group multiple adds together
-3. **Index URIs**: Create indexes in FalkorDB for frequently queried URIs
-4. **Limit Result Sets**: Use LIMIT in SPARQL queries
-5. **Close Resources**: Always close models and query executions
+1. **Automatic Indexing**: The adapter automatically creates an index on `Resource.uri` for optimal performance
+2. **Efficient Literal Storage**: Literals are stored as node properties, not separate nodes, reducing graph traversal
+3. **Use Connection Pooling**: Already configured by default with JFalkorDB driver
+4. **Batch Operations**: Group multiple adds together when possible
+5. **Type-Based Queries**: Leverage `rdf:type` labels for efficient filtering
+6. **Limit Result Sets**: Use LIMIT in SPARQL queries to reduce data transfer
+7. **Close Resources**: Always close models, query executions, and custom drivers
+8. **Parameterized Queries**: All queries use parameters internally for better performance and security
 
 ## Docker Compose Setup
 
@@ -576,14 +691,23 @@ See [CICD_SETUP.md](CICD_SETUP.md) for detailed setup instructions.
 
 ## Changelog
 
-### Version 1.0-SNAPSHOT
-- Initial release
-- Basic RDF to FalkorDB mapping
-- SPARQL query support
-- Connection pooling
-- CI/CD with GitHub Actions
-- Maven Central publishing support
-- Factory pattern for model creation
+### Version 1.0-SNAPSHOT (Latest)
+- **New**: Literals stored as node properties instead of separate nodes (major performance improvement)
+- **New**: rdf:type support with native graph labels
+- **New**: Automatic URI indexing on Resource nodes
+- **New**: Custom driver constructor and factory methods
+- **New**: Builder pattern support for custom drivers
+- **New**: Parameterized Cypher queries for security and performance
+- **New**: Backtick notation for URIs in property names and relationships
+- Improved: Enhanced test coverage with 16 comprehensive tests
+- Improved: Better error handling and validation
+- Initial release features:
+  - Basic RDF to FalkorDB mapping
+  - SPARQL query support
+  - Connection pooling
+  - CI/CD with GitHub Actions
+  - Maven Central publishing support
+  - Factory pattern for model creation
 
 ---
 

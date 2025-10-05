@@ -2,6 +2,8 @@
 
 This guide will help you set up and start using the Jena-FalkorDB adapter in under 10 minutes.
 
+> **Note**: This adapter now features efficient literal storage as node properties, automatic URI indexing, and rdf:type support with native labels for optimal performance! See the [README](README.md) for architecture details.
+
 ## Quick Start (3 Steps)
 
 ### Step 1: Start FalkorDB
@@ -279,7 +281,18 @@ Model model = FalkorDBModelFactory.builder()
     .port(6379)
     .graphName("production_graph")
     .build();
+
+// Method 3: Custom driver (NEW!)
+Driver customDriver = FalkorDB.driver("localhost", 6379);
+Model model = FalkorDBModelFactory.createModel(customDriver, "my_graph");
+// Or with builder:
+Model model = FalkorDBModelFactory.builder()
+    .driver(customDriver)
+    .graphName("my_graph")
+    .build();
 ```
+
+> **Pro Tip**: The adapter automatically creates an index on `Resource.uri` for optimal query performance!
 
 ### Environment Variables
 

@@ -58,12 +58,12 @@ public final class FalkorDBGraph extends GraphBase {
      * Create a FalkorDB-backed graph with a custom driver instance.
      * This allows users to bring their own configured driver.
      *
-     * @param driver FalkorDB driver instance
+     * @param driverInstance FalkorDB driver instance to use
      * @param name name of the FalkorDB graph to use
      */
-    public FalkorDBGraph(final Driver driver, final String name) {
-        this.driver = driver;
-        this.graph = driver.graph(name);
+    public FalkorDBGraph(final Driver driverInstance, final String name) {
+        this.driver = driverInstance;
+        this.graph = this.driver.graph(name);
         this.graphName = name;
         ensureIndexes();
     }
@@ -304,12 +304,12 @@ public final class FalkorDBGraph extends GraphBase {
             Node subject = NodeFactory.createURI(subjectUri);
             
             @SuppressWarnings("unchecked")
-            Map<String, Object> properties = 
+            Map<String, Object> properties =
                 (Map<String, Object>) record.getValue("props");
             
-            // Iterate over all properties
-            for (Map.Entry<String, Object> entry : 
-                    properties.entrySet()) {
+          // Iterate over all properties
+          for (Map.Entry<String, Object> entry :
+              properties.entrySet()) {
                 String predicateUri = entry.getKey();
                 
                 // Skip the 'uri' property as it's not an RDF triple
@@ -319,7 +319,7 @@ public final class FalkorDBGraph extends GraphBase {
                 
                 // Check if predicate matches pattern
                 if (pattern.getPredicate().isConcrete()) {
-                    String patternPredicate = 
+                    String patternPredicate =
                         nodeToString(pattern.getPredicate());
                     if (!predicateUri.equals(patternPredicate)) {
                         continue;
@@ -330,7 +330,7 @@ public final class FalkorDBGraph extends GraphBase {
                 
                 // Check if object matches pattern
                 if (pattern.getObject().isConcrete()) {
-                    String patternObject = 
+                    String patternObject =
                         pattern.getObject().getLiteralLexicalForm();
                     if (!literalValue.equals(patternObject)) {
                         continue;

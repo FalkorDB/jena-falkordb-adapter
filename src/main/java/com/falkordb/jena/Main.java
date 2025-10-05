@@ -64,24 +64,42 @@ public final class Main {
 
             // Query specific patterns
             System.out.println("\n=== Querying: Find all rdf:type triples ===");
-            StmtIterator typeIter = model.listStatements(null, RDF.type, (Resource) null);
+            StmtIterator typeIter = model.listStatements(
+                null,
+                RDF.type,
+                (Resource) null
+            );
             while (typeIter.hasNext()) {
                 Statement stmt = typeIter.nextStatement();
-                System.out.println("  " + stmt.getSubject() + " is a " + stmt.getObject());
+                String s = stmt.getSubject().toString();
+                String o = stmt.getObject().toString();
+                System.out.println("  " + s + " is a " + o);
             }
 
             System.out.println("\n=== Querying: Find all properties of John ===");
-            StmtIterator johnIter = model.listStatements(person, null, (Resource) null);
+            StmtIterator johnIter = model.listStatements(
+                person,
+                null,
+                (Resource) null
+            );
             while (johnIter.hasNext()) {
                 Statement stmt = johnIter.nextStatement();
-                System.out.println("  " + stmt.getPredicate() + " -> " + stmt.getObject());
+                String p = stmt.getPredicate().toString();
+                String o = stmt.getObject().toString();
+                System.out.println("  " + p + " -> " + o);
             }
 
             System.out.println("\n=== Querying: Find all resources with name property ===");
-            StmtIterator nameIter = model.listStatements(null, name, (Resource) null);
+            StmtIterator nameIter = model.listStatements(
+                null,
+                name,
+                (Resource) null
+            );
             while (nameIter.hasNext()) {
                 Statement stmt = nameIter.nextStatement();
-                System.out.println("  " + stmt.getSubject() + " has name: " + stmt.getObject());
+                String s = stmt.getSubject().toString();
+                String o = stmt.getObject().toString();
+                System.out.println("  " + s + " has name: " + o);
             }
 
             // Delete operations
@@ -107,8 +125,14 @@ public final class Main {
             System.out.println("✓ Added Jane with email");
 
             System.out.println("\n=== Querying: Find all Persons ===");
-            Resource personType = model.createResource("http://example.org/Person");
-            StmtIterator personsIter = model.listStatements(null, RDF.type, personType);
+            Resource personType = model.createResource(
+                "http://example.org/Person"
+            );
+            StmtIterator personsIter = model.listStatements(
+                null,
+                RDF.type,
+                personType
+            );
             while (personsIter.hasNext()) {
                 Statement stmt = personsIter.nextStatement();
                 Resource personRes = stmt.getSubject();
@@ -140,8 +164,9 @@ public final class Main {
         } catch (Exception e) {
             System.err.println("✗ Error: " + e.getMessage());
             System.err.println(
-                    "Make sure FalkorDB is running on localhost:"
-                            + FalkorDBModelFactory.DEFAULT_PORT);
+                "Make sure FalkorDB is running on localhost:" +
+                FalkorDBModelFactory.DEFAULT_PORT
+            );
             e.printStackTrace();
         }
     }

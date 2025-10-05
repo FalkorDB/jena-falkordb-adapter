@@ -1,5 +1,6 @@
 package com.falkordb.jena;
 
+import com.falkordb.Driver;
 import org.apache.jena.rdf.model.Model;
 import org.apache.jena.rdf.model.ModelFactory;
 
@@ -47,6 +48,21 @@ public final class FalkorDBModelFactory {
     }
 
     /**
+     * Create a {@link Model} backed by a FalkorDB graph using a custom driver.
+     * This allows users to bring their own configured driver instance.
+     *
+     * @param driver the FalkorDB driver instance to use
+     * @param graphName the FalkorDB graph name to use for the model
+     * @return a Jena {@link Model} backed by FalkorDB
+     */
+    public static Model createModel(final Driver driver,
+                                    final String graphName) {
+        org.apache.jena.graph.Graph graph =
+            new FalkorDBGraph(driver, graphName);
+        return ModelFactory.createModelForGraph(graph);
+    }
+
+    /**
      * Create a {@link Model} backed by a FalkorDB graph using default graph
      * name "rdf_graph".
      *
@@ -77,6 +93,8 @@ public final class FalkorDBModelFactory {
         private int port = DEFAULT_PORT;
         /** Name of the FalkorDB graph to create the model for. */
         private String graphName = "rdf_graph";
+        /** Custom FalkorDB driver instance (optional). */
+        private Driver driver = null;
 
         /**
          * Set the FalkorDB host to connect to.
@@ -111,6 +129,18 @@ public final class FalkorDBModelFactory {
             return this;
         }
 
+        /**
+         * Set a custom FalkorDB driver instance to use.
+         * If set, host and port settings will be ignored.
+         *
+         * @param value the FalkorDB driver instance
+         * @return this builder
+         */
+        public Builder driver(final Driver value) {
+            this.driver = value;
+            return this;
+        }
+
     /**
      * Build and return a Jena {@link Model} configured with the
      * builder values.
@@ -118,6 +148,9 @@ public final class FalkorDBModelFactory {
      * @return a FalkorDB-backed {@link Model}
      */
         public Model build() {
+            if (driver != null) {
+                return createModel(driver, graphName);
+            }
             return createModel(host, port, graphName);
         }
     }

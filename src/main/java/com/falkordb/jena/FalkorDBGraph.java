@@ -38,9 +38,7 @@ public final class FalkorDBGraph extends GraphBase {
      * @param name name of the FalkorDB graph to use
      */
     public FalkorDBGraph(final String name) {
-        this.driver = FalkorDB.driver();
-        this.graph = driver.graph(name);
-        this.graphName = name;
+        this(FalkorDB.driver(), name);
     }
 
     /**
@@ -53,9 +51,40 @@ public final class FalkorDBGraph extends GraphBase {
     public FalkorDBGraph(final String host,
                         final int port,
                         final String name) {
-        this.driver = FalkorDB.driver(host, port);
+        this(FalkorDB.driver(host, port), name);
+    }
+
+    /**
+     * Create a FalkorDB-backed graph with a custom driver instance.
+     * This allows users to bring their own configured driver.
+     *
+     * @param driver FalkorDB driver instance
+     * @param name name of the FalkorDB graph to use
+     */
+    public FalkorDBGraph(final Driver driver, final String name) {
+        this.driver = driver;
         this.graph = driver.graph(name);
         this.graphName = name;
+        ensureIndexes();
+    }
+
+    /**
+     * Ensures required indexes exist on the graph for optimal performance.
+     * Creates an index on the uri property of Resource nodes.
+     */
+    private void ensureIndexes() {
+        try {
+            // Create index on Resource.uri for fast lookups
+            graph.query("CREATE INDEX FOR (r:Resource) ON (r.uri)");
+        } catch (Exception e) {
+            // Index might already exist, which is fine
+            // FalkorDB returns an error if index already exists
+            if (!e.getMessage().contains("already indexed")) {
+                System.err.println(
+                    "Warning: Could not create index: " + e.getMessage()
+                );
+            }
+        }
     }
 
     /**

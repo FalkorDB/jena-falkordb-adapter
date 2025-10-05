@@ -20,8 +20,9 @@ import org.apache.jena.vocabulary.RDF;
 /**
  * Jena Graph implementation backed by a FalkorDB graph.
  *
- * This class implements the minimal GraphBase hooks to translate Jena Triple
- * operations into FalkorDB (Cypher-like) queries using the JFalkorDB API.
+ * This class implements the minimal GraphBase hooks to translate Jena
+ * Triple operations into FalkorDB (Cypher-like) queries using the JFalkorDB
+ * API.
  */
 public final class FalkorDBGraph extends GraphBase {
     /** FalkorDB driver (JFalkorDB). */
@@ -58,11 +59,11 @@ public final class FalkorDBGraph extends GraphBase {
      * Create a FalkorDB-backed graph with a custom driver instance.
      * This allows users to bring their own configured driver.
      *
-     * @param driverInstance FalkorDB driver instance to use
+     * @param suppliedDriver FalkorDB driver instance to use
      * @param name name of the FalkorDB graph to use
      */
-    public FalkorDBGraph(final Driver driverInstance, final String name) {
-        this.driver = driverInstance;
+    public FalkorDBGraph(final Driver suppliedDriver, final String name) {
+        this.driver = suppliedDriver;
         this.graph = this.driver.graph(name);
         this.graphName = name;
         ensureIndexes();
@@ -78,7 +79,6 @@ public final class FalkorDBGraph extends GraphBase {
             graph.query("CREATE INDEX FOR (r:Resource) ON (r.uri)");
         } catch (Exception e) {
             // Index might already exist, which is fine
-            // FalkorDB returns an error if index already exists
             if (!e.getMessage().contains("already indexed")) {
                 System.err.println(
                     "Warning: Could not create index: " + e.getMessage()
@@ -96,9 +96,7 @@ public final class FalkorDBGraph extends GraphBase {
         return graphName;
     }
 
-    /**
-     * Clear all nodes and relationships from the graph.
-     */
+    /** Clear all nodes and relationships from the graph. */
     @Override
     public void clear() {
         // Delete all nodes and relationships
@@ -108,9 +106,10 @@ public final class FalkorDBGraph extends GraphBase {
     /**
      * Add a triple to the backing FalkorDB graph.
      *
-     * This method translates a Jena Triple to a FalkorDB/Cypher create query.
-     * When the object is a literal, it is stored as a property on the subject node.
-     * When the object is a resource, it creates a relationship between nodes.
+     * This method translates a Jena Triple to a FalkorDB/Cypher create
+     * query. When the object is a literal, it is stored as a property on the
+     * subject node. When the object is a resource, it creates a relationship
+     * between nodes.
      */
     @Override
     public void performAdd(final Triple triple) {
@@ -120,26 +119,27 @@ public final class FalkorDBGraph extends GraphBase {
 
         Map<String, Object> params = new HashMap<>(2);
         String cypher;
-        
+
         if (triple.getObject().isLiteral()) {
             // Store literal as a property on the subject node
             // Use backticks to allow URIs as property names directly
-            String objectValue = triple.getObject().getLiteralLexicalForm();
-            
+            String objectValue =
+                triple.getObject().getLiteralLexicalForm();
+
             params.put("subjectUri", subject);
             params.put("objectValue", objectValue);
-            
+
             cypher = String.format(
                 "MERGE (s:Resource {uri: $subjectUri}) "
-                + "SET s.`%s` = $objectValue",
+                    + "SET s.`%s` = $objectValue",
                 predicate
             );
         } else if (predicate.equals(RDF.type.getURI())) {
             // Special handling for rdf:type - create node with type as label
             String object = nodeToString(triple.getObject());
-            
+
             params.put("subjectUri", subject);
-            
+
             cypher = String.format(
                 "MERGE (s:Resource:`%s` {uri: $subjectUri})",
                 object
@@ -147,14 +147,14 @@ public final class FalkorDBGraph extends GraphBase {
         } else {
             // Create relationship for resource objects
             String object = nodeToString(triple.getObject());
-            
+
             params.put("subjectUri", subject);
             params.put("objectUri", object);
-            
+
             cypher = String.format(
                 "MERGE (s:Resource {uri: $subjectUri}) "
-                + "MERGE (o:Resource {uri: $objectUri}) "
-                + "MERGE (s)-[r:`%s`]->(o)",
+                    + "MERGE (o:Resource {uri: $objectUri}) "
+                    + "MERGE (s)-[r:`%s`]->(o)",
                 predicate
             );
         }
@@ -170,37 +170,36 @@ public final class FalkorDBGraph extends GraphBase {
 
         Map<String, Object> params = new HashMap<>(2);
         String cypher;
-        
+
         if (triple.getObject().isLiteral()) {
             // Remove property from the subject node
             // Use backticks to allow URIs as property names directly
             params.put("subjectUri", subject);
-            
+
             cypher = String.format(
                 "MATCH (s:Resource {uri: $subjectUri}) "
-                + "REMOVE s.`%s`",
+                    + "REMOVE s.`%s`",
                 predicate
             );
         } else if (predicate.equals(RDF.type.getURI())) {
             // Special handling for rdf:type - remove label from node
             String object = nodeToString(triple.getObject());
-            
+
             params.put("subjectUri", subject);
-            
             cypher = String.format(
                 "MATCH (s:Resource:`%s` {uri: $subjectUri}) "
-                + "REMOVE s:`%s`",
+                    + "REMOVE s:`%s`",
                 object, object
             );
         } else {
             String object = nodeToString(triple.getObject());
-            
+
             params.put("subjectUri", subject);
             params.put("objectUri", object);
-            
+
             cypher = String.format(
                 "MATCH (s:Resource {uri: $subjectUri})-[r:`%s`]->"
-                + "(o:Resource {uri: $objectUri}) DELETE r",
+                    + "(o:Resource {uri: $objectUri}) DELETE r",
                 predicate
             );
         }
@@ -212,38 +211,40 @@ public final class FalkorDBGraph extends GraphBase {
     @Override
     protected ExtendedIterator<Triple> graphBaseFind(final Triple pattern) {
         List<Triple> triples = new ArrayList<>();
-        
+
         // Check if this is an rdf:type query
-        boolean isTypeQuery = !pattern.getPredicate().isConcrete() 
+        boolean isTypeQuery = !pattern.getPredicate().isConcrete()
             || pattern.getPredicate().getURI().equals(RDF.type.getURI());
-        
+
         if (isTypeQuery) {
             // Query for rdf:type triples (nodes with labels)
             List<Triple> typeTriples = findTypeTriples(pattern);
             triples.addAll(typeTriples);
         }
-        
-        // Query for relationship-based triples (non-literal objects, non-rdf:type)
-        if (!pattern.getObject().isConcrete() 
+
+        // Query for relationship-based triples (non-literal objects,
+        // non-rdf:type)
+        if (!pattern.getObject().isConcrete()
             || !pattern.getObject().isLiteral()) {
-            if (!pattern.getPredicate().isConcrete() 
-                || !pattern.getPredicate().getURI().equals(RDF.type.getURI())) {
+            if (!pattern.getPredicate().isConcrete()
+                || !pattern.getPredicate().getURI().equals(
+                    RDF.type.getURI())) {
                 Map<String, Object> params = new HashMap<>(2);
-                String cypherRels = buildCypherMatchRelationships(pattern, params);
+                String cypherRels = buildCypherMatchRelationships(pattern,
+                    params);
                 ResultSet result = graph.query(cypherRels, params);
-                
+
                 for (Record record : result) {
                     Triple triple = recordToTriple(record);
                     triples.add(triple);
                 }
             }
         }
-        
+
         // Query for property-based triples (literal objects)
-        if (!pattern.getObject().isConcrete() 
+        if (!pattern.getObject().isConcrete()
             || pattern.getObject().isLiteral()) {
-            List<Triple> propertyTriples = 
-                findPropertyTriples(pattern);
+            List<Triple> propertyTriples = findPropertyTriples(pattern);
             triples.addAll(propertyTriples);
         }
 
@@ -251,7 +252,7 @@ public final class FalkorDBGraph extends GraphBase {
     }
 
     private String buildCypherMatchRelationships(
-            final Triple pattern, 
+            final Triple pattern,
             final Map<String, Object> params) {
         StringBuilder cypher = new StringBuilder("MATCH ");
 
@@ -282,127 +283,127 @@ public final class FalkorDBGraph extends GraphBase {
 
     private List<Triple> findPropertyTriples(final Triple pattern) {
         List<Triple> triples = new ArrayList<>();
-        
+
         // Build query to get nodes with their properties as map
         Map<String, Object> params = new HashMap<>(1);
         StringBuilder cypher = new StringBuilder("MATCH ");
-        
+
         if (pattern.getSubject().isConcrete()) {
             params.put("subjectUri", nodeToString(pattern.getSubject()));
             cypher.append("(s:Resource {uri: $subjectUri})");
         } else {
             cypher.append("(s:Resource)");
         }
-        
+
         cypher.append(" RETURN s, properties(s) as props");
-        
+
         ResultSet result = graph.query(cypher.toString(), params);
-        
+
         for (Record record : result) {
             com.falkordb.graph_entities.Node node = record.getValue("s");
             String subjectUri = node.getProperty("uri").getValue().toString();
             Node subject = NodeFactory.createURI(subjectUri);
-            
+
             @SuppressWarnings("unchecked")
-            Map<String, Object> properties =
-                (Map<String, Object>) record.getValue("props");
-            
-          // Iterate over all properties
-          for (Map.Entry<String, Object> entry :
-              properties.entrySet()) {
+            Map<String, Object> properties = (Map<String, Object>)
+                record.getValue("props");
+
+            // Iterate over all properties
+            for (Map.Entry<String, Object> entry
+                : properties.entrySet()) {
                 String predicateUri = entry.getKey();
-                
+
                 // Skip the 'uri' property as it's not an RDF triple
                 if ("uri".equals(predicateUri)) {
                     continue;
                 }
-                
+
                 // Check if predicate matches pattern
                 if (pattern.getPredicate().isConcrete()) {
-                    String patternPredicate =
-                        nodeToString(pattern.getPredicate());
+                    String patternPredicate = nodeToString(
+                        pattern.getPredicate());
                     if (!predicateUri.equals(patternPredicate)) {
                         continue;
                     }
                 }
-                
+
                 String literalValue = entry.getValue().toString();
-                
+
                 // Check if object matches pattern
                 if (pattern.getObject().isConcrete()) {
-                    String patternObject =
-                        pattern.getObject().getLiteralLexicalForm();
+                    String patternObject = pattern.getObject()
+                        .getLiteralLexicalForm();
                     if (!literalValue.equals(patternObject)) {
                         continue;
                     }
                 }
-                
+
                 Node predicate = NodeFactory.createURI(predicateUri);
                 Node object = NodeFactory.createLiteral(literalValue);
-                
+
                 triples.add(Triple.create(subject, predicate, object));
             }
         }
-        
+
         return triples;
     }
 
     private List<Triple> findTypeTriples(final Triple pattern) {
         List<Triple> triples = new ArrayList<>();
-        
+
         // Build query to get nodes with their labels
         Map<String, Object> params = new HashMap<>(1);
         StringBuilder cypher = new StringBuilder("MATCH ");
-        
+
         if (pattern.getSubject().isConcrete()) {
             params.put("subjectUri", nodeToString(pattern.getSubject()));
             cypher.append("(s {uri: $subjectUri})");
         } else {
             cypher.append("(s)");
         }
-        
+
         cypher.append(" RETURN s, labels(s) as nodeLabels");
-        
+
         ResultSet result = graph.query(cypher.toString(), params);
-        
+
         for (Record record : result) {
             com.falkordb.graph_entities.Node node = record.getValue("s");
             String subjectUri = node.getProperty("uri").getValue().toString();
             Node subject = NodeFactory.createURI(subjectUri);
-            
+
             @SuppressWarnings("unchecked")
-            List<String> labels = (List<String>) record.getValue("nodeLabels");
-            
+            List<String> labels = (List<String>) record.getValue(
+                "nodeLabels");
+
             // Create an rdf:type triple for each label (except "Resource")
             for (String label : labels) {
                 if ("Resource".equals(label)) {
                     continue; // Skip the base Resource label
                 }
-                
+
                 // Check if object matches pattern
                 if (pattern.getObject().isConcrete()) {
-                    String patternObject = nodeToString(pattern.getObject());
+                    String patternObject = nodeToString(
+                        pattern.getObject());
                     if (!label.equals(patternObject)) {
                         continue;
                     }
                 }
-                
+
                 Node predicate = NodeFactory.createURI(RDF.type.getURI());
                 Node object = NodeFactory.createURI(label);
-                
+
                 triples.add(Triple.create(subject, predicate, object));
             }
         }
-        
+
         return triples;
     }
 
     private Triple recordToTriple(final Record record) {
-        com.falkordb.graph_entities.Node subjectNode =
-            record.getValue("s");
+        com.falkordb.graph_entities.Node subjectNode = record.getValue("s");
         com.falkordb.graph_entities.Edge edge = record.getValue("r");
-        com.falkordb.graph_entities.Node objectNode =
-            record.getValue("o");
+        com.falkordb.graph_entities.Node objectNode = record.getValue("o");
 
         String subjectUri = subjectNode.getProperty("uri").getValue()
             .toString();

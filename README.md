@@ -608,6 +608,112 @@ Contributions are welcome! Areas for improvement:
 - Additional test coverage
 - Documentation improvements
 
+## Releasing to Maven Central
+
+This project is configured to publish releases to Maven Central. Here's how to create and publish a release:
+
+### Release Prerequisites
+
+1. **GPG Key**: You need a GPG key pair for signing artifacts
+
+   ```bash
+   # Generate a new GPG key (if you don't have one)
+   gpg --gen-key
+   
+   # List your keys
+   gpg --list-keys
+   
+   # Publish your public key to a keyserver
+   gpg --keyserver keyserver.ubuntu.com --send-keys YOUR_KEY_ID
+   ```
+
+2. **Maven Central Account**: Sign up at [https://central.sonatype.com/](https://central.sonatype.com/)
+
+3. **Configure Maven Settings**: Add credentials to `~/.m2/settings.xml`
+
+   ```xml
+   <settings>
+     <servers>
+       <server>
+         <id>central</id>
+         <username>your-username</username>
+         <password>your-password</password>
+       </server>
+     </servers>
+   </settings>
+   ```
+
+### Release Process
+
+1. **Update Version**: Remove `-SNAPSHOT` from version in `pom.xml`
+
+   ```xml
+   <version>0.2.0</version>
+   ```
+
+2. **Build and Test**: Ensure everything works
+
+   ```bash
+   mvn clean install
+   ```
+
+3. **Create Release Build**: Build with the release profile
+
+   ```bash
+   mvn clean install -Prelease
+   ```
+
+   This will:
+   - Compile the code
+   - Run all tests
+   - Generate source and javadoc JARs
+   - Sign all artifacts with GPG
+   - You'll be prompted for your GPG passphrase
+
+4. **Deploy to Maven Central**
+
+   ```bash
+   mvn deploy -Prelease
+   ```
+
+5. **Create Git Tag**
+
+   ```bash
+   git add pom.xml
+   git commit -m "Release version 0.2.0"
+   git tag -a v0.2.0 -m "Release version 0.2.0"
+   git push origin main
+   git push origin v0.2.0
+   ```
+
+6. **Create GitHub Release**: Go to GitHub and create a release from the tag
+
+7. **Bump to Next SNAPSHOT**: Update `pom.xml` for next development cycle
+
+   ```xml
+   <version>0.3.0-SNAPSHOT</version>
+   ```
+
+   ```bash
+   git add pom.xml
+   git commit -m "Bump version to 0.3.0-SNAPSHOT"
+   git push origin main
+   ```
+
+### Building Locally (Without GPG Signing)
+
+For local development, you don't need GPG signing:
+
+```bash
+# Regular build without signing
+mvn clean install
+
+# Skip tests if needed
+mvn clean install -DskipTests
+```
+
+The GPG signing only happens when you use the `-Prelease` profile, which is intended for publishing releases to Maven Central.
+
 ## License
 
 This project is provided as-is for educational and development purposes.

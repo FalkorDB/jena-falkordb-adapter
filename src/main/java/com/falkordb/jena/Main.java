@@ -6,6 +6,8 @@ import org.apache.jena.rdf.model.Resource;
 import org.apache.jena.rdf.model.Statement;
 import org.apache.jena.rdf.model.StmtIterator;
 import org.apache.jena.vocabulary.RDF;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Simple demo application that shows basic usage of the FalkorDB-Jena adapter.
@@ -14,6 +16,9 @@ import org.apache.jena.vocabulary.RDF;
  * a FalkorDB instance, creates a small RDF dataset and prints the results.
  */
 public final class Main {
+    /** Logger instance for this class. */
+    private static final Logger LOGGER = LoggerFactory.getLogger(Main.class);
+
     /** Sample age used in the demo person resource. */
     private static final int SAMPLE_AGE = 30;
 
@@ -28,16 +33,18 @@ public final class Main {
      * @param args command line arguments (ignored)
      */
     public static void main(final String[] args) {
-        System.out.println("FalkorDB-Jena Adapter Demo");
-        System.out.println("===============================================");
+        if (LOGGER.isInfoEnabled()) {
+            LOGGER.info("FalkorDB-Jena Adapter Demo");
+            LOGGER.info("===============================================");
+        }
 
         try {
             // Create a model using FalkorDB
             Model model = FalkorDBModelFactory.createModel("demo_graph");
 
-            System.out.println(
-                "✓ Connected to FalkorDB using FalkorDB driver"
-            );
+            if (LOGGER.isInfoEnabled()) {
+                LOGGER.info("✓ Connected to FalkorDB using FalkorDB driver");
+            }
             // Create some sample RDF data and print initial statements
             Property name = model.createProperty("http://example.org/name");
             Property age = model.createProperty("http://example.org/age");
@@ -48,26 +55,31 @@ public final class Main {
             queryResourcesWithName(model, name);
 
             // Delete operations
-            System.out.println(
-                "\n=== Deleting: Remove age property ==="
-            );
+            if (LOGGER.isInfoEnabled()) {
+                LOGGER.info("\n=== Deleting: Remove age property ===");
+            }
             person.removeAll(age);
-            System.out.println("✓ Age property removed");
-            System.out.println("Model size after delete: " + model.size());
+            if (LOGGER.isInfoEnabled()) {
+                LOGGER.info("✓ Age property removed");
+                LOGGER.info("Model size after delete: {}", model.size());
+            }
 
-            System.out.println(
-                "\n=== Querying: List statements after deletion ==="
-            );
+            if (LOGGER.isInfoEnabled()) {
+                LOGGER.info(
+                    "\n=== Querying: List statements after deletion ===");
+            }
             StmtIterator afterDeleteIter = model.listStatements();
             while (afterDeleteIter.hasNext()) {
                 Statement stmt = afterDeleteIter.nextStatement();
-                System.out.println("  " + stmt);
+                if (LOGGER.isInfoEnabled()) {
+                    LOGGER.info("  {}", stmt);
+                }
             }
 
             // Add another resource to demonstrate more complex queries
-            System.out.println(
-                "\n=== Adding: Another person ==="
-            );
+            if (LOGGER.isInfoEnabled()) {
+                LOGGER.info("\n=== Adding: Another person ===");
+            }
             Resource person2 = model.createResource(
                 "http://example.org/person/jane"
             );
@@ -80,9 +92,13 @@ public final class Main {
                 "http://example.org/email"
             );
             person2.addProperty(email, "jane@example.org");
-            System.out.println("✓ Added Jane with email");
+            if (LOGGER.isInfoEnabled()) {
+                LOGGER.info("✓ Added Jane with email");
+            }
 
-            System.out.println("\n=== Querying: Find all Persons ===");
+            if (LOGGER.isInfoEnabled()) {
+                LOGGER.info("\n=== Querying: Find all Persons ===");
+            }
             StmtIterator personsIter = model.listStatements(
                 null,
                 RDF.type,
@@ -91,43 +107,49 @@ public final class Main {
             while (personsIter.hasNext()) {
                 Statement stmt = personsIter.nextStatement();
                 Resource personRes = stmt.getSubject();
-                System.out.println(
-                    "  Person: " + personRes.getURI()
-                );
+                if (LOGGER.isInfoEnabled()) {
+                    LOGGER.info("  Person: {}", personRes.getURI());
+                }
 
                 // Get name if available
                 Statement nameStmt = personRes.getProperty(name);
-                if (nameStmt != null) {
-                    System.out.println(
-                        "    Name: " + nameStmt.getObject()
-                    );
+                if (nameStmt != null && LOGGER.isInfoEnabled()) {
+                    LOGGER.info("    Name: {}", nameStmt.getObject());
                 }
             }
 
             // Delete a complete resource
-            System.out.println(
-                "\n=== Deleting: Remove Jane completely ==="
-            );
+            if (LOGGER.isInfoEnabled()) {
+                LOGGER.info("\n=== Deleting: Remove Jane completely ===");
+            }
             person2.removeProperties();
-            System.out.println("✓ All properties of Jane removed");
-            System.out.println("Final model size: " + model.size());
+            if (LOGGER.isInfoEnabled()) {
+                LOGGER.info("✓ All properties of Jane removed");
+                LOGGER.info("Final model size: {}", model.size());
+            }
 
-            System.out.println(
-                "\n=== Final State: All remaining statements ==="
-            );
+            if (LOGGER.isInfoEnabled()) {
+                LOGGER.info("\n=== Final State: All remaining statements ===");
+            }
             StmtIterator finalIter = model.listStatements();
             while (finalIter.hasNext()) {
                 Statement stmt = finalIter.nextStatement();
-                System.out.println("  " + stmt);
+                if (LOGGER.isInfoEnabled()) {
+                    LOGGER.info("  {}", stmt);
+                }
             }
 
             model.close();
-            System.out.println("\n✓ Demo completed successfully");
+            if (LOGGER.isInfoEnabled()) {
+                LOGGER.info("\n✓ Demo completed successfully");
+            }
 
         } catch (RuntimeException e) {
-            System.err.println("✗ Error: " + e.getMessage());
-            System.err.println("Make sure FalkorDB is running on localhost:");
-            System.err.println(FalkorDBModelFactory.DEFAULT_PORT);
+            if (LOGGER.isErrorEnabled()) {
+                LOGGER.error("✗ Error: {}", e.getMessage());
+                LOGGER.error("Make sure FalkorDB is running on localhost:{}",
+                    FalkorDBModelFactory.DEFAULT_PORT);
+            }
             e.printStackTrace();
         }
     }
@@ -143,23 +165,33 @@ public final class Main {
         person.addProperty(name, "John Doe");
         person.addProperty(age, model.createTypedLiteral(SAMPLE_AGE));
 
-        System.out.println("✓ Added sample RDF data");
-        System.out.println("Model size: " + model.size());
+        if (LOGGER.isInfoEnabled()) {
+            LOGGER.info("✓ Added sample RDF data");
+            LOGGER.info("Model size: {}", model.size());
+        }
         return person;
     }
 
     private static void printAllStatements(final Model model) {
-        System.out.println("\n=== Querying: List All Statements ===");
+        if (LOGGER.isInfoEnabled()) {
+            LOGGER.info("\n=== Querying: List All Statements ===");
+        }
         StmtIterator iter = model.listStatements();
         while (iter.hasNext()) {
             Statement stmt = iter.nextStatement();
-            System.out.println(stmt);
+            if (LOGGER.isInfoEnabled()) {
+                LOGGER.info("{}", stmt);
+            }
         }
-        System.out.println("Total statements: " + model.size());
+        if (LOGGER.isInfoEnabled()) {
+            LOGGER.info("Total statements: {}", model.size());
+        }
     }
 
     private static void queryTypes(final Model model) {
-        System.out.println("\n=== Querying: Find all rdf:type triples ===");
+        if (LOGGER.isInfoEnabled()) {
+            LOGGER.info("\n=== Querying: Find all rdf:type triples ===");
+        }
         StmtIterator typeIter = model.listStatements(
             null,
             RDF.type,
@@ -169,13 +201,17 @@ public final class Main {
             Statement stmt = typeIter.nextStatement();
             String s = stmt.getSubject().toString();
             String o = stmt.getObject().toString();
-            System.out.println("  " + s + " is a " + o);
+            if (LOGGER.isInfoEnabled()) {
+                LOGGER.info("  {} is a {}", s, o);
+            }
         }
     }
 
     private static void queryPropertiesOfPerson(final Model model,
             final Resource person) {
-        System.out.println("\n=== Querying: Find all properties of John ===");
+        if (LOGGER.isInfoEnabled()) {
+            LOGGER.info("\n=== Querying: Find all properties of John ===");
+        }
         StmtIterator johnIter = model.listStatements(
             person,
             null,
@@ -185,15 +221,19 @@ public final class Main {
             Statement stmt = johnIter.nextStatement();
             String p = stmt.getPredicate().toString();
             String o = stmt.getObject().toString();
-            System.out.println("  " + p + " -> " + o);
+            if (LOGGER.isInfoEnabled()) {
+                LOGGER.info("  {} -> {}", p, o);
+            }
         }
     }
 
     private static void queryResourcesWithName(final Model model,
             final Property name) {
-        System.out.println(
-            "\n=== Querying: Find all resources with name property ==="
-        );
+        if (LOGGER.isInfoEnabled()) {
+            LOGGER.info(
+                "\n=== Querying: Find all resources with name property ==="
+            );
+        }
         StmtIterator nameIter = model.listStatements(
             null,
             name,
@@ -203,7 +243,9 @@ public final class Main {
             Statement stmt = nameIter.nextStatement();
             String s = stmt.getSubject().toString();
             String o = stmt.getObject().toString();
-            System.out.println("  " + s + " has name: " + o);
+            if (LOGGER.isInfoEnabled()) {
+                LOGGER.info("  {} has name: {}", s, o);
+            }
         }
     }
 }

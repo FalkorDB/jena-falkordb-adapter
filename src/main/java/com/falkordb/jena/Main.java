@@ -150,7 +150,7 @@ public final class Main {
                 LOGGER.error("Make sure FalkorDB is running on localhost:{}",
                     FalkorDBModelFactory.DEFAULT_PORT);
             }
-            e.printStackTrace();
+            LOGGER.error("Stack trace:", e);
         }
     }
 

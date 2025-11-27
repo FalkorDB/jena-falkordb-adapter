@@ -16,6 +16,8 @@ import org.apache.jena.graph.NodeFactory;
 import org.apache.jena.util.iterator.ExtendedIterator;
 import org.apache.jena.util.iterator.WrappedIterator;
 import org.apache.jena.vocabulary.RDF;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Jena Graph implementation backed by a FalkorDB graph.
@@ -25,6 +27,9 @@ import org.apache.jena.vocabulary.RDF;
  * API.
  */
 public final class FalkorDBGraph extends GraphBase {
+    /** Logger instance. */
+    private static final Logger LOGGER = LoggerFactory.getLogger(
+        FalkorDBGraph.class);
     /** FalkorDB driver (JFalkorDB). */
     private final Driver driver;
     /** Underlying FalkorDB graph instance. */
@@ -80,9 +85,10 @@ public final class FalkorDBGraph extends GraphBase {
         } catch (Exception e) {
             // Index might already exist, which is fine
             if (!e.getMessage().contains("already indexed")) {
-                System.err.println(
-                    "Warning: Could not create index: " + e.getMessage()
-                );
+                if (LOGGER.isWarnEnabled()) {
+                    LOGGER.warn("Could not create index: {}",
+                        e.getMessage());
+                }
             }
         }
     }
@@ -443,9 +449,10 @@ public final class FalkorDBGraph extends GraphBase {
         try {
             driver.close();
         } catch (Exception e) {
-            System.err.println(
-                "Error closing FalkorDB driver: " + e.getMessage()
-            );
+            if (LOGGER.isErrorEnabled()) {
+                LOGGER.error("Error closing FalkorDB driver: {}",
+                    e.getMessage());
+            }
         }
         super.close();
     }

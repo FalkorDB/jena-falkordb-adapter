@@ -77,21 +77,21 @@ public class FusekiInferenceIntegrationTest {
                 .build();
 
         // Clear the graph before each test
-        if (falkorModel.getGraph() instanceof FalkorDBGraph) {
-            ((FalkorDBGraph) falkorModel.getGraph()).clear();
+        if (falkorModel.getGraph() instanceof FalkorDBGraph falkorGraph) {
+            falkorGraph.clear();
         }
 
         // Load rules from classpath
-        List<Rule> rules = loadRulesFromClasspath("rules/grandfather_of_bwd.rule");
+        var rules = loadRulesFromClasspath("rules/grandfather_of_bwd.rule");
 
         // Create a reasoner with the rules
-        Reasoner reasoner = new GenericRuleReasoner(rules);
+        var reasoner = new GenericRuleReasoner(rules);
 
         // Create inference model wrapping the FalkorDB model
         infModel = ModelFactory.createInfModel(reasoner, falkorModel);
 
         // Create dataset from inference model
-        Dataset ds = DatasetFactory.create(infModel);
+        var ds = DatasetFactory.create(infModel);
 
         // Start Fuseki server
         server = FusekiServer.create()

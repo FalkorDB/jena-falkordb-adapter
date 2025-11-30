@@ -62,12 +62,12 @@ public class FusekiFalkorDBIntegrationTest {
             .build();
         
         // Clear the graph before each test
-        if (falkorModel.getGraph() instanceof FalkorDBGraph) {
-            ((FalkorDBGraph) falkorModel.getGraph()).clear();
+        if (falkorModel.getGraph() instanceof FalkorDBGraph falkorGraph) {
+            falkorGraph.clear();
         }
         
         // Create dataset from model
-        Dataset ds = DatasetFactory.create(falkorModel);
+        var ds = DatasetFactory.create(falkorModel);
         
         // Start Fuseki server
         server = FusekiServer.create()

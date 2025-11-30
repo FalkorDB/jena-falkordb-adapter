@@ -15,6 +15,28 @@ import org.slf4j.LoggerFactory;
  *
  * <p>This class starts an Apache Jena Fuseki server that uses FalkorDB
  * as the underlying graph database for RDF storage.</p>
+ *
+ * <p>The server can be started in two modes:</p>
+ * <ul>
+ *   <li><b>Config mode</b>: Using a TTL configuration file with the assembler
+ *       (e.g., {@code --config config-falkordb.ttl})</li>
+ *   <li><b>Direct mode</b>: Using environment variables for connection settings
+ *       (default mode when no config file is specified)</li>
+ * </ul>
+ *
+ * <p>Example config file usage:</p>
+ * <pre>
+ * java -jar jena-fuseki-falkordb.jar --config config-falkordb.ttl
+ * </pre>
+ *
+ * <p>Example environment variable usage:</p>
+ * <pre>
+ * export FALKORDB_HOST=localhost
+ * export FALKORDB_PORT=6379
+ * export FALKORDB_GRAPH=my_graph
+ * export FUSEKI_PORT=3330
+ * java -jar jena-fuseki-falkordb.jar
+ * </pre>
  */
 public final class FalkorFuseki {
     /** Logger instance for this class. */
@@ -38,6 +60,8 @@ public final class FalkorFuseki {
     /** Module webapp path when running from project root. */
     private static final String MODULE_WEBAPP_PATH =
         "jena-fuseki-falkordb/" + DEV_WEBAPP_PATH;
+    /** Default config file name in classpath. */
+    private static final String DEFAULT_CONFIG_RESOURCE = "config-falkordb.ttl";
 
     /** Prevent instantiation of this utility class. */
     private FalkorFuseki() {
@@ -47,9 +71,128 @@ public final class FalkorFuseki {
     /**
      * Main entry point for starting the FalkorDB-backed Fuseki server.
      *
-     * @param args command line arguments (ignored)
+     * <p>Supports the following command line options:</p>
+     * <ul>
+     *   <li>{@code --config <file>}: Path to TTL configuration file</li>
+     *   <li>{@code --help}: Show usage information</li>
+     * </ul>
+     *
+     * @param args command line arguments
      */
     public static void main(final String[] args) {
+        // Parse command line arguments
+        String configFile = null;
+        for (int i = 0; i < args.length; i++) {
+            if ("--config".equals(args[i]) && i + 1 < args.length) {
+                configFile = args[i + 1];
+                i++;
+            } else if ("--help".equals(args[i])) {
+                printUsage();
+                return;
+            }
+        }
+
+        // Start server with config file or direct mode
+        if (configFile != null) {
+            startWithConfig(configFile);
+        } else {
+            // Check for config file via environment variable
+            String envConfig = System.getenv("FUSEKI_CONFIG");
+            if (envConfig != null && !envConfig.isEmpty()) {
+                startWithConfig(envConfig);
+            } else {
+                startDirect();
+            }
+        }
+    }
+
+    /**
+     * Print usage information to stdout.
+     */
+    private static void printUsage() {
+        System.out.println("FalkorDB Fuseki Server");
+        System.out.println();
+        System.out.println("Usage:");
+        System.out.println("  java -jar jena-fuseki-falkordb.jar [options]");
+        System.out.println();
+        System.out.println("Options:");
+        System.out.println("  --config <file>  Path to TTL configuration file");
+        System.out.println("  --help           Show this help message");
+        System.out.println();
+        System.out.println("Environment Variables (used when no config file):");
+        System.out.println("  FALKORDB_HOST    FalkorDB host (default: localhost)");
+        System.out.println("  FALKORDB_PORT    FalkorDB port (default: 6379)");
+        System.out.println("  FALKORDB_GRAPH   Graph name (default: my_knowledge_graph)");
+        System.out.println("  FUSEKI_PORT      Fuseki server port (default: 3330)");
+        System.out.println("  FUSEKI_CONFIG    Path to config file (alternative to --config)");
+        System.out.println();
+        System.out.println("Example config file (TTL):");
+        System.out.println("  @prefix falkor:  <http://falkordb.com/jena/assembler#> .");
+        System.out.println("  @prefix fuseki:  <http://jena.apache.org/fuseki#> .");
+        System.out.println();
+        System.out.println("  :dataset rdf:type falkor:FalkorDBModel ;");
+        System.out.println("      falkor:host \"localhost\" ;");
+        System.out.println("      falkor:port 6379 ;");
+        System.out.println("      falkor:graphName \"my_graph\" .");
+    }
+
+    /**
+     * Start the Fuseki server using a configuration file.
+     *
+     * <p>The configuration file should be in Turtle format and define
+     * FalkorDB-backed datasets using the assembler vocabulary.</p>
+     *
+     * @param configPath path to the configuration file
+     */
+    private static void startWithConfig(final String configPath) {
+        if (LOGGER.isInfoEnabled()) {
+            LOGGER.info("Starting Fuseki with config file: {}", configPath);
+        }
+
+        File configFile = new File(configPath);
+        if (!configFile.exists()) {
+            // Try loading from classpath
+            URL resourceUrl = FalkorFuseki.class.getClassLoader()
+                .getResource(configPath);
+            if (resourceUrl != null) {
+                configFile = new File(resourceUrl.getPath());
+            } else {
+                LOGGER.error("Config file not found: {}", configPath);
+                System.exit(1);
+                return;
+            }
+        }
+
+        int fusekiPort = getEnvOrDefaultInt("FUSEKI_PORT", DEFAULT_FUSEKI_PORT);
+
+        FusekiServer.Builder serverBuilder = FusekiServer.create()
+            .port(fusekiPort)
+            .parseConfigFile(configFile.getAbsolutePath());
+
+        // Try to set up static files
+        String staticBase = getStaticFileBase();
+        if (staticBase != null) {
+            serverBuilder.staticFileBase(staticBase);
+            if (LOGGER.isInfoEnabled()) {
+                LOGGER.info("Serving static files from: {}", staticBase);
+            }
+        }
+
+        FusekiServer server = serverBuilder.build();
+        server.start();
+
+        if (LOGGER.isInfoEnabled()) {
+            LOGGER.info("Server running on port {}. "
+                + "Check config file for service endpoints.", fusekiPort);
+        }
+    }
+
+    /**
+     * Start the Fuseki server using direct connection settings.
+     *
+     * <p>Connection settings are read from environment variables.</p>
+     */
+    private static void startDirect() {
         // 1. Connection Details for FalkorDB (Redis)
         String host = getEnvOrDefault("FALKORDB_HOST", DEFAULT_HOST);
         int port = getEnvOrDefaultInt("FALKORDB_PORT", DEFAULT_PORT);

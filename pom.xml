@@ -15,6 +15,7 @@
 
     <modules>
         <module>jena-falkordb-adapter</module>
+        <module>jena-falkordb-assembler</module>
         <module>jena-fuseki-falkordb</module>
     </modules>
 
@@ -90,6 +91,13 @@
             <dependency>
                 <groupId>com.falkordb</groupId>
                 <artifactId>jena-falkordb-adapter</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <!-- Jena FalkorDB Assembler (this project) -->
+            <dependency>
+                <groupId>com.falkordb</groupId>
+                <artifactId>jena-falkordb-assembler</artifactId>
                 <version>${project.version}</version>
             </dependency>
 

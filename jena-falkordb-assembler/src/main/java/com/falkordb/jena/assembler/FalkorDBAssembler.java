@@ -30,6 +30,13 @@ public class FalkorDBAssembler extends AssemblerBase {
     private static final Logger LOGGER = LoggerFactory.getLogger(
         FalkorDBAssembler.class);
 
+    /**
+     * Creates a new FalkorDBAssembler instance.
+     */
+    public FalkorDBAssembler() {
+        // Default constructor
+    }
+
     /** Default FalkorDB host. */
     private static final String DEFAULT_HOST = "localhost";
 

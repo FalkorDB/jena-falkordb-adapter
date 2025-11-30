@@ -97,6 +97,13 @@ public final class FalkorDBModelFactory {
         private Driver driver = null;
 
         /**
+         * Creates a new Builder with default settings.
+         */
+        public Builder() {
+            // Default constructor
+        }
+
+        /**
          * Set the FalkorDB host to connect to.
          *
          * @param value the FalkorDB host

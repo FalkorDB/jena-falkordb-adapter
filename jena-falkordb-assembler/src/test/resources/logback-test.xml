@@ -17,7 +17,7 @@
     <!-- Suppress Apache SIS logs -->
     <logger name="org.apache.sis" level="ERROR"/>
 
-    <!-- Logger for the FalkorDB adapter -->
+    <!-- Logger for the FalkorDB Assembler module -->
     <logger name="com.falkordb" level="INFO"/>
 
     <!-- Root logger configuration -->

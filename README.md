@@ -8,12 +8,19 @@
 [![Discuss the project](https://img.shields.io/badge/discussions-FalkorDB-brightgreen.svg)](https://github.com/FalkorDB/FalkorDB/discussions)
 [![codecov](https://codecov.io/gh/FalkorDB/jena-falkordb-adapter/graph/badge.svg?token=kQg1yvyp0u)](https://codecov.io/gh/FalkorDB/jena-falkordb-adapter)
 
-# Jena-FalkorDB Adapter
+# Jena-FalkorDB
 
 [![Try Free](https://img.shields.io/badge/Try%20Free-FalkorDB%20Cloud-FF8101?labelColor=FDE900&style=for-the-badge&link=https://app.falkordb.cloud)](https://app.falkordb.cloud)
 
 
 A Java adapter that enables Apache Jena to work with FalkorDB graph database, allowing you to use SPARQL queries on data stored in FalkorDB.
+
+## Project Structure
+
+This is a multi-module Maven project consisting of:
+
+- **jena-falkordb-adapter** - Core adapter library that integrates Apache Jena with FalkorDB
+- **jena-fuseki-falkordb** - Apache Jena Fuseki server with FalkorDB backend for SPARQL endpoint
 
 ## Features
 
@@ -24,6 +31,7 @@ A Java adapter that enables Apache Jena to work with FalkorDB graph database, al
 - ✅ **rdf:type support with native graph labels**
 - ✅ **Automatic URI indexing** for optimal query performance
 - ✅ **Custom driver support** for advanced configuration
+- ✅ **Fuseki SPARQL server** with FalkorDB backend
 - ✅ Connection pooling for better performance
 - ✅ Easy-to-use factory pattern for model creation
 - ✅ Continuous integration with multi-version Java testing (11, 17, 21)
@@ -58,6 +66,8 @@ published artifact, see the "Using from Maven" section below.
 If the project artifacts are published to Maven Central or OSSRH snapshots, you can add
 the adapter as a dependency in your own project's `pom.xml`.
 
+### Adapter Library
+
 For the snapshot (development) version:
 
 ```xml
@@ -72,7 +82,7 @@ For the snapshot (development) version:
     <dependency>
         <groupId>com.falkordb</groupId>
         <artifactId>jena-falkordb-adapter</artifactId>
-        <version>1.0-SNAPSHOT</version>
+        <version>0.2.0-SNAPSHOT</version>
     </dependency>
 </dependencies>
 ```
@@ -84,6 +94,20 @@ For a released version available on Maven Central (replace `x.y.z` with the rele
     <dependency>
         <groupId>com.falkordb</groupId>
         <artifactId>jena-falkordb-adapter</artifactId>
+        <version>x.y.z</version>
+    </dependency>
+</dependencies>
+```
+
+### Fuseki Server with FalkorDB
+
+If you want to run a Fuseki SPARQL endpoint with FalkorDB backend:
+
+```xml
+<dependencies>
+    <dependency>
+        <groupId>com.falkordb</groupId>
+        <artifactId>jena-fuseki-falkordb</artifactId>
         <version>x.y.z</version>
     </dependency>
 </dependencies>
@@ -585,16 +609,40 @@ docker run -p 6379:6379 -d --rm --name falkordb falkordb/falkordb:latest
 mvn test
 ```
 
-4. Build an executable JAR and run the demo:
+4. Build executable JARs and run the demo:
 
 ```bash
 mvn clean package
-java -jar target/jena-falkordb-adapter-1.0-SNAPSHOT.jar
+# Run the adapter demo
+java -jar jena-falkordb-adapter/target/jena-falkordb-adapter-0.2.0-SNAPSHOT.jar
+
+# Run the Fuseki server with FalkorDB
+java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar
 ```
+
+### Running the Fuseki Server
+
+The Fuseki server module provides a standalone SPARQL endpoint:
+
+```bash
+# Using environment variables for configuration
+export FALKORDB_HOST=localhost
+export FALKORDB_PORT=6379
+export FALKORDB_GRAPH=my_knowledge_graph
+export FUSEKI_PORT=3330
+
+java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar
+```
+
+Then access:
+- **Web UI**: http://localhost:3330/
+- **SPARQL Endpoint**: http://localhost:3330/falkor
 
 Developer notes:
 
-- The main adapter code lives under `src/main/java/com/falkordb/jena/`.
+- This is a multi-module Maven project with a parent POM and two submodules
+- The adapter code lives under `jena-falkordb-adapter/src/main/java/com/falkordb/jena/`
+- The Fuseki server code lives under `jena-fuseki-falkordb/src/main/java/com/falkordb/`
 - Tests that interact with FalkorDB assume a local FalkorDB instance; tests use `FalkorDBGraph.clear()` to keep the test graph isolated.
 - CI publishes snapshots to OSSRH; see `.github/workflows` for publishing details.
 

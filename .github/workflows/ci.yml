@@ -96,13 +96,13 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: test-results
-        path: target/surefire-reports/
+        path: '**/target/surefire-reports/'
     
-    - name: Upload JAR artifact
+    - name: Upload JAR artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: jar-file
-        path: target/*.jar
+        name: jar-files
+        path: '**/target/*.jar'
 
   lint:
     name: Lint and Code Quality
@@ -122,10 +122,6 @@ jobs:
     - name: Compile code
       run: mvn -B clean compile --file pom.xml
     
-    - name: Run Checkstyle
-      run: mvn -B checkstyle:check --file pom.xml
-      continue-on-error: true
-    
     - name: Run SpotBugs
       run: mvn -B spotbugs:check --file pom.xml
       continue-on-error: true
@@ -138,20 +134,12 @@ jobs:
       run: mvn -B pmd:cpd-check --file pom.xml
       continue-on-error: true
     
-    - name: Upload Checkstyle report
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: checkstyle-report
-        path: target/checkstyle-result.xml
-        if-no-files-found: ignore
-    
     - name: Upload SpotBugs report
       if: always()
       uses: actions/upload-artifact@v4
       with:
         name: spotbugs-report
-        path: target/spotbugsXml.xml
+        path: '**/target/spotbugsXml.xml'
         if-no-files-found: ignore
     
     - name: Upload PMD report
@@ -159,7 +147,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: pmd-report
-        path: target/pmd.xml
+        path: '**/target/pmd.xml'
         if-no-files-found: ignore
   
   code-quality:

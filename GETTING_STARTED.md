@@ -549,6 +549,113 @@ curl -X POST -H "Content-Type: text/turtle" \
   http://localhost:3030/dataset/data
 ```
 
+### Curl Examples
+
+The following curl examples demonstrate common GeoSPARQL operations. These examples correspond to the integration tests in `GeoSPARQLIntegrationTest.java`.
+
+**Example 1: Insert a rectangle (polygon) and a point**
+
+This inserts a park (polygon) and a fountain (point) inside it:
+
+```bash
+curl -X POST http://localhost:3030/dataset/update \
+  -H "Content-Type: application/sparql-update" \
+  --data '
+PREFIX geo: <http://www.opengis.net/ont/geosparql#>
+PREFIX sf: <http://www.opengis.net/ont/sf#>
+PREFIX ex: <http://example.org/>
+INSERT DATA {
+  ex:park a geo:Feature ;
+    ex:name "City Park" ;
+    geo:hasGeometry ex:parkGeom .
+  ex:parkGeom a sf:Polygon ;
+    geo:asWKT "POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))"^^geo:wktLiteral .
+  ex:fountain a geo:Feature ;
+    ex:name "Fountain" ;
+    geo:hasGeometry ex:fountainGeom .
+  ex:fountainGeom a sf:Point ;
+    geo:asWKT "POINT(5 5)"^^geo:wktLiteral .
+}'
+```
+
+**Example 2: Query for spatial containment (sfContains)**
+
+Find which polygon contains which point:
+
+```bash
+curl -X POST http://localhost:3030/dataset/query \
+  -H "Accept: application/sparql-results+json" \
+  --data-urlencode 'query=
+PREFIX geo: <http://www.opengis.net/ont/geosparql#>
+PREFIX geof: <http://www.opengis.net/def/function/geosparql/>
+PREFIX sf: <http://www.opengis.net/ont/sf#>
+PREFIX ex: <http://example.org/>
+SELECT ?parkName ?pointName WHERE {
+  ?park a geo:Feature ; ex:name ?parkName ; geo:hasGeometry ?parkGeom .
+  ?point a geo:Feature ; ex:name ?pointName ; geo:hasGeometry ?pointGeom .
+  ?parkGeom a sf:Polygon ; geo:asWKT ?parkWkt .
+  ?pointGeom a sf:Point ; geo:asWKT ?pointWkt .
+  FILTER(geof:sfContains(?parkWkt, ?pointWkt))
+}'
+```
+
+Expected result:
+```json
+{
+  "results": {
+    "bindings": [
+      { "parkName": { "value": "City Park" }, "pointName": { "value": "Fountain" } }
+    ]
+  }
+}
+```
+
+**Example 3: Query for features within a bounding box (sfWithin)**
+
+First, insert features at different locations:
+
+```bash
+curl -X POST http://localhost:3030/dataset/update \
+  -H "Content-Type: application/sparql-update" \
+  --data '
+PREFIX geo: <http://www.opengis.net/ont/geosparql#>
+PREFIX sf: <http://www.opengis.net/ont/sf#>
+PREFIX ex: <http://example.org/>
+INSERT DATA {
+  ex:feature1 a geo:Feature ; ex:name "Inside" ;
+    geo:hasGeometry [ a sf:Point ; geo:asWKT "POINT(5 5)"^^geo:wktLiteral ] .
+  ex:feature2 a geo:Feature ; ex:name "Outside" ;
+    geo:hasGeometry [ a sf:Point ; geo:asWKT "POINT(15 15)"^^geo:wktLiteral ] .
+}'
+```
+
+Then query for features within a bounding box:
+
+```bash
+curl -X POST http://localhost:3030/dataset/query \
+  -H "Accept: application/sparql-results+json" \
+  --data-urlencode 'query=
+PREFIX geo: <http://www.opengis.net/ont/geosparql#>
+PREFIX geof: <http://www.opengis.net/def/function/geosparql/>
+PREFIX ex: <http://example.org/>
+SELECT ?name WHERE {
+  ?feature a geo:Feature ; ex:name ?name ; geo:hasGeometry ?geom .
+  ?geom geo:asWKT ?wkt .
+  FILTER(geof:sfWithin(?wkt, "POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))"^^geo:wktLiteral))
+}'
+```
+
+Expected result (only the "Inside" feature is returned):
+```json
+{
+  "results": {
+    "bindings": [
+      { "name": { "value": "Inside" } }
+    ]
+  }
+}
+```
+
 ### GeoSPARQL Functions
 
 Common spatial functions available:

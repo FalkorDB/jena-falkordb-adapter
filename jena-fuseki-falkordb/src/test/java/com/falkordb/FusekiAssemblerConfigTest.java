@@ -6,9 +6,19 @@ import org.apache.jena.query.ResultSet;
 import org.apache.jena.sparql.exec.http.QueryExecutionHTTP;
 import org.apache.jena.sparql.exec.http.UpdateExecutionHTTP;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.utility.DockerImageName;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -20,27 +30,47 @@ import static org.junit.jupiter.api.Assertions.*;
  * 2. Configuration files can define FalkorDB-backed datasets
  * 3. The server works correctly with config-based initialization
  * 
- * Prerequisites: FalkorDB must be running on localhost:6379
- * Run: docker run -p 6379:6379 -it --rm falkordb/falkordb:latest
+ * Uses Testcontainers to automatically start FalkorDB if not already running.
  */
+@Testcontainers
 public class FusekiAssemblerConfigTest {
 
     private static final int TEST_PORT = 3332;
-    private static final String CONFIG_FILE = "config-test-falkordb.ttl";
+    private static final int FALKORDB_PORT = 6379;
+    
+    @Container
+    private static final GenericContainer<?> falkordb = new GenericContainer<>(
+            DockerImageName.parse("falkordb/falkordb:latest"))
+            .withExposedPorts(FALKORDB_PORT)
+            .withReuse(true);
+    
+    @TempDir
+    Path tempDir;
+    
+    private static String falkorHost;
+    private static int falkorPort;
     
     private FusekiServer server;
     private String sparqlEndpoint;
     private String updateEndpoint;
     
+    @BeforeAll
+    public static void setUpContainer() {
+        falkorHost = falkordb.getHost();
+        falkorPort = falkordb.getMappedPort(FALKORDB_PORT);
+    }
+    
     @BeforeEach
-    public void setUp() {
-        // Load config from classpath
-        String configPath = getClass().getClassLoader().getResource(CONFIG_FILE).getPath();
+    public void setUp() throws IOException {
+        // Generate config file with dynamic port
+        String configContent = generateConfigFile(falkorHost, falkorPort);
+        Path configPath = tempDir.resolve("config-test-falkordb.ttl");
+        Files.writeString(configPath, configContent);
         
         // Start Fuseki server with config file
         server = FusekiServer.create()
             .port(TEST_PORT)
-            .parseConfigFile(configPath)
+            .parseConfigFile(configPath.toString())
             .build();
         server.start();
         
@@ -51,6 +81,36 @@ public class FusekiAssemblerConfigTest {
         // Clear any existing data
         String clearQuery = "DELETE WHERE { ?s ?p ?o }";
         UpdateExecutionHTTP.service(updateEndpoint).update(clearQuery).execute();
+    }
+    
+    /**
+     * Generate a Fuseki configuration file with the given FalkorDB connection details.
+     */
+    private String generateConfigFile(String host, int port) {
+        return "# FalkorDB Fuseki Test Configuration (generated)\n" +
+               "@prefix :        <#> .\n" +
+               "@prefix falkor:  <http://falkordb.com/jena/assembler#> .\n" +
+               "@prefix fuseki:  <http://jena.apache.org/fuseki#> .\n" +
+               "@prefix ja:      <http://jena.hpl.hp.com/2005/11/Assembler#> .\n" +
+               "@prefix rdf:     <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .\n" +
+               "\n" +
+               "[] rdf:type fuseki:Server ;\n" +
+               "   fuseki:services ( :service ) .\n" +
+               "\n" +
+               ":service rdf:type fuseki:Service ;\n" +
+               "    fuseki:name \"testdb\" ;\n" +
+               "    fuseki:endpoint [ fuseki:operation fuseki:query ; fuseki:name \"query\" ] ;\n" +
+               "    fuseki:endpoint [ fuseki:operation fuseki:update ; fuseki:name \"update\" ] ;\n" +
+               "    fuseki:endpoint [ fuseki:operation fuseki:gsp-rw ; fuseki:name \"data\" ] ;\n" +
+               "    fuseki:dataset :dataset_rdf .\n" +
+               "\n" +
+               ":dataset_rdf rdf:type ja:RDFDataset ;\n" +
+               "    ja:defaultGraph :falkor_db_model .\n" +
+               "\n" +
+               ":falkor_db_model rdf:type falkor:FalkorDBModel ;\n" +
+               "    falkor:host \"" + host + "\" ;\n" +
+               "    falkor:port " + port + " ;\n" +
+               "    falkor:graphName \"test_assembler_graph\" .\n";
     }
     
     @AfterEach

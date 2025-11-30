@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <!-- Console appender configuration -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Suppress verbose Jetty debug logs -->
+    <logger name="org.eclipse.jetty" level="WARN"/>
+    <logger name="org.eclipse.jetty.http" level="WARN"/>
+    <logger name="org.eclipse.jetty.server" level="WARN"/>
+    <logger name="org.eclipse.jetty.util" level="WARN"/>
+
+    <!-- Suppress verbose Fuseki/Jena logs during tests -->
+    <logger name="org.apache.jena" level="WARN"/>
+    <logger name="org.apache.jena.fuseki" level="INFO"/>
+
+    <!-- Logger for the FalkorDB adapter -->
+    <logger name="com.falkordb" level="INFO"/>
+
+    <!-- Testcontainers logging -->
+    <logger name="org.testcontainers" level="INFO"/>
+    <logger name="com.github.dockerjava" level="WARN"/>
+
+    <!-- Root logger configuration -->
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>

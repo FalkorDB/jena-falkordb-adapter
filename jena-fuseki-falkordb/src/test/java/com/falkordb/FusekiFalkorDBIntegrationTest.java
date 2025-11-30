@@ -11,9 +11,14 @@ import org.apache.jena.rdf.model.Model;
 import org.apache.jena.sparql.exec.http.QueryExecutionHTTP;
 import org.apache.jena.sparql.exec.http.UpdateExecutionHTTP;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.utility.DockerImageName;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -26,26 +31,42 @@ import static org.junit.jupiter.api.Assertions.*;
  * 3. SPARQL updates can be executed against the FalkorDB-backed endpoint
  * 4. The father-grandfather example from requirements works correctly
  * 
- * Prerequisites: FalkorDB must be running on localhost:6379
- * Run: docker run -p 6379:6379 -it --rm falkordb/falkordb:latest
+ * Uses Testcontainers to automatically start FalkorDB if not already running.
  */
+@Testcontainers
 public class FusekiFalkorDBIntegrationTest {
 
     private static final String TEST_GRAPH = "fuseki_test_graph";
     private static final int TEST_PORT = 3331;
     private static final String DATASET_PATH = "/falkor";
+    private static final int FALKORDB_PORT = 6379;
+    
+    @Container
+    private static final GenericContainer<?> falkordb = new GenericContainer<>(
+            DockerImageName.parse("falkordb/falkordb:latest"))
+            .withExposedPorts(FALKORDB_PORT)
+            .withReuse(true);
+    
+    private static String falkorHost;
+    private static int falkorPort;
     
     private FusekiServer server;
     private Model falkorModel;
     private String sparqlEndpoint;
     private String updateEndpoint;
     
+    @BeforeAll
+    public static void setUpContainer() {
+        falkorHost = falkordb.getHost();
+        falkorPort = falkordb.getMappedPort(FALKORDB_PORT);
+    }
+    
     @BeforeEach
     public void setUp() {
         // Create FalkorDB-backed model
         falkorModel = FalkorDBModelFactory.builder()
-            .host("localhost")
-            .port(6379)
+            .host(falkorHost)
+            .port(falkorPort)
             .graphName(TEST_GRAPH)
             .build();
         

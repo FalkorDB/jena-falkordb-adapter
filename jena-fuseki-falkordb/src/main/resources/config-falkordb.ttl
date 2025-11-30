@@ -1,0 +1,68 @@
+# FalkorDB Fuseki Configuration Example
+#
+# This configuration file demonstrates how to configure Apache Jena Fuseki
+# to use FalkorDB as the backend database via the assembler mechanism.
+#
+# To use this configuration:
+# 1. Start FalkorDB: docker run -p 6379:6379 -it --rm falkordb/falkordb:latest
+# 2. Run Fuseki with this config: fuseki-server --config=config-falkordb.ttl
+#
+# Prerequisites:
+# - FalkorDB must be running on localhost:6379 (or as configured below)
+# - The jena-fuseki-falkordb JAR must be in Fuseki's lib directory
+
+@prefix :        <#> .
+@prefix falkor:  <http://falkordb.com/jena/assembler#> .
+@prefix fuseki:  <http://jena.apache.org/fuseki#> .
+@prefix ja:      <http://jena.hpl.hp.com/2005/11/Assembler#> .
+@prefix rdf:     <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:    <http://www.w3.org/2000/01/rdf-schema#> .
+
+# Fuseki server configuration
+[] rdf:type fuseki:Server ;
+   fuseki:services (
+     :service
+   ) .
+
+# The FalkorDB-backed service
+:service rdf:type fuseki:Service ;
+    # Service name - endpoint will be available at /falkor
+    fuseki:name "falkor" ;
+    
+    # SPARQL query endpoint
+    fuseki:endpoint [
+        fuseki:operation fuseki:query ;
+        fuseki:name "sparql"
+    ] ;
+    fuseki:endpoint [
+        fuseki:operation fuseki:query ;
+        fuseki:name "query"
+    ] ;
+    
+    # SPARQL update endpoint
+    fuseki:endpoint [
+        fuseki:operation fuseki:update ;
+        fuseki:name "update"
+    ] ;
+    
+    # Graph Store Protocol (read-only)
+    fuseki:endpoint [
+        fuseki:operation fuseki:gsp-r ;
+        fuseki:name "get"
+    ] ;
+    
+    # Graph Store Protocol (read-write)
+    fuseki:endpoint [
+        fuseki:operation fuseki:gsp-rw ;
+        fuseki:name "data"
+    ] ;
+    
+    # Link to the FalkorDB dataset
+    fuseki:dataset :dataset .
+
+# FalkorDB-backed dataset configuration
+:dataset rdf:type falkor:FalkorDBModel ;
+    # FalkorDB connection settings (all optional with defaults shown)
+    falkor:host "localhost" ;  # Default: "localhost"
+    falkor:port 6379 ;         # Default: 6379
+    falkor:graphName "knowledge_graph" .  # Default: "rdf_graph"

@@ -41,7 +41,7 @@ jobs:
           server-password: MAVEN_CENTRAL_TOKEN
 
       - name: Update version in POM
-        run: mvn versions:set -DnewVersion=${{ steps.get_version.outputs.VERSION }}
+        run: mvn versions:set -DnewVersion=${{ steps.get_version.outputs.VERSION }} -DprocessAllModules=true
 
       - name: Import GPG key
         uses: crazy-max/ghaction-import-gpg@v6

@@ -23,8 +23,6 @@ jobs:
           server-id: central
           server-username: CENTRAL_USERNAME
           server-password: CENTRAL_TOKEN
-          # gpg-private-key: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }} # Value of the GPG private key to import
-          # gpg-passphrase: MAVEN_GPG_PASSPHRASE # env variable for GPG private ke
 
       - name: Cache dependencies
         uses: actions/cache@v4
@@ -32,7 +30,7 @@ jobs:
           path: |
             ~/.m2/repository
             /var/cache/apt
-          key: jena-falkordb-adapter-${{hashFiles('**/pom.xml')}}
+          key: jena-falkordb-${{hashFiles('**/pom.xml')}}
 
       - name: mvn offline
         run: |
@@ -45,6 +43,4 @@ jobs:
           CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
           CENTRAL_TOKEN: ${{ secrets.CENTRAL_TOKEN }}
           MAVEN_GPG_PASSPHRASE: ${{ secrets.OSSH_GPG_SECRET_KEY_PASSWORD }}
-
-          # MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
 

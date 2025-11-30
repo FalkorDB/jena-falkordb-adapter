@@ -5,13 +5,18 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.falkordb</groupId>
-    <artifactId>jena-falkordb-adapter</artifactId>
+    <artifactId>jena-falkordb</artifactId>
     <version>0.2.0-SNAPSHOT</version>
-    <packaging>jar</packaging>
+    <packaging>pom</packaging>
 
-    <name>Jena FalkorDB Adapter</name>
-    <description>Apache Jena adapter for FalkorDB graph database</description>
+    <name>Jena FalkorDB</name>
+    <description>Apache Jena integration with FalkorDB graph database</description>
     <url>https://github.com/FalkorDB/jena-falkordb-adapter</url>
+
+    <modules>
+        <module>jena-falkordb-adapter</module>
+        <module>jena-fuseki-falkordb</module>
+    </modules>
 
     <licenses>
         <license>
@@ -52,210 +57,252 @@
         <maven.compiler.target>11</maven.compiler.target>
         <jena.version>4.10.0</jena.version>
         <jfalkordb.version>0.6.0</jfalkordb.version>
+        <slf4j.version>2.0.17</slf4j.version>
+        <logback.version>1.5.12</logback.version>
+        <junit.version>5.10.0</junit.version>
     </properties>
 
-    <dependencies>
-        <!-- Apache Jena -->
-        <dependency>
-            <groupId>org.apache.jena</groupId>
-            <artifactId>apache-jena-libs</artifactId>
-            <version>${jena.version}</version>
-            <type>pom</type>
-        </dependency>
+    <dependencyManagement>
+        <dependencies>
+            <!-- Apache Jena -->
+            <dependency>
+                <groupId>org.apache.jena</groupId>
+                <artifactId>apache-jena-libs</artifactId>
+                <version>${jena.version}</version>
+                <type>pom</type>
+            </dependency>
 
-        <!-- JFalkorDB for FalkorDB connection -->
-        <dependency>
-            <groupId>com.falkordb</groupId>
-            <artifactId>jfalkordb</artifactId>
-            <version>${jfalkordb.version}</version>
-        </dependency>
+            <!-- Apache Jena Fuseki -->
+            <dependency>
+                <groupId>org.apache.jena</groupId>
+                <artifactId>jena-fuseki-main</artifactId>
+                <version>${jena.version}</version>
+            </dependency>
 
-        <!-- SLF4J API -->
-        <dependency>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-api</artifactId>
-            <version>2.0.17</version>
-        </dependency>
+            <!-- JFalkorDB for FalkorDB connection -->
+            <dependency>
+                <groupId>com.falkordb</groupId>
+                <artifactId>jfalkordb</artifactId>
+                <version>${jfalkordb.version}</version>
+            </dependency>
 
-        <!-- Logback implementation for logging -->
-        <dependency>
-            <groupId>ch.qos.logback</groupId>
-            <artifactId>logback-classic</artifactId>
-            <version>1.5.12</version>
-        </dependency>
+            <!-- Jena FalkorDB Adapter (this project) -->
+            <dependency>
+                <groupId>com.falkordb</groupId>
+                <artifactId>jena-falkordb-adapter</artifactId>
+                <version>${project.version}</version>
+            </dependency>
 
-        <!-- JUnit for testing -->
-        <dependency>
-            <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter-engine</artifactId>
-            <version>5.10.0</version>
-            <scope>test</scope>
-        </dependency>
-    </dependencies>
+            <!-- SLF4J API -->
+            <dependency>
+                <groupId>org.slf4j</groupId>
+                <artifactId>slf4j-api</artifactId>
+                <version>${slf4j.version}</version>
+            </dependency>
+
+            <!-- Logback implementation for logging -->
+            <dependency>
+                <groupId>ch.qos.logback</groupId>
+                <artifactId>logback-classic</artifactId>
+                <version>${logback.version}</version>
+            </dependency>
+
+            <!-- JUnit for testing -->
+            <dependency>
+                <groupId>org.junit.jupiter</groupId>
+                <artifactId>junit-jupiter-engine</artifactId>
+                <version>${junit.version}</version>
+                <scope>test</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>3.14.1</version>
+                    <configuration>
+                        <source>11</source>
+                        <target>11</target>
+                    </configuration>
+                </plugin>
+
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-shade-plugin</artifactId>
+                    <version>3.6.1</version>
+                </plugin>
+
+                <!-- Source plugin for Maven Central -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-source-plugin</artifactId>
+                    <version>3.3.1</version>
+                    <executions>
+                        <execution>
+                            <id>attach-sources</id>
+                            <goals>
+                                <goal>jar-no-fork</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+
+                <!-- Javadoc plugin for Maven Central -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-javadoc-plugin</artifactId>
+                    <version>3.12.0</version>
+                    <executions>
+                        <execution>
+                            <id>attach-javadocs</id>
+                            <goals>
+                                <goal>jar</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+
+                <!-- Checkstyle for code style checking -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-checkstyle-plugin</artifactId>
+                    <version>3.5.0</version>
+                    <configuration>
+                        <configLocation>sun_checks.xml</configLocation>
+                        <consoleOutput>true</consoleOutput>
+                        <failOnViolation>true</failOnViolation>
+                        <maxAllowedViolations>0</maxAllowedViolations>
+                        <violationSeverity>error</violationSeverity>
+                    </configuration>
+                    <executions>
+                        <execution>
+                            <id>checkstyle</id>
+                            <phase>verify</phase>
+                            <goals>
+                                <goal>check</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+
+                <!-- JaCoCo for code coverage reporting -->
+                <plugin>
+                    <groupId>org.jacoco</groupId>
+                    <artifactId>jacoco-maven-plugin</artifactId>
+                    <version>0.8.11</version>
+                    <executions>
+                        <execution>
+                            <id>prepare-agent</id>
+                            <goals>
+                                <goal>prepare-agent</goal>
+                            </goals>
+                        </execution>
+                        <execution>
+                            <id>report</id>
+                            <phase>test</phase>
+                            <goals>
+                                <goal>report</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+
+                <!-- SpotBugs for bug detection -->
+                <plugin>
+                    <groupId>com.github.spotbugs</groupId>
+                    <artifactId>spotbugs-maven-plugin</artifactId>
+                    <version>4.9.8.1</version>
+                    <configuration>
+                        <effort>Max</effort>
+                        <threshold>Low</threshold>
+                        <xmlOutput>true</xmlOutput>
+                        <failOnError>true</failOnError>
+                    </configuration>
+                    <executions>
+                        <execution>
+                            <id>analyze</id>
+                            <phase>verify</phase>
+                            <goals>
+                                <goal>check</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+
+                <!-- PMD for code quality analysis -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-pmd-plugin</artifactId>
+                    <version>3.28.0</version>
+                    <configuration>
+                        <rulesets>
+                            <ruleset>/rulesets/java/quickstart.xml</ruleset>
+                        </rulesets>
+                        <printFailingErrors>true</printFailingErrors>
+                        <failOnViolation>true</failOnViolation>
+                    </configuration>
+                    <executions>
+                        <execution>
+                            <id>analyze</id>
+                            <phase>verify</phase>
+                            <goals>
+                                <goal>check</goal>
+                                <goal>cpd-check</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+
+                <plugin>
+                    <groupId>org.sonatype.central</groupId>
+                    <artifactId>central-publishing-maven-plugin</artifactId>
+                    <version>0.8.0</version>
+                    <extensions>true</extensions>
+                    <configuration>
+                        <publishingServerId>central</publishingServerId>
+                        <autoPublish>true</autoPublish>
+                        <waitUntil>published</waitUntil>
+                    </configuration>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.14.1</version>
-                <configuration>
-                    <source>11</source>
-                    <target>11</target>
-                </configuration>
             </plugin>
-
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-shade-plugin</artifactId>
-                <version>3.6.1</version>
-                <executions>
-                    <execution>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>shade</goal>
-                        </goals>
-                        <configuration>
-                            <transformers>
-                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                                    <mainClass>com.falkordb.jena.Main</mainClass>
-                                </transformer>
-                            </transformers>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-
-            <!-- Source plugin for Maven Central -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-source-plugin</artifactId>
-                <version>3.3.1</version>
-                <executions>
-                    <execution>
-                        <id>attach-sources</id>
-                        <goals>
-                            <goal>jar-no-fork</goal>
-                        </goals>
-                    </execution>
-                </executions>
             </plugin>
-
-            <!-- Javadoc plugin for Maven Central -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-javadoc-plugin</artifactId>
-                <version>3.12.0</version>
-                <executions>
-                    <execution>
-                        <id>attach-javadocs</id>
-                        <goals>
-                            <goal>jar</goal>
-                        </goals>
-                    </execution>
-                </executions>
             </plugin>
-
-            <!-- Checkstyle for code style checking -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-checkstyle-plugin</artifactId>
-                <version>3.5.0</version>
-                <configuration>
-                    <configLocation>sun_checks.xml</configLocation>
-                    <consoleOutput>true</consoleOutput>
-                    <failOnViolation>true</failOnViolation>
-                    <maxAllowedViolations>0</maxAllowedViolations>
-                    <violationSeverity>error</violationSeverity>
-                </configuration>
-                <executions>
-                    <execution>
-                        <id>checkstyle</id>
-                        <phase>verify</phase>
-                        <goals>
-                            <goal>check</goal>
-                        </goals>
-                    </execution>
-                </executions>
             </plugin>
-
-            <!-- JaCoCo for code coverage reporting -->
             <plugin>
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
-                <version>0.8.11</version>
-                <executions>
-                    <execution>
-                        <id>prepare-agent</id>
-                        <goals>
-                            <goal>prepare-agent</goal>
-                        </goals>
-                    </execution>
-                    <execution>
-                        <id>report</id>
-                        <phase>test</phase>
-                        <goals>
-                            <goal>report</goal>
-                        </goals>
-                    </execution>
-                </executions>
             </plugin>
-
-            <!-- SpotBugs for bug detection -->
             <plugin>
                 <groupId>com.github.spotbugs</groupId>
                 <artifactId>spotbugs-maven-plugin</artifactId>
-                <version>4.9.8.1</version>
-                <configuration>
-                    <effort>Max</effort>
-                    <threshold>Low</threshold>
-                    <xmlOutput>true</xmlOutput>
-                    <failOnError>true</failOnError>
-                </configuration>
-                <executions>
-                    <execution>
-                        <id>analyze</id>
-                        <phase>verify</phase>
-                        <goals>
-                            <goal>check</goal>
-                        </goals>
-                    </execution>
-                </executions>
             </plugin>
-
-            <!-- PMD for code quality analysis -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-pmd-plugin</artifactId>
-                <version>3.28.0</version>
-                <configuration>
-                    <rulesets>
-                        <ruleset>/rulesets/java/quickstart.xml</ruleset>
-                    </rulesets>
-                    <printFailingErrors>true</printFailingErrors>
-                    <failOnViolation>true</failOnViolation>
-                </configuration>
-                <executions>
-                    <execution>
-                        <id>analyze</id>
-                        <phase>verify</phase>
-                        <goals>
-                            <goal>check</goal>
-                            <goal>cpd-check</goal>
-                        </goals>
-                    </execution>
-                </executions>
             </plugin>
             <plugin>
                 <groupId>org.sonatype.central</groupId>
                 <artifactId>central-publishing-maven-plugin</artifactId>
-                <version>0.8.0</version>
-                <extensions>true</extensions>
-                <configuration>
-                    <publishingServerId>central</publishingServerId>
-                    <autoPublish>true</autoPublish>
-                    <waitUntil>published</waitUntil>
-                </configuration>
             </plugin>
         </plugins>
     </build>

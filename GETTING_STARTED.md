@@ -1,8 +1,12 @@
-# Getting Started with Jena-FalkorDB Adapter
+# Getting Started with Jena-FalkorDB
 
-This guide will help you set up and start using the Jena-FalkorDB adapter in under 10 minutes.
+This guide will help you set up and start using the Jena-FalkorDB project in under 10 minutes.
 
-> **Note**: This adapter now features efficient literal storage as node properties, automatic URI indexing, and rdf:type support with native labels for optimal performance! See the [README](README.md) for architecture details.
+> **Note**: This is a multi-module project containing:
+> - **jena-falkordb-adapter** - Core adapter library for integrating Jena with FalkorDB
+> - **jena-fuseki-falkordb** - Fuseki SPARQL server with FalkorDB backend
+
+The adapter features efficient literal storage as node properties, automatic URI indexing, and rdf:type support with native labels for optimal performance! See the [README](README.md) for architecture details.
 
 ## Quick Start (3 Steps)
 
@@ -12,35 +16,28 @@ This guide will help you set up and start using the Jena-FalkorDB adapter in und
 docker run -p 6379:6379 -it --rm falkordb/falkordb:latest
 ```
 
-### Step 2: Create Your Project
-
-Create this directory structure:
-```
-jena-falkordb-adapter/
-├── pom.xml
-└── src/
-    └── main/
-        └── java/
-            └── com/
-                └── example/
-                    └── jena/
-                        └── falkordb/
-                            ├── FalkorDBGraph.java
-                            ├── FalkorDBModelFactory.java
-                            └── Main.java
-```
-
-Copy all the provided Java files into their respective directories.
-
-### Step 3: Build and Run
+### Step 2: Build the Project
 
 ```bash
+git clone https://github.com/FalkorDB/jena-falkordb-adapter.git
 cd jena-falkordb-adapter
-mvn clean install
-mvn exec:java -Dexec.mainClass="com.falkordb.jena.Main"
+mvn clean install -DskipTests
 ```
 
-That's it! You should see the demo running.
+### Step 3: Run the Demo or Fuseki Server
+
+**Option A: Run the adapter demo**
+```bash
+java -jar jena-falkordb-adapter/target/jena-falkordb-adapter-0.2.0-SNAPSHOT.jar
+```
+
+**Option B: Run the Fuseki SPARQL server**
+```bash
+java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar
+```
+Then open http://localhost:3330/ in your browser.
+
+That's it! You should see the demo running or the Fuseki server started.
 
 ---
 

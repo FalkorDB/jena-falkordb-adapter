@@ -390,7 +390,7 @@ The rule will infer:
 Use the inference configuration file to enable rule-based reasoning:
 
 ```bash
-java -jar jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar --config config-falkordb-inference.ttl
+java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar --config jena-fuseki-falkordb/src/main/resources/config-falkordb-inference.ttl
 ```
 
 **Example inference configuration (`config-falkordb-inference.ttl`):**

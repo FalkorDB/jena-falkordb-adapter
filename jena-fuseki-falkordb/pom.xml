@@ -23,6 +23,12 @@
             <artifactId>jena-falkordb-adapter</artifactId>
         </dependency>
 
+        <!-- Jena FalkorDB Assembler -->
+        <dependency>
+            <groupId>com.falkordb</groupId>
+            <artifactId>jena-falkordb-assembler</artifactId>
+        </dependency>
+
         <!-- Apache Jena Fuseki -->
         <dependency>
             <groupId>org.apache.jena</groupId>

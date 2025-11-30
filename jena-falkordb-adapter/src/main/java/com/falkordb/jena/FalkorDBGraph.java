@@ -193,7 +193,7 @@ public final class FalkorDBGraph extends GraphBase {
             params.put("objectUri", object);
 
             cypher = """
-                MATCH (s:Resource {uri: $subjectUri})-[r:`%s`]->\
+                MATCH (s:Resource {uri: $subjectUri})-[r:`%s`]->
                 (o:Resource {uri: $objectUri}) DELETE r""".formatted(predicate);
         }
 
@@ -294,7 +294,7 @@ public final class FalkorDBGraph extends GraphBase {
         for (var record : result) {
             com.falkordb.graph_entities.Node node = record.getValue("s");
             var subjectUri = node.getProperty("uri").getValue().toString();
-             var subject = NodeFactory.createURI(subjectUri);
+            var subject = NodeFactory.createURI(subjectUri);
 
             @SuppressWarnings("unchecked")
             var properties = (Map<String, Object>) record.getValue("props");

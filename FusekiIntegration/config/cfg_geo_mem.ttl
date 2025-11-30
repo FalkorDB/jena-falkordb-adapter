@@ -1,0 +1,44 @@
+@prefix rdf:        <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:       <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix tdb2:       <http://jena.apache.org/2016/tdb#> .
+@prefix tdb1:       <http://jena.hpl.hp.com/2008/tdb#> .
+@prefix fuseki:     <http://jena.apache.org/fuseki#> .
+@prefix ja:         <http://jena.hpl.hp.com/2005/11/Assembler#> .
+@prefix geosparql:  <http://jena.apache.org/geosparql#> .
+@prefix :           <#> .
+
+[] a fuseki:Server ;
+  fuseki:services (:service) ;
+  .
+
+:service a fuseki:Service ;
+  fuseki:name "dataset" ;
+  fuseki:endpoint [ fuseki:operation fuseki:query ; ] ;
+  fuseki:endpoint [ fuseki:operation fuseki:update ; ] ;
+  fuseki:endpoint [ fuseki:operation fuseki:gsp-r ;  ] ;
+  fuseki:endpoint [ fuseki:operation fuseki:gsp-rw ; ] ;
+  fuseki:endpoint [ fuseki:operation fuseki:upload ; ] ;
+  fuseki:endpoint [ fuseki:operation fuseki:patch ; ] ;
+  fuseki:dataset :dataset_geosparql ;
+  .
+
+:dataset_geosparql a geosparql:GeosparqlDataset ;
+  # Build in-memory is absent.
+  # geosparql:spatialIndexFile     "spatial.index";
+
+  ## Default settings. See documentation for meanings.
+  geosparql:inference            true ;
+  geosparql:queryRewrite         true ;
+  geosparql:indexEnabled         true ;
+  geosparql:applyDefaultGeometry false ;
+
+  # 3 item lists: [Geometry Literal, Geometry Transform, Query Rewrite]
+  geosparql:indexSizes           "-1,-1,-1" ;       # Default - unlimited.
+  geosparql:indexExpires         "5000,5000,5000" ; # Default - time in milliseconds.
+
+  ## Required setting - data over which GeoSPARQL is applied
+  geosparql:dataset :dataset_base ;
+  .
+
+# Transactional in-memory dataset.
+:dataset_base a ja:MemoryDataset .

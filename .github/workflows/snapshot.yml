@@ -21,11 +21,12 @@ jobs:
           source "$HOME/.sdkman/bin/sdkman-init.sh"
           sdk version
 
-      - name: Install Java from .sdkmanrc
+      - name: Install Java and Maven from .sdkmanrc
         run: |
           source "$HOME/.sdkman/bin/sdkman-init.sh"
           sdk env install
           java -version
+          mvn -version
 
       - name: Configure Maven settings for Maven Central
         run: |

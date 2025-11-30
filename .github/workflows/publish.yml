@@ -30,18 +30,45 @@ jobs:
           realversion="${realversion//v/}"
           echo "VERSION=$realversion" >> $GITHUB_OUTPUT
 
-      - name: Set up JDK 17 for publishing to Maven Central
-        uses: actions/setup-java@v5
+      - name: Setup SDKMAN!
+        run: |
+          curl -s "https://get.sdkman.io" | bash
+          source "$HOME/.sdkman/bin/sdkman-init.sh"
+          sdk version
+
+      - name: Install Java from .sdkmanrc
+        run: |
+          source "$HOME/.sdkman/bin/sdkman-init.sh"
+          sdk env install
+          java -version
+
+      - name: Set up Maven cache
+        uses: actions/cache@v4
         with:
-          java-version: '17'
-          distribution: 'temurin'
-          cache: maven
-          server-id: central
-          server-username: MAVEN_CENTRAL_USERNAME
-          server-password: MAVEN_CENTRAL_TOKEN
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      - name: Configure Maven settings for Maven Central
+        run: |
+          mkdir -p ~/.m2
+          cat > ~/.m2/settings.xml << 'EOF'
+          <settings>
+            <servers>
+              <server>
+                <id>central</id>
+                <username>${env.MAVEN_CENTRAL_USERNAME}</username>
+                <password>${env.MAVEN_CENTRAL_TOKEN}</password>
+              </server>
+            </servers>
+          </settings>
+          EOF
 
       - name: Update version in POM
-        run: mvn versions:set -DnewVersion=${{ steps.get_version.outputs.VERSION }} -DprocessAllModules=true
+        run: |
+          source "$HOME/.sdkman/bin/sdkman-init.sh"
+          mvn versions:set -DnewVersion=${{ steps.get_version.outputs.VERSION }} -DprocessAllModules=true
 
       - name: Import GPG key
         uses: crazy-max/ghaction-import-gpg@v6
@@ -51,6 +78,7 @@ jobs:
 
       - name: Build and deploy to Maven Central
         run: |
+          source "$HOME/.sdkman/bin/sdkman-init.sh"
           mvn --no-transfer-progress \
             --batch-mode \
             clean deploy

@@ -61,6 +61,7 @@
         <slf4j.version>2.0.17</slf4j.version>
         <logback.version>1.5.12</logback.version>
         <junit.version>5.10.0</junit.version>
+        <testcontainers.version>1.20.3</testcontainers.version>
     </properties>
 
     <dependencyManagement>
@@ -120,6 +121,20 @@
                 <groupId>org.junit.jupiter</groupId>
                 <artifactId>junit-jupiter-engine</artifactId>
                 <version>${junit.version}</version>
+                <scope>test</scope>
+            </dependency>
+
+            <!-- Testcontainers for integration testing -->
+            <dependency>
+                <groupId>org.testcontainers</groupId>
+                <artifactId>testcontainers</artifactId>
+                <version>${testcontainers.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.testcontainers</groupId>
+                <artifactId>junit-jupiter</artifactId>
+                <version>${testcontainers.version}</version>
                 <scope>test</scope>
             </dependency>
         </dependencies>

@@ -1,0 +1,244 @@
+package com.falkordb;
+
+import org.apache.jena.fuseki.main.FusekiServer;
+import org.apache.jena.query.QueryExecution;
+import org.apache.jena.query.ResultSet;
+import org.apache.jena.sparql.exec.http.QueryExecutionHTTP;
+import org.apache.jena.sparql.exec.http.UpdateExecutionHTTP;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.utility.DockerImageName;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+/**
+ * Tests for Fuseki server started with assembler configuration file.
+ * 
+ * This verifies that:
+ * 1. The FalkorDBAssembler is properly registered and used
+ * 2. Configuration files can define FalkorDB-backed datasets
+ * 3. The server works correctly with config-based initialization
+ * 
+ * Uses Testcontainers to automatically start FalkorDB if not already running.
+ */
+@Testcontainers
+public class FusekiAssemblerConfigTest {
+
+    private static final int TEST_PORT = 3332;
+    private static final int FALKORDB_PORT = 6379;
+    
+    @Container
+    private static final GenericContainer<?> falkordb = new GenericContainer<>(
+            DockerImageName.parse("falkordb/falkordb:latest"))
+            .withExposedPorts(FALKORDB_PORT);
+    
+    @TempDir
+    Path tempDir;
+    
+    private static String falkorHost;
+    private static int falkorPort;
+    
+    private FusekiServer server;
+    private String sparqlEndpoint;
+    private String updateEndpoint;
+    
+    @BeforeAll
+    public static void setUpContainer() {
+        falkorHost = falkordb.getHost();
+        falkorPort = falkordb.getMappedPort(FALKORDB_PORT);
+    }
+    
+    @BeforeEach
+    public void setUp() throws IOException {
+        // Generate config file with dynamic port
+        String configContent = generateConfigFile(falkorHost, falkorPort);
+        Path configPath = tempDir.resolve("config-test-falkordb.ttl");
+        Files.writeString(configPath, configContent);
+        
+        // Start Fuseki server with config file
+        server = FusekiServer.create()
+            .port(TEST_PORT)
+            .parseConfigFile(configPath.toString())
+            .build();
+        server.start();
+        
+        // Endpoints based on config file service name "testdb"
+        sparqlEndpoint = "http://localhost:" + TEST_PORT + "/testdb/query";
+        updateEndpoint = "http://localhost:" + TEST_PORT + "/testdb/update";
+        
+        // Clear any existing data
+        String clearQuery = "DELETE WHERE { ?s ?p ?o }";
+        UpdateExecutionHTTP.service(updateEndpoint).update(clearQuery).execute();
+    }
+    
+    /**
+     * Generate a Fuseki configuration file with the given FalkorDB connection details.
+     */
+    private String generateConfigFile(String host, int port) {
+        return "# FalkorDB Fuseki Test Configuration (generated)\n" +
+               "@prefix :        <#> .\n" +
+               "@prefix falkor:  <http://falkordb.com/jena/assembler#> .\n" +
+               "@prefix fuseki:  <http://jena.apache.org/fuseki#> .\n" +
+               "@prefix ja:      <http://jena.hpl.hp.com/2005/11/Assembler#> .\n" +
+               "@prefix rdf:     <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .\n" +
+               "\n" +
+               "[] rdf:type fuseki:Server ;\n" +
+               "   fuseki:services ( :service ) .\n" +
+               "\n" +
+               ":service rdf:type fuseki:Service ;\n" +
+               "    fuseki:name \"testdb\" ;\n" +
+               "    fuseki:endpoint [ fuseki:operation fuseki:query ; fuseki:name \"query\" ] ;\n" +
+               "    fuseki:endpoint [ fuseki:operation fuseki:update ; fuseki:name \"update\" ] ;\n" +
+               "    fuseki:endpoint [ fuseki:operation fuseki:gsp-rw ; fuseki:name \"data\" ] ;\n" +
+               "    fuseki:dataset :dataset_rdf .\n" +
+               "\n" +
+               ":dataset_rdf rdf:type ja:RDFDataset ;\n" +
+               "    ja:defaultGraph :falkor_db_model .\n" +
+               "\n" +
+               ":falkor_db_model rdf:type falkor:FalkorDBModel ;\n" +
+               "    falkor:host \"" + host + "\" ;\n" +
+               "    falkor:port " + port + " ;\n" +
+               "    falkor:graphName \"test_assembler_graph\" .\n";
+    }
+    
+    @AfterEach
+    public void tearDown() {
+        if (server != null) {
+            server.stop();
+        }
+    }
+    
+    @Test
+    @DisplayName("Test server starts with config file")
+    public void testServerStartsWithConfig() {
+        assertNotNull(server, "Server should be started");
+        assertEquals(TEST_PORT, server.getPort(), "Server should be running on configured port");
+    }
+    
+    @Test
+    @DisplayName("Test assembler-configured endpoint responds to queries")
+    public void testAssemblerEndpointQuery() {
+        String query = "SELECT * WHERE { ?s ?p ?o }";
+        
+        try (QueryExecution qexec = QueryExecutionHTTP.service(sparqlEndpoint).query(query).build()) {
+            ResultSet results = qexec.execSelect();
+            // Should not throw - endpoint should be functional
+            assertNotNull(results);
+        }
+    }
+    
+    @Test
+    @DisplayName("Test assembler-configured endpoint accepts updates")
+    public void testAssemblerEndpointUpdate() {
+        // Insert data with unique URI to avoid conflicts
+        String uniqueId = String.valueOf(System.currentTimeMillis());
+        String insertQuery = 
+            "PREFIX ex: <http://example.org/updatetest/> " +
+            "INSERT DATA { " +
+            "  ex:test" + uniqueId + " ex:property \"value\" . " +
+            "}";
+        
+        UpdateExecutionHTTP.service(updateEndpoint).update(insertQuery).execute();
+        
+        // Verify insert worked
+        String selectQuery = 
+            "PREFIX ex: <http://example.org/updatetest/> " +
+            "SELECT ?value WHERE { ex:test" + uniqueId + " ex:property ?value }";
+        
+        try (QueryExecution qexec = QueryExecutionHTTP.service(sparqlEndpoint).query(selectQuery).build()) {
+            ResultSet results = qexec.execSelect();
+            assertTrue(results.hasNext(), "Data should be retrievable after insert");
+            assertEquals("value", results.next().getLiteral("value").getString());
+        }
+    }
+    
+    @Test
+    @DisplayName("Test full workflow with assembler config - father example from requirements")
+    public void testFatherExampleWithAssemblerConfig() {
+        // Insert father-son data (from Proposal.md requirements)
+        String insertQuery = 
+            "PREFIX ff: <http://www.semanticweb.org/ontologies/2023/1/fathers_father#> " +
+            "INSERT DATA { " +
+            "  ff:Jacob a ff:Male . " +
+            "  ff:Isaac a ff:Male ; " +
+            "    ff:father_of ff:Jacob . " +
+            "  ff:Abraham a ff:Male ; " +
+            "    ff:father_of ff:Isaac . " +
+            "}";
+        
+        UpdateExecutionHTTP.service(updateEndpoint).update(insertQuery).execute();
+        
+        // Verify specific relationships exist using ASK queries
+        String verifyAbrahamToIsaac = 
+            "PREFIX ff: <http://www.semanticweb.org/ontologies/2023/1/fathers_father#> " +
+            "ASK { ff:Abraham ff:father_of ff:Isaac }";
+        
+        try (QueryExecution qexec = QueryExecutionHTTP.service(sparqlEndpoint).query(verifyAbrahamToIsaac).build()) {
+            assertTrue(qexec.execAsk(), "Abraham should be father of Isaac");
+        }
+        
+        String verifyIsaacToJacob = 
+            "PREFIX ff: <http://www.semanticweb.org/ontologies/2023/1/fathers_father#> " +
+            "ASK { ff:Isaac ff:father_of ff:Jacob }";
+        
+        try (QueryExecution qexec = QueryExecutionHTTP.service(sparqlEndpoint).query(verifyIsaacToJacob).build()) {
+            assertTrue(qexec.execAsk(), "Isaac should be father of Jacob");
+        }
+        
+        // Verify types were set
+        String verifyTypes = 
+            "PREFIX ff: <http://www.semanticweb.org/ontologies/2023/1/fathers_father#> " +
+            "ASK { " +
+            "  ff:Jacob a ff:Male . " +
+            "  ff:Isaac a ff:Male . " +
+            "  ff:Abraham a ff:Male . " +
+            "}";
+        
+        try (QueryExecution qexec = QueryExecutionHTTP.service(sparqlEndpoint).query(verifyTypes).build()) {
+            assertTrue(qexec.execAsk(), "All three should be of type Male");
+        }
+    }
+    
+    @Test
+    @DisplayName("Test count query with assembler config")
+    public void testCountQueryWithAssemblerConfig() {
+        // Get initial count
+        String countQuery = "SELECT (COUNT(*) AS ?count) WHERE { ?s ?p ?o }";
+        int initialCount;
+        try (QueryExecution qexec = QueryExecutionHTTP.service(sparqlEndpoint).query(countQuery).build()) {
+            ResultSet results = qexec.execSelect();
+            assertTrue(results.hasNext());
+            initialCount = results.next().getLiteral("count").getInt();
+        }
+        
+        // Insert some data
+        String insertQuery = 
+            "PREFIX ex: <http://example.org/counttest/> " +
+            "INSERT DATA { " +
+            "  ex:a ex:p \"1\" . " +
+            "  ex:b ex:p \"2\" . " +
+            "  ex:c ex:p \"3\" . " +
+            "}";
+        
+        UpdateExecutionHTTP.service(updateEndpoint).update(insertQuery).execute();
+        
+        // Count triples - should be initial + 3
+        try (QueryExecution qexec = QueryExecutionHTTP.service(sparqlEndpoint).query(countQuery).build()) {
+            ResultSet results = qexec.execSelect();
+            assertTrue(results.hasNext());
+            int newCount = results.next().getLiteral("count").getInt();
+            assertEquals(initialCount + 3, newCount, "Should have 3 more triples after insert");
+        }
+    }
+}

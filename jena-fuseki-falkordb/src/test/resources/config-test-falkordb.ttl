@@ -1,16 +1,7 @@
-# FalkorDB Fuseki Configuration Example
+# FalkorDB Fuseki Test Configuration
 #
 # This configuration file demonstrates how to configure Apache Jena Fuseki
 # to use FalkorDB as the backend database via the assembler mechanism.
-#
-# To use this configuration:
-# 1. Start FalkorDB: docker run -p 6379:6379 -it --rm falkordb/falkordb:latest
-# 2. Run Fuseki with this config: 
-#    java -jar jena-fuseki-falkordb.jar --config config-falkordb.ttl
-#
-# Prerequisites:
-# - FalkorDB must be running on localhost:6379 (or as configured below)
-# - The jena-fuseki-falkordb JAR must include the assembler module
 
 @prefix :        <#> .
 @prefix falkor:  <http://falkordb.com/jena/assembler#> .
@@ -27,8 +18,8 @@
 
 # The FalkorDB-backed service
 :service rdf:type fuseki:Service ;
-    # Service name - endpoint will be available at /falkor
-    fuseki:name "falkor" ;
+    # Service name - endpoint will be available at /testdb
+    fuseki:name "testdb" ;
     
     # SPARQL query endpoint
     fuseki:endpoint [
@@ -62,13 +53,12 @@
     fuseki:dataset :dataset_rdf .
 
 # RDF Dataset wrapping FalkorDB model
-# This is needed because Fuseki expects a Dataset, not a Model
 :dataset_rdf rdf:type ja:RDFDataset ;
     ja:defaultGraph :falkor_db_model .
 
 # FalkorDB-backed model configuration
 :falkor_db_model rdf:type falkor:FalkorDBModel ;
-    # FalkorDB connection settings (all optional with defaults shown)
-    falkor:host "localhost" ;  # Default: "localhost"
-    falkor:port 6379 ;         # Default: 6379
-    falkor:graphName "knowledge_graph" .  # Default: "rdf_graph"
+    # FalkorDB connection settings
+    falkor:host "localhost" ;
+    falkor:port 6379 ;
+    falkor:graphName "test_assembler_graph" .

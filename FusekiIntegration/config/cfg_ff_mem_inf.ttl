@@ -1,0 +1,45 @@
+@prefix :        <#> .
+@prefix fuseki:  <http://jena.apache.org/fuseki#> .
+@prefix rdf:     <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:    <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix tdb2:    <http://jena.apache.org/2016/tdb#> .
+@prefix tdb1:    <http://jena.hpl.hp.com/2008/tdb#> .
+@prefix ja:      <http://jena.hpl.hp.com/2005/11/Assembler#> .
+
+[] a fuseki:Server ;
+  fuseki:services (:service) ;
+  .
+
+:service a fuseki:Service ;
+  fuseki:name "dataset" ;
+  fuseki:endpoint [ fuseki:operation fuseki:query ; ] ;
+  fuseki:endpoint [ fuseki:operation fuseki:update ; ] ;
+  fuseki:endpoint [ fuseki:operation fuseki:gsp-r ;  ] ;
+  fuseki:endpoint [ fuseki:operation fuseki:gsp-rw ; ] ;
+  fuseki:endpoint [ fuseki:operation fuseki:upload ; ] ;
+  fuseki:endpoint [ fuseki:operation fuseki:patch ; ] ;
+  fuseki:dataset :dataset_rdf ;
+  .
+
+# RDF Dataset for inference model.
+:dataset_rdf a ja:RDFDataset ;
+  ja:defaultGraph :model_inf_generic ;
+  .
+
+# Inference model with Generic Rule Reasoner.
+:model_inf_generic a ja:InfModel ;
+  ja:baseModel :model_base_mem ;
+  ja:reasoner [
+    # See: https://jena.apache.org/documentation/javadoc/jena/constant-values.html
+    ja:reasonerURL <http://jena.hpl.hp.com/2003/GenericRuleReasoner> ;
+    ja:rulesFrom <file:../rules/grandfather_of_bwd.rule> ;
+    # ja:rulesFrom <file:../rules/grandfather_of_fwd.rule> ;
+  ] ;
+  .
+
+# Base model in memory.
+:model_base_mem a ja:MemoryModel ;
+  ja:content [
+    ja:externalContent <file:../data/fathers_father.ttl>; 
+  ] ;
+  .

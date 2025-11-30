@@ -12,5 +12,4 @@
     (?y ff:father_of ?z) 
     ->
     (?x ff:grandfather_of ?z)
-    print("====================================>", ?x, "grandfather_of", ?z)
 ]

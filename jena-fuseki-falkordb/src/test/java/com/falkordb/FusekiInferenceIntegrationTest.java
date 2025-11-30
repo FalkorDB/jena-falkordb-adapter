@@ -240,10 +240,10 @@ public class FusekiInferenceIntegrationTest {
         try (QueryExecution qexec = QueryExecutionHTTP.service(sparqlEndpoint).query(selectQuery).build()) {
             ResultSet results = qexec.execSelect();
 
-            // Should have 3 grandfather relationships:
-            // Jesse grandfather_of David
-            // Obed grandfather_of Solomon
-            // (Note: Obed is great-grandfather of David, not grandfather)
+            // Should have 2 grandfather relationships inferred:
+            // Jesse grandfather_of David (Jesse -> Solomon -> David)
+            // Obed grandfather_of Solomon (Obed -> Jesse -> Solomon)
+            // Note: Obed is great-grandfather of David (not grandfather), so no direct relationship
             int count = 0;
             while (results.hasNext()) {
                 results.next();

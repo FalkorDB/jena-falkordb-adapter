@@ -82,19 +82,20 @@ public class FusekiAssemblerConfigTest {
     @Test
     @DisplayName("Test assembler-configured endpoint accepts updates")
     public void testAssemblerEndpointUpdate() {
-        // Insert data
+        // Insert data with unique URI to avoid conflicts
+        String uniqueId = String.valueOf(System.currentTimeMillis());
         String insertQuery = 
-            "PREFIX ex: <http://example.org/> " +
+            "PREFIX ex: <http://example.org/updatetest/> " +
             "INSERT DATA { " +
-            "  ex:test ex:property \"value\" . " +
+            "  ex:test" + uniqueId + " ex:property \"value\" . " +
             "}";
         
         UpdateExecutionHTTP.service(updateEndpoint).update(insertQuery).execute();
         
         // Verify insert worked
         String selectQuery = 
-            "PREFIX ex: <http://example.org/> " +
-            "SELECT ?value WHERE { ex:test ex:property ?value }";
+            "PREFIX ex: <http://example.org/updatetest/> " +
+            "SELECT ?value WHERE { ex:test" + uniqueId + " ex:property ?value }";
         
         try (QueryExecution qexec = QueryExecutionHTTP.service(sparqlEndpoint).query(selectQuery).build()) {
             ResultSet results = qexec.execSelect();
@@ -119,39 +120,52 @@ public class FusekiAssemblerConfigTest {
         
         UpdateExecutionHTTP.service(updateEndpoint).update(insertQuery).execute();
         
-        // Query for father-son relationships
-        String selectQuery = 
+        // Verify specific relationships exist using ASK queries
+        String verifyAbrahamToIsaac = 
             "PREFIX ff: <http://www.semanticweb.org/ontologies/2023/1/fathers_father#> " +
-            "SELECT ?father ?son " +
-            "WHERE { " +
-            "  ?father ff:father_of ?son . " +
-            "} ORDER BY ?father";
+            "ASK { ff:Abraham ff:father_of ff:Isaac }";
         
-        try (QueryExecution qexec = QueryExecutionHTTP.service(sparqlEndpoint).query(selectQuery).build()) {
-            ResultSet results = qexec.execSelect();
-            
-            // First result: Abraham -> Isaac
-            assertTrue(results.hasNext(), "Should have first result");
-            var first = results.next();
-            assertTrue(first.getResource("father").getURI().endsWith("Abraham"));
-            assertTrue(first.getResource("son").getURI().endsWith("Isaac"));
-            
-            // Second result: Isaac -> Jacob
-            assertTrue(results.hasNext(), "Should have second result");
-            var second = results.next();
-            assertTrue(second.getResource("father").getURI().endsWith("Isaac"));
-            assertTrue(second.getResource("son").getURI().endsWith("Jacob"));
-            
-            assertFalse(results.hasNext(), "Should have only two results");
+        try (QueryExecution qexec = QueryExecutionHTTP.service(sparqlEndpoint).query(verifyAbrahamToIsaac).build()) {
+            assertTrue(qexec.execAsk(), "Abraham should be father of Isaac");
+        }
+        
+        String verifyIsaacToJacob = 
+            "PREFIX ff: <http://www.semanticweb.org/ontologies/2023/1/fathers_father#> " +
+            "ASK { ff:Isaac ff:father_of ff:Jacob }";
+        
+        try (QueryExecution qexec = QueryExecutionHTTP.service(sparqlEndpoint).query(verifyIsaacToJacob).build()) {
+            assertTrue(qexec.execAsk(), "Isaac should be father of Jacob");
+        }
+        
+        // Verify types were set
+        String verifyTypes = 
+            "PREFIX ff: <http://www.semanticweb.org/ontologies/2023/1/fathers_father#> " +
+            "ASK { " +
+            "  ff:Jacob a ff:Male . " +
+            "  ff:Isaac a ff:Male . " +
+            "  ff:Abraham a ff:Male . " +
+            "}";
+        
+        try (QueryExecution qexec = QueryExecutionHTTP.service(sparqlEndpoint).query(verifyTypes).build()) {
+            assertTrue(qexec.execAsk(), "All three should be of type Male");
         }
     }
     
     @Test
     @DisplayName("Test count query with assembler config")
     public void testCountQueryWithAssemblerConfig() {
+        // Get initial count
+        String countQuery = "SELECT (COUNT(*) AS ?count) WHERE { ?s ?p ?o }";
+        int initialCount;
+        try (QueryExecution qexec = QueryExecutionHTTP.service(sparqlEndpoint).query(countQuery).build()) {
+            ResultSet results = qexec.execSelect();
+            assertTrue(results.hasNext());
+            initialCount = results.next().getLiteral("count").getInt();
+        }
+        
         // Insert some data
         String insertQuery = 
-            "PREFIX ex: <http://example.org/> " +
+            "PREFIX ex: <http://example.org/counttest/> " +
             "INSERT DATA { " +
             "  ex:a ex:p \"1\" . " +
             "  ex:b ex:p \"2\" . " +
@@ -160,13 +174,12 @@ public class FusekiAssemblerConfigTest {
         
         UpdateExecutionHTTP.service(updateEndpoint).update(insertQuery).execute();
         
-        // Count triples
-        String countQuery = "SELECT (COUNT(*) AS ?count) WHERE { ?s ?p ?o }";
-        
+        // Count triples - should be initial + 3
         try (QueryExecution qexec = QueryExecutionHTTP.service(sparqlEndpoint).query(countQuery).build()) {
             ResultSet results = qexec.execSelect();
             assertTrue(results.hasNext());
-            assertEquals(3, results.next().getLiteral("count").getInt());
+            int newCount = results.next().getLiteral("count").getInt();
+            assertEquals(initialCount + 3, newCount, "Should have 3 more triples after insert");
         }
     }
 }

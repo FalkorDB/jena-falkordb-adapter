@@ -50,10 +50,14 @@
     ] ;
     
     # Link to the FalkorDB dataset
-    fuseki:dataset :dataset .
+    fuseki:dataset :dataset_rdf .
 
-# FalkorDB-backed dataset configuration
-:dataset rdf:type falkor:FalkorDBModel ;
+# RDF Dataset wrapping FalkorDB model
+:dataset_rdf rdf:type ja:RDFDataset ;
+    ja:defaultGraph :falkor_db_model .
+
+# FalkorDB-backed model configuration
+:falkor_db_model rdf:type falkor:FalkorDBModel ;
     # FalkorDB connection settings
     falkor:host "localhost" ;
     falkor:port 6379 ;

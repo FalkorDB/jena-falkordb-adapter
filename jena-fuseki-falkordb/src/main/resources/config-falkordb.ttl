@@ -5,11 +5,12 @@
 #
 # To use this configuration:
 # 1. Start FalkorDB: docker run -p 6379:6379 -it --rm falkordb/falkordb:latest
-# 2. Run Fuseki with this config: fuseki-server --config=config-falkordb.ttl
+# 2. Run Fuseki with this config: 
+#    java -jar jena-fuseki-falkordb.jar --config config-falkordb.ttl
 #
 # Prerequisites:
 # - FalkorDB must be running on localhost:6379 (or as configured below)
-# - The jena-fuseki-falkordb JAR must be in Fuseki's lib directory
+# - The jena-fuseki-falkordb JAR must include the assembler module
 
 @prefix :        <#> .
 @prefix falkor:  <http://falkordb.com/jena/assembler#> .
@@ -58,10 +59,15 @@
     ] ;
     
     # Link to the FalkorDB dataset
-    fuseki:dataset :dataset .
+    fuseki:dataset :dataset_rdf .
 
-# FalkorDB-backed dataset configuration
-:dataset rdf:type falkor:FalkorDBModel ;
+# RDF Dataset wrapping FalkorDB model
+# This is needed because Fuseki expects a Dataset, not a Model
+:dataset_rdf rdf:type ja:RDFDataset ;
+    ja:defaultGraph :falkor_db_model .
+
+# FalkorDB-backed model configuration
+:falkor_db_model rdf:type falkor:FalkorDBModel ;
     # FalkorDB connection settings (all optional with defaults shown)
     falkor:host "localhost" ;  # Default: "localhost"
     falkor:port 6379 ;         # Default: 6379

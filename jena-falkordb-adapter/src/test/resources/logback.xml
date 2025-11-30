@@ -21,6 +21,17 @@
         </encoder>
     </appender>
 
+    <!-- Suppress verbose Jetty debug logs -->
+    <logger name="org.eclipse.jetty" level="WARN"/>
+    <logger name="org.eclipse.jetty.http" level="WARN"/>
+    <logger name="org.eclipse.jetty.server" level="WARN"/>
+    <logger name="org.eclipse.jetty.util" level="WARN"/>
+    <logger name="org.eclipse.jetty.io" level="WARN"/>
+
+    <!-- Suppress verbose Fuseki/Jena logs during tests -->
+    <logger name="org.apache.jena" level="WARN"/>
+    <logger name="org.apache.jena.fuseki" level="INFO"/>
+
     <!-- Logger for the FalkorDB Jena adapter -->
     <logger name="com.falkordb.jena" level="INFO"/>
 

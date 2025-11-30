@@ -14,7 +14,7 @@
     <logger name="org.eclipse.jetty.util" level="WARN"/>
     <logger name="org.eclipse.jetty.io" level="WARN"/>
 
-    <!-- Suppress verbose Fuseki/Jena logs during tests -->
+    <!-- Suppress verbose Fuseki/Jena logs -->
     <logger name="org.apache.jena" level="WARN"/>
     <logger name="org.apache.jena.fuseki" level="INFO"/>
 

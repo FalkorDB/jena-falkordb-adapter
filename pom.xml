@@ -16,6 +16,7 @@
     <modules>
         <module>jena-falkordb-adapter</module>
         <module>jena-falkordb-assembler</module>
+        <module>jena-geosparql</module>
         <module>jena-fuseki-falkordb</module>
     </modules>
 

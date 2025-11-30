@@ -14,8 +14,8 @@
     <logger name="org.apache.jena" level="WARN"/>
     <logger name="org.apache.jena.fuseki" level="INFO"/>
 
-    <!-- Logger for the FalkorDB adapter -->
-    <logger name="com.falkordb" level="INFO"/>
+    <!-- Logger for the FalkorDB Jena adapter -->
+    <logger name="com.falkordb.jena" level="INFO"/>
 
     <!-- Root logger configuration -->
     <root level="INFO">

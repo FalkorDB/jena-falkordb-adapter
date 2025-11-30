@@ -27,6 +27,13 @@ public class FalkorDBInit implements JenaSubsystemLifecycle {
         FalkorDBInit.class);
 
     /**
+     * Creates a new FalkorDBInit instance.
+     */
+    public FalkorDBInit() {
+        // Default constructor for SPI discovery
+    }
+
+    /**
      * Returns the initialization level for this subsystem.
      * Level 500 ensures this runs after core Jena initialization.
      *

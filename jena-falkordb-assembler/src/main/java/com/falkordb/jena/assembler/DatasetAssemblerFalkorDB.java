@@ -43,6 +43,13 @@ public class DatasetAssemblerFalkorDB extends AssemblerBase {
     private static final Logger LOGGER = LoggerFactory.getLogger(
         DatasetAssemblerFalkorDB.class);
 
+    /**
+     * Creates a new DatasetAssemblerFalkorDB instance.
+     */
+    public DatasetAssemblerFalkorDB() {
+        // Default constructor
+    }
+
     /** Default FalkorDB host. */
     private static final String DEFAULT_HOST = "localhost";
 

@@ -1,6 +1,8 @@
 package com.falkordb;
 
 import com.falkordb.jena.FalkorDBModelFactory;
+import java.io.File;
+import java.net.URL;
 import org.apache.jena.fuseki.main.FusekiServer;
 import org.apache.jena.query.Dataset;
 import org.apache.jena.query.DatasetFactory;
@@ -29,9 +31,8 @@ public final class FalkorFuseki {
     private static final int DEFAULT_FUSEKI_PORT = 3330;
     /** Default dataset path. */
     private static final String DEFAULT_DATASET_PATH = "/falkor";
-    /** Default static file base path. */
-    private static final String DEFAULT_STATIC_BASE =
-        "src/main/resources/webapp";
+    /** Classpath resource path for webapp. */
+    private static final String WEBAPP_RESOURCE_PATH = "webapp";
 
     /** Prevent instantiation of this utility class. */
     private FalkorFuseki() {
@@ -70,18 +71,67 @@ public final class FalkorFuseki {
             LOGGER.info("Starting Fuseki Server on port {}...", fusekiPort);
         }
 
-        FusekiServer server = FusekiServer.create()
+        FusekiServer.Builder serverBuilder = FusekiServer.create()
                 .port(fusekiPort)
-                .add(DEFAULT_DATASET_PATH, ds)
-                .staticFileBase(DEFAULT_STATIC_BASE)
-                .build();
+                .add(DEFAULT_DATASET_PATH, ds);
 
+        // Try to set up static files from classpath or filesystem
+        String staticBase = getStaticFileBase();
+        if (staticBase != null) {
+            serverBuilder.staticFileBase(staticBase);
+            if (LOGGER.isInfoEnabled()) {
+                LOGGER.info("Serving static files from: {}", staticBase);
+            }
+        }
+
+        FusekiServer server = serverBuilder.build();
         server.start();
 
         if (LOGGER.isInfoEnabled()) {
             LOGGER.info("Server running. SPARQL endpoint: "
                 + "http://localhost:{}{}", fusekiPort, DEFAULT_DATASET_PATH);
         }
+    }
+
+    /**
+     * Gets the static file base path.
+     * First tries to get resources from the classpath, then falls back to
+     * a filesystem path if running from source.
+     *
+     * @return the static file base path, or null if not available
+     */
+    private static String getStaticFileBase() {
+        // Try to get from classpath resource
+        URL resourceUrl = FalkorFuseki.class.getClassLoader()
+            .getResource(WEBAPP_RESOURCE_PATH);
+        if (resourceUrl != null) {
+            String protocol = resourceUrl.getProtocol();
+            if ("file".equals(protocol)) {
+                // Running from filesystem (e.g., IDE or mvn exec)
+                return resourceUrl.getPath();
+            }
+            // Running from JAR - Fuseki can't serve from JAR directly
+            // Return null and let Fuseki use its default behavior
+        }
+
+        // Fallback: try src/main/resources/webapp for development
+        File devPath = new File("src/main/resources/webapp");
+        if (devPath.exists() && devPath.isDirectory()) {
+            return devPath.getAbsolutePath();
+        }
+
+        // Try jena-fuseki-falkordb subdir for running from root
+        File submodulePath = new File(
+            "jena-fuseki-falkordb/src/main/resources/webapp");
+        if (submodulePath.exists() && submodulePath.isDirectory()) {
+            return submodulePath.getAbsolutePath();
+        }
+
+        if (LOGGER.isWarnEnabled()) {
+            LOGGER.warn("Static files not available. "
+                + "Web UI may not be accessible.");
+        }
+        return null;
     }
 
     /**

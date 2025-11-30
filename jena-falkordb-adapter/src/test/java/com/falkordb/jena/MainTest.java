@@ -4,6 +4,9 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.github.dockerjava.api.model.ExposedPort;
+import com.github.dockerjava.api.model.PortBinding;
+import com.github.dockerjava.api.model.Ports;
 import org.apache.jena.rdf.model.Model;
 import org.apache.jena.rdf.model.Property;
 import org.apache.jena.rdf.model.Resource;
@@ -29,6 +32,10 @@ public class MainTest {
     /**
      * Container bound to fixed port 6379 so Main.main() can connect using
      * default localhost:6379 connection settings.
+     * 
+     * The @SuppressWarnings("resource") is needed because the static container
+     * field is managed by Testcontainers lifecycle (via @Container annotation)
+     * and should not be manually closed.
      */
     @SuppressWarnings("resource")
     @Container
@@ -37,9 +44,9 @@ public class MainTest {
             .withExposedPorts(FALKORDB_PORT)
             .withCreateContainerCmdModifier(cmd -> 
                 cmd.withHostConfig(cmd.getHostConfig()
-                    .withPortBindings(new com.github.dockerjava.api.model.PortBinding(
-                        com.github.dockerjava.api.model.Ports.Binding.bindPort(FALKORDB_PORT),
-                        new com.github.dockerjava.api.model.ExposedPort(FALKORDB_PORT)))));
+                    .withPortBindings(new PortBinding(
+                        Ports.Binding.bindPort(FALKORDB_PORT),
+                        new ExposedPort(FALKORDB_PORT)))));
 
     @Test
     @DisplayName("Test Main.main() runs without exceptions")

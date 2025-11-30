@@ -11,10 +11,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.DockerImageName;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -30,18 +26,14 @@ import static org.junit.jupiter.api.Assertions.*;
  * 2. Configuration files can define FalkorDB-backed datasets
  * 3. The server works correctly with config-based initialization
  * 
- * Uses Testcontainers to automatically start FalkorDB if not already running.
+ * Prerequisites: FalkorDB must be running. Configure via environment variables:
+ * - FALKORDB_HOST (default: localhost)
+ * - FALKORDB_PORT (default: 6379)
  */
-@Testcontainers
 public class FusekiAssemblerConfigTest {
 
     private static final int TEST_PORT = 3332;
-    private static final int FALKORDB_PORT = 6379;
-    
-    @Container
-    private static final GenericContainer<?> falkordb = new GenericContainer<>(
-            DockerImageName.parse("falkordb/falkordb:latest"))
-            .withExposedPorts(FALKORDB_PORT);
+    private static final int DEFAULT_FALKORDB_PORT = 6379;
     
     @TempDir
     Path tempDir;
@@ -55,8 +47,8 @@ public class FusekiAssemblerConfigTest {
     
     @BeforeAll
     public static void setUpContainer() {
-        falkorHost = falkordb.getHost();
-        falkorPort = falkordb.getMappedPort(FALKORDB_PORT);
+        falkorHost = System.getenv().getOrDefault("FALKORDB_HOST", "localhost");
+        falkorPort = Integer.parseInt(System.getenv().getOrDefault("FALKORDB_PORT", String.valueOf(DEFAULT_FALKORDB_PORT)));
     }
     
     @BeforeEach

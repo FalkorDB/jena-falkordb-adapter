@@ -390,7 +390,7 @@ The rule will infer:
 Use the inference configuration file to enable rule-based reasoning:
 
 ```bash
-java -jar jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar --config config-falkordb-inference.ttl
+java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar --config jena-fuseki-falkordb/src/main/resources/config-falkordb-inference.ttl
 ```
 
 **Example inference configuration (`config-falkordb-inference.ttl`):**
@@ -401,6 +401,10 @@ java -jar jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar --config config-falkordb-infer
 @prefix fuseki:  <http://jena.apache.org/fuseki#> .
 @prefix ja:      <http://jena.hpl.hp.com/2005/11/Assembler#> .
 @prefix rdf:     <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:    <http://www.w3.org/2000/01/rdf-schema#> .
+
+# Declare FalkorDBModel as a subclass of ja:Model for assembler compatibility
+falkor:FalkorDBModel rdfs:subClassOf ja:Model .
 
 # Fuseki server configuration
 [] rdf:type fuseki:Server ;

@@ -7,9 +7,7 @@ import org.apache.jena.assembler.assemblers.AssemblerBase;
 import org.apache.jena.query.Dataset;
 import org.apache.jena.query.DatasetFactory;
 import org.apache.jena.rdf.model.Model;
-import org.apache.jena.rdf.model.Property;
 import org.apache.jena.rdf.model.Resource;
-import org.apache.jena.rdf.model.Statement;
 import org.apache.jena.sparql.core.DatasetGraph;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -63,10 +61,12 @@ public class DatasetAssemblerFalkorDB extends AssemblerBase {
      */
     public DatasetGraph createDataset(final Assembler a, final Resource root) {
         // Extract configuration properties
-        String host = getStringProperty(root, FalkorDBVocab.host, DEFAULT_HOST);
-        int port = getIntProperty(root, FalkorDBVocab.port, DEFAULT_PORT);
-        String graphName = getStringProperty(root, FalkorDBVocab.graphName,
-            DEFAULT_GRAPH_NAME);
+        String host = AssemblerUtils.getStringProperty(root,
+            FalkorDBVocab.host, DEFAULT_HOST);
+        int port = AssemblerUtils.getIntProperty(root,
+            FalkorDBVocab.port, DEFAULT_PORT);
+        String graphName = AssemblerUtils.getStringProperty(root,
+            FalkorDBVocab.graphName, DEFAULT_GRAPH_NAME);
 
         if (LOGGER.isInfoEnabled()) {
             LOGGER.info(
@@ -99,39 +99,5 @@ public class DatasetAssemblerFalkorDB extends AssemblerBase {
             final Mode mode) {
         DatasetGraph dsg = createDataset(a, root);
         return DatasetFactory.wrap(dsg);
-    }
-
-    /**
-     * Get a string property value from the configuration resource.
-     *
-     * @param root the configuration resource
-     * @param property the property to retrieve
-     * @param defaultValue the default value if property is not present
-     * @return the property value or default
-     */
-    private String getStringProperty(final Resource root,
-            final Property property, final String defaultValue) {
-        Statement stmt = root.getProperty(property);
-        if (stmt == null) {
-            return defaultValue;
-        }
-        return stmt.getString();
-    }
-
-    /**
-     * Get an integer property value from the configuration resource.
-     *
-     * @param root the configuration resource
-     * @param property the property to retrieve
-     * @param defaultValue the default value if property is not present
-     * @return the property value or default
-     */
-    private int getIntProperty(final Resource root, final Property property,
-            final int defaultValue) {
-        Statement stmt = root.getProperty(property);
-        if (stmt == null) {
-            return defaultValue;
-        }
-        return stmt.getInt();
     }
 }

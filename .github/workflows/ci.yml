@@ -29,6 +29,9 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
     
+    - name: Enable memory overcommit for FalkorDB
+      run: sudo sysctl -w vm.overcommit_memory=1
+    
     - name: Setup SDKMAN!
       run: |
         curl -s "https://get.sdkman.io" | bash

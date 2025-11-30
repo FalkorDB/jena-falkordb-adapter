@@ -1,131 +1,23 @@
 package com.falkordb.jena;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.github.dockerjava.api.model.ExposedPort;
-import com.github.dockerjava.api.model.PortBinding;
-import com.github.dockerjava.api.model.Ports;
-import org.apache.jena.rdf.model.Model;
-import org.apache.jena.rdf.model.Property;
-import org.apache.jena.rdf.model.Resource;
-import org.apache.jena.vocabulary.RDF;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.DockerImageName;
 
 /**
  * Tests that exercise the demo Main class code paths using Testcontainers.
  * 
- * This test class uses its own container with fixed port binding to 6379
- * so that Main.main() can use default localhost:6379 connection settings.
- * Other tests use the dynamic port binding from FalkorDBTestBase.
+ * Extends FalkorDBTestBase which provides Testcontainers setup for FalkorDB.
+ * No manual Docker setup required - tests work both locally and in CI.
  */
-@Testcontainers
-public class MainTest {
-
-    private static final int FALKORDB_PORT = 6379;
-
-    /**
-     * Container bound to fixed port 6379 so Main.main() can connect using
-     * default localhost:6379 connection settings.
-     * 
-     * Note: This test class intentionally does NOT extend FalkorDBTestBase
-     * because it needs a fixed port binding for testing Main.main() which
-     * uses default connection settings (localhost:6379).
-     * 
-     * The @SuppressWarnings("resource") is needed because the static container
-     * field is managed by Testcontainers lifecycle (via @Container annotation)
-     * and should not be manually closed.
-     */
-    @SuppressWarnings("resource")
-    @Container
-    private static final GenericContainer<?> falkordb = new GenericContainer<>(
-            DockerImageName.parse("falkordb/falkordb:latest"))
-            .withExposedPorts(FALKORDB_PORT)
-            .withCreateContainerCmdModifier(cmd -> 
-                cmd.withHostConfig(cmd.getHostConfig()
-                    .withPortBindings(new PortBinding(
-                        Ports.Binding.bindPort(FALKORDB_PORT),
-                        new ExposedPort(FALKORDB_PORT)))));
+public class MainTest extends FalkorDBTestBase {
 
     @Test
-    @DisplayName("Test Main.main() runs without exceptions")
-    public void testMainRunsWithoutThrowing() {
-        // Execute the actual Main.main() method which uses default localhost:6379
-        // The container is bound to port 6379 so this will work
-        assertDoesNotThrow(() -> Main.main(new String[0]));
-    }
-
-    @Test
-    @DisplayName("Test Main class demo functionality using dynamic port")
-    public void testMainDemoFunctionality() {
-        // This test exercises similar code paths using dynamic port assignment
-        String falkorHost = falkordb.getHost();
-        int falkorPort = falkordb.getMappedPort(FALKORDB_PORT);
-        
-        assertDoesNotThrow(() -> {
-            Model model = FalkorDBModelFactory.builder()
-                .host(falkorHost)
-                .port(falkorPort)
-                .graphName("demo_graph_test")
-                .build();
-
-            try {
-                // Clear any previous data
-                if (model.getGraph() instanceof FalkorDBGraph) {
-                    ((FalkorDBGraph) model.getGraph()).clear();
-                }
-
-                // Create some sample RDF data (same as Main.main)
-                Property name = model.createProperty("http://example.org/name");
-                Property age = model.createProperty("http://example.org/age");
-                Resource person = model.createResource(
-                    "http://example.org/person/john");
-                
-                person.addProperty(RDF.type, model.createResource(
-                    "http://example.org/Person"));
-                person.addProperty(name, "John Doe");
-                person.addProperty(age, model.createTypedLiteral(30));
-
-                // Verify data was added
-                assertTrue(model.size() > 0, "Model should contain data");
-                assertNotNull(person.getProperty(name), 
-                    "Person should have name property");
-
-                // Test delete operations (same as Main.main)
-                person.removeAll(age);
-                assertNotNull(person.getProperty(name), 
-                    "Name should still exist after removing age");
-
-                // Add another resource
-                Resource person2 = model.createResource(
-                    "http://example.org/person/jane");
-                Resource personType = model.createResource(
-                    "http://example.org/Person");
-                person2.addProperty(RDF.type, personType);
-                person2.addProperty(name, "Jane Smith");
-                Property email = model.createProperty("http://example.org/email");
-                person2.addProperty(email, "jane@example.org");
-
-                // Test querying
-                var iter = model.listStatements(null, RDF.type, personType);
-                int count = 0;
-                while (iter.hasNext()) {
-                    iter.next();
-                    count++;
-                }
-                assertTrue(count >= 1, "Should find at least one Person");
-
-                // Test complete resource deletion
-                person2.removeProperties();
-            } finally {
-                model.close();
-            }
-        });
+    @DisplayName("Test Main.runDemo() executes all demo code paths")
+    public void testMainRunDemo() {
+        // Execute the Main.runDemo() method with dynamic host/port from container
+        // This exercises all the code paths in Main.java for full code coverage
+        assertDoesNotThrow(() -> Main.runDemo(falkorHost, falkorPort));
     }
 }

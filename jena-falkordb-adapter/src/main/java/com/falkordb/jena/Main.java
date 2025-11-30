@@ -14,6 +14,12 @@ import org.slf4j.LoggerFactory;
  * <p>
  * This class is intended for local manual testing and examples; it connects to
  * a FalkorDB instance, creates a small RDF dataset and prints the results.
+ * <p>
+ * Connection settings can be configured via environment variables:
+ * <ul>
+ *   <li>FALKORDB_HOST - FalkorDB host (default: localhost)</li>
+ *   <li>FALKORDB_PORT - FalkorDB port (default: 6379)</li>
+ * </ul>
  */
 public final class Main {
     /** Logger instance for this class. */
@@ -21,6 +27,15 @@ public final class Main {
 
     /** Sample age used in the demo person resource. */
     private static final int SAMPLE_AGE = 30;
+    
+    /** Environment variable name for FalkorDB host. */
+    private static final String ENV_HOST = "FALKORDB_HOST";
+    
+    /** Environment variable name for FalkorDB port. */
+    private static final String ENV_PORT = "FALKORDB_PORT";
+    
+    /** Default host when environment variable is not set. */
+    private static final String DEFAULT_HOST = "localhost";
 
     /** Prevent instantiation of this utility/demo class. */
     private Main() {
@@ -33,6 +48,29 @@ public final class Main {
      * @param args command line arguments (ignored)
      */
     public static void main(final String[] args) {
+        // Get connection settings from environment or use defaults
+        String host = System.getenv(ENV_HOST);
+        if (host == null || host.isEmpty()) {
+            host = DEFAULT_HOST;
+        }
+        
+        String portStr = System.getenv(ENV_PORT);
+        int port = FalkorDBModelFactory.DEFAULT_PORT;
+        if (portStr != null && !portStr.isEmpty()) {
+            port = Integer.parseInt(portStr);
+        }
+        
+        runDemo(host, port);
+    }
+    
+    /**
+     * Run the demo with the specified connection parameters.
+     * This method is package-private to allow testing.
+     *
+     * @param host FalkorDB host
+     * @param port FalkorDB port
+     */
+    static void runDemo(final String host, final int port) {
         if (LOGGER.isInfoEnabled()) {
             LOGGER.info("FalkorDB-Jena Adapter Demo");
             LOGGER.info("===============================================");
@@ -40,7 +78,11 @@ public final class Main {
 
         try {
             // Create a model using FalkorDB
-            Model model = FalkorDBModelFactory.createModel("demo_graph");
+            Model model = FalkorDBModelFactory.builder()
+                .host(host)
+                .port(port)
+                .graphName("demo_graph")
+                .build();
 
             if (LOGGER.isInfoEnabled()) {
                 LOGGER.info("✓ Connected to FalkorDB using FalkorDB driver");

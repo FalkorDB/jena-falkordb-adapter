@@ -106,12 +106,20 @@ public final class FalkorFuseki {
         String envPath = System.getenv("STATIC_FILES_BASE");
         if (envPath != null && !envPath.isEmpty()) {
             File envFile = new File(envPath);
-            if (envFile.exists() && envFile.isDirectory()) {
-                return envFile.getAbsolutePath();
-            }
-            if (LOGGER.isWarnEnabled()) {
-                LOGGER.warn("STATIC_FILES_BASE '{}' does not exist or "
-                    + "is not a directory", envPath);
+            try {
+                String canonicalPath = envFile.getCanonicalPath();
+                File canonicalFile = new File(canonicalPath);
+                if (canonicalFile.exists() && canonicalFile.isDirectory()) {
+                    return canonicalPath;
+                } else {
+                    if (LOGGER.isWarnEnabled()) {
+                        LOGGER.warn("STATIC_FILES_BASE '{}' does not exist or is not a directory", envPath);
+                    }
+                }
+            } catch (java.io.IOException e) {
+                if (LOGGER.isWarnEnabled()) {
+                    LOGGER.warn("Invalid path in STATIC_FILES_BASE: {}", envPath);
+                }
             }
         }
 

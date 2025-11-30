@@ -1,9 +1,8 @@
 package com.falkordb.jena;
 
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
 /**
@@ -22,7 +21,6 @@ import org.testcontainers.utility.DockerImageName;
  * <p>This ensures tests work both locally (with automatic container) and 
  * in CI (with pre-configured FalkorDB service).
  */
-@Testcontainers
 public abstract class FalkorDBTestBase {
     
     /** Default FalkorDB port. */
@@ -36,15 +34,10 @@ public abstract class FalkorDBTestBase {
 
     /**
      * Testcontainers container for FalkorDB.
-     * Only started when environment variables are not set (local development).
-     * 
-     * The @SuppressWarnings("resource") is needed because the static container
-     * field is managed by Testcontainers lifecycle (via @Container annotation)
-     * and should not be manually closed.
+     * Only created and started when environment variables are not set 
+     * (local development).
      */
-    @SuppressWarnings("resource")
-    @Container
-    protected static final GenericContainer<?> falkordb = createContainer();
+    private static GenericContainer<?> falkordbContainer;
 
     /** Host where FalkorDB is running. */
     protected static String falkorHost;
@@ -53,44 +46,44 @@ public abstract class FalkorDBTestBase {
     protected static int falkorPort;
     
     /**
-     * Creates the FalkorDB container only if environment variables are not set.
-     * When running in CI with a FalkorDB service, returns null to skip container.
+     * Checks if we're running in CI mode with external FalkorDB service.
      */
-    private static GenericContainer<?> createContainer() {
-        // Check if we're running in CI with a FalkorDB service
+    private static boolean isUsingExternalService() {
         String envHost = System.getenv(ENV_HOST);
         String envPort = System.getenv(ENV_PORT);
-        
-        if (envHost != null && !envHost.isEmpty() 
-                && envPort != null && !envPort.isEmpty()) {
-            // CI mode: use external FalkorDB service, don't create container
-            return null;
-        }
-        
-        // Local mode: create Testcontainer
-        return new GenericContainer<>(
-                DockerImageName.parse("falkordb/falkordb:latest"))
-                .withExposedPorts(FALKORDB_PORT);
+        return envHost != null && !envHost.isEmpty() 
+                && envPort != null && !envPort.isEmpty();
     }
 
     /**
-     * Set up the container host and port before all tests.
-     * Uses environment variables if set (CI), otherwise uses Testcontainer.
+     * Set up FalkorDB connection before all tests.
+     * Uses environment variables if set (CI), otherwise starts Testcontainer.
      */
     @BeforeAll
-    public static void setUpContainer() {
-        String envHost = System.getenv(ENV_HOST);
-        String envPort = System.getenv(ENV_PORT);
-        
-        if (envHost != null && !envHost.isEmpty() 
-                && envPort != null && !envPort.isEmpty()) {
+    public static void setUpFalkorDB() {
+        if (isUsingExternalService()) {
             // CI mode: use environment variables
-            falkorHost = envHost;
-            falkorPort = Integer.parseInt(envPort);
+            falkorHost = System.getenv(ENV_HOST);
+            falkorPort = Integer.parseInt(System.getenv(ENV_PORT));
         } else {
-            // Local mode: use Testcontainer
-            falkorHost = falkordb.getHost();
-            falkorPort = falkordb.getMappedPort(FALKORDB_PORT);
+            // Local mode: create and start Testcontainer
+            falkordbContainer = new GenericContainer<>(
+                    DockerImageName.parse("falkordb/falkordb:latest"))
+                    .withExposedPorts(FALKORDB_PORT);
+            falkordbContainer.start();
+            falkorHost = falkordbContainer.getHost();
+            falkorPort = falkordbContainer.getMappedPort(FALKORDB_PORT);
+        }
+    }
+    
+    /**
+     * Clean up FalkorDB container after all tests (if we started one).
+     */
+    @AfterAll
+    public static void tearDownFalkorDB() {
+        if (falkordbContainer != null) {
+            falkordbContainer.stop();
+            falkordbContainer = null;
         }
     }
 }

@@ -54,7 +54,7 @@ public class FalkorDBInit implements JenaSubsystemLifecycle {
         );
 
         // Also register as a model assembler for direct model assembly
-        Assembler.general.implementWith(
+        Assembler.general().implementWith(
             FalkorDBVocab.FalkorDBModel,
             FalkorDBAssembler.INSTANCE
         );

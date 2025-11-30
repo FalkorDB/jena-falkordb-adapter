@@ -345,7 +345,7 @@ public final class FalkorDBGraph extends GraphBase {
                 }
 
                 Node predicate = NodeFactory.createURI(predicateUri);
-                Node object = NodeFactory.createLiteral(literalValue);
+                Node object = NodeFactory.createLiteralString(literalValue);
 
                 triples.add(Triple.create(subject, predicate, object));
             }
@@ -423,7 +423,7 @@ public final class FalkorDBGraph extends GraphBase {
         if (objectNode.getProperty("value") != null) {
             String literalValue = objectNode.getProperty("value")
                 .getValue().toString();
-            object = NodeFactory.createLiteral(literalValue);
+            object = NodeFactory.createLiteralString(literalValue);
         } else {
             String objectUri = objectNode.getProperty("uri").getValue()
                 .toString();

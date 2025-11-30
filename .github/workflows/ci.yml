@@ -121,35 +121,7 @@ jobs:
     
     - name: Compile code
       run: mvn -B clean compile --file pom.xml
-    
-    - name: Run SpotBugs
-      run: mvn -B spotbugs:check --file pom.xml
-      continue-on-error: true
-    
-    - name: Run PMD
-      run: mvn -B pmd:check --file pom.xml
-      continue-on-error: true
-    
-    - name: Run PMD CPD (Copy-Paste Detection)
-      run: mvn -B pmd:cpd-check --file pom.xml
-      continue-on-error: true
-    
-    - name: Upload SpotBugs report
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: spotbugs-report
-        path: '**/target/spotbugsXml.xml'
-        if-no-files-found: ignore
-    
-    - name: Upload PMD report
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: pmd-report
-        path: '**/target/pmd.xml'
-        if-no-files-found: ignore
-  
+
   code-quality:
     name: Code Quality Checks
     runs-on: ubuntu-latest

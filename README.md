@@ -39,8 +39,7 @@ This is a multi-module Maven project consisting of:
 
 ## Prerequisites
 
-- Java 11 or higher
-- Maven 3.6 or higher
+- sdkman
 - FalkorDB running (via Docker or direct installation)
 
 ## Setup

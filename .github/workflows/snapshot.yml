@@ -14,15 +14,33 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - name: Set up publishing to maven central
-        uses: actions/setup-java@v5
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-          cache: maven
-          server-id: central
-          server-username: CENTRAL_USERNAME
-          server-password: CENTRAL_TOKEN
+
+      - name: Setup SDKMAN!
+        run: |
+          curl -s "https://get.sdkman.io" | bash
+          source "$HOME/.sdkman/bin/sdkman-init.sh"
+          sdk version
+
+      - name: Install Java from .sdkmanrc
+        run: |
+          source "$HOME/.sdkman/bin/sdkman-init.sh"
+          sdk env install
+          java -version
+
+      - name: Configure Maven settings for Maven Central
+        run: |
+          mkdir -p ~/.m2
+          cat > ~/.m2/settings.xml << 'EOF'
+          <settings>
+            <servers>
+              <server>
+                <id>central</id>
+                <username>${env.CENTRAL_USERNAME}</username>
+                <password>${env.CENTRAL_TOKEN}</password>
+              </server>
+            </servers>
+          </settings>
+          EOF
 
       - name: Cache dependencies
         uses: actions/cache@v4
@@ -34,10 +52,12 @@ jobs:
 
       - name: mvn offline
         run: |
+          source "$HOME/.sdkman/bin/sdkman-init.sh"
           mvn -q dependency:go-offline
           
       - name: deploy
         run: |
+          source "$HOME/.sdkman/bin/sdkman-init.sh"
           mvn -DskipTests -Dgpg.skip=true deploy
         env:
           CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}

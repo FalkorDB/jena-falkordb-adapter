@@ -32,6 +32,7 @@ This is a multi-module Maven project consisting of:
 - ✅ **Automatic URI indexing** for optimal query performance
 - ✅ **Custom driver support** for advanced configuration
 - ✅ **Fuseki SPARQL server** with FalkorDB backend
+- ✅ **Inference support** with rule-based reasoning (RDFS/OWL rules)
 - ✅ Connection pooling for better performance
 - ✅ Easy-to-use factory pattern for model creation
 - ✅ Continuous integration with multi-version Java testing (11, 17, 21)
@@ -366,7 +367,8 @@ This is a basic implementation with some limitations:
 1. **Query Translation**: Not all SPARQL features are fully translated to Cypher
 2. **Performance**: Translation overhead may impact performance for large datasets
 3. **Complex Queries**: Advanced SPARQL features (OPTIONAL, UNION, nested queries) may not work as expected
-4. **Inference**: RDFS/OWL reasoning is not yet implemented
+
+Note: Inference/reasoning is now supported via Jena's rule-based reasoning when using the Fuseki server with appropriate configuration. See the [Fuseki GETTING_STARTED.md](jena-fuseki-falkordb/GETTING_STARTED.md) for details.
 
 ## Architecture
 

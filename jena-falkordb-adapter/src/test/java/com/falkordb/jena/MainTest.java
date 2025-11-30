@@ -8,7 +8,6 @@ import org.apache.jena.rdf.model.Model;
 import org.apache.jena.rdf.model.Property;
 import org.apache.jena.rdf.model.Resource;
 import org.apache.jena.vocabulary.RDF;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.containers.GenericContainer;
@@ -27,30 +26,41 @@ public class MainTest {
 
     private static final int FALKORDB_PORT = 6379;
 
+    /**
+     * Container bound to fixed port 6379 so Main.main() can connect using
+     * default localhost:6379 connection settings.
+     */
+    @SuppressWarnings("resource")
     @Container
     private static final GenericContainer<?> falkordb = new GenericContainer<>(
             DockerImageName.parse("falkordb/falkordb:latest"))
-            .withExposedPorts(FALKORDB_PORT);
+            .withExposedPorts(FALKORDB_PORT)
+            .withCreateContainerCmdModifier(cmd -> 
+                cmd.withHostConfig(cmd.getHostConfig()
+                    .withPortBindings(new com.github.dockerjava.api.model.PortBinding(
+                        com.github.dockerjava.api.model.Ports.Binding.bindPort(FALKORDB_PORT),
+                        new com.github.dockerjava.api.model.ExposedPort(FALKORDB_PORT)))));
 
-    private static String falkorHost;
-    private static int falkorPort;
-
-    @BeforeAll
-    public static void setUpContainer() {
-        falkorHost = falkordb.getHost();
-        falkorPort = falkordb.getMappedPort(FALKORDB_PORT);
+    @Test
+    @DisplayName("Test Main.main() runs without exceptions")
+    public void testMainRunsWithoutThrowing() {
+        // Execute the actual Main.main() method which uses default localhost:6379
+        // The container is bound to port 6379 so this will work
+        assertDoesNotThrow(() -> Main.main(new String[0]));
     }
 
     @Test
-    @DisplayName("Test Main class demo functionality using Testcontainers")
+    @DisplayName("Test Main class demo functionality using dynamic port")
     public void testMainDemoFunctionality() {
-        // This test exercises the same code paths as Main.main() but uses
-        // Testcontainers to ensure the test works both locally and in CI
+        // This test exercises similar code paths using dynamic port assignment
+        String falkorHost = falkordb.getHost();
+        int falkorPort = falkordb.getMappedPort(FALKORDB_PORT);
+        
         assertDoesNotThrow(() -> {
             Model model = FalkorDBModelFactory.builder()
                 .host(falkorHost)
                 .port(falkorPort)
-                .graphName("demo_graph")
+                .graphName("demo_graph_test")
                 .build();
 
             try {

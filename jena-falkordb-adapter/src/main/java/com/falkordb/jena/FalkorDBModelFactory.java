@@ -28,9 +28,7 @@ public final class FalkorDBModelFactory {
     public static Model createModel(final String host,
                                     final int port,
                                     final String graphName) {
-        org.apache.jena.graph.Graph graph =
-            new FalkorDBGraph(host, port, graphName);
-
+        var graph = new FalkorDBGraph(host, port, graphName);
         return ModelFactory.createModelForGraph(graph);
     }
 
@@ -42,8 +40,7 @@ public final class FalkorDBModelFactory {
      * @return a Jena {@link Model} backed by FalkorDB
      */
     public static Model createModel(final String graphName) {
-        org.apache.jena.graph.Graph graph =
-            new FalkorDBGraph(graphName);
+        var graph = new FalkorDBGraph(graphName);
         return ModelFactory.createModelForGraph(graph);
     }
 
@@ -57,8 +54,7 @@ public final class FalkorDBModelFactory {
      */
     public static Model createModel(final Driver driver,
                                     final String graphName) {
-        org.apache.jena.graph.Graph graph =
-            new FalkorDBGraph(driver, graphName);
+        var graph = new FalkorDBGraph(driver, graphName);
         return ModelFactory.createModelForGraph(graph);
     }
 
@@ -86,7 +82,7 @@ public final class FalkorDBModelFactory {
     /**
      * Builder for creating FalkorDB-backed Jena {@link Model} instances.
      */
-    public static class Builder {
+    public static final class Builder {
         /** FalkorDB host to connect to. */
         private String host = "localhost";
         /** FalkorDB port to connect to. */
@@ -94,7 +90,7 @@ public final class FalkorDBModelFactory {
         /** Name of the FalkorDB graph to create the model for. */
         private String graphName = "rdf_graph";
         /** Custom FalkorDB driver instance (optional). */
-        private Driver driver = null;
+        private Driver driver;
 
         /**
          * Creates a new Builder with default settings.
@@ -148,12 +144,12 @@ public final class FalkorDBModelFactory {
             return this;
         }
 
-    /**
-     * Build and return a Jena {@link Model} configured with the
-     * builder values.
-     *
-     * @return a FalkorDB-backed {@link Model}
-     */
+        /**
+         * Build and return a Jena {@link Model} configured with the
+         * builder values.
+         *
+         * @return a FalkorDB-backed {@link Model}
+         */
         public Model build() {
             if (driver != null) {
                 return createModel(driver, graphName);

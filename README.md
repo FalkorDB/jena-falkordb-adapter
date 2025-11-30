@@ -154,12 +154,12 @@ import org.apache.jena.rdf.model.*;
 import org.apache.jena.vocabulary.RDF;
 
 // Create a model backed by FalkorDB
-Model model = FalkorDBModelFactory.createDefaultModel();
+var model = FalkorDBModelFactory.createDefaultModel();
 
 try {
     // Create and add RDF data
-    Resource person = model.createResource("http://example.org/alice");
-    Property name = model.createProperty("http://xmlns.com/foaf/0.1/name");
+    var person = model.createResource("http://example.org/alice");
+    var name = model.createProperty("http://xmlns.com/foaf/0.1/name");
     
     person.addProperty(name, "Alice");
     person.addProperty(RDF.type, model.createResource("http://xmlns.com/foaf/0.1/Person"));
@@ -175,14 +175,14 @@ try {
 
 ```java
 // Using builder pattern
-Model model = FalkorDBModelFactory.builder()
+var model = FalkorDBModelFactory.builder()
     .host("localhost")
     .port(6379)
     .graphName("my_graph")
     .build();
 
 // Or direct method
-Model model = FalkorDBModelFactory.createModel("localhost", 6379, "my_graph");
+var model = FalkorDBModelFactory.createModel("localhost", 6379, "my_graph");
 ```
 
 ### Using Custom Driver
@@ -194,21 +194,21 @@ import com.falkordb.Driver;
 import com.falkordb.FalkorDB;
 
 // Create a custom configured driver
-Driver customDriver = FalkorDB.driver("localhost", 6379);
+var customDriver = FalkorDB.driver("localhost", 6379);
 // Configure your driver as needed...
 
 // Use with factory
-Model model = FalkorDBModelFactory.createModel(customDriver, "my_graph");
+var model = FalkorDBModelFactory.createModel(customDriver, "my_graph");
 
 // Or use with builder
-Model model = FalkorDBModelFactory.builder()
+var model = FalkorDBModelFactory.builder()
     .driver(customDriver)
     .graphName("my_graph")
     .build();
 
 // Or directly with the graph
-FalkorDBGraph graph = new FalkorDBGraph(customDriver, "my_graph");
-Model model = ModelFactory.createModelForGraph(graph);
+var graph = new FalkorDBGraph(customDriver, "my_graph");
+var model = ModelFactory.createModelForGraph(graph);
 
 // Don't forget to close the driver when done
 customDriver.close();
@@ -263,24 +263,24 @@ This storage model provides:
 ```java
 import org.apache.jena.query.*;
 
-Model model = FalkorDBModelFactory.createDefaultModel();
+var model = FalkorDBModelFactory.createDefaultModel();
 
-String sparqlQuery = 
-    "PREFIX foaf: <http://xmlns.com/foaf/0.1/> " +
-    "SELECT ?name ?age " +
-    "WHERE { " +
-    "  ?person foaf:name ?name . " +
-    "  ?person foaf:age ?age . " +
-    "} " +
-    "ORDER BY ?age";
+var sparqlQuery = """
+    PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+    SELECT ?name ?age
+    WHERE {
+      ?person foaf:name ?name .
+      ?person foaf:age ?age .
+    }
+    ORDER BY ?age""";
 
-try (QueryExecution qexec = QueryExecutionFactory.create(sparqlQuery, model)) {
-    ResultSet results = qexec.execSelect();
+try (var qexec = QueryExecutionFactory.create(sparqlQuery, model)) {
+    var results = qexec.execSelect();
     
     while (results.hasNext()) {
-        QuerySolution solution = results.nextSolution();
-        String name = solution.getLiteral("name").getString();
-        int age = solution.getLiteral("age").getInt();
+        var solution = results.nextSolution();
+        var name = solution.getLiteral("name").getString();
+        var age = solution.getLiteral("age").getInt();
         System.out.println(name + " is " + age + " years old");
     }
 }
@@ -291,19 +291,19 @@ model.close();
 ### Adding Complex Data
 
 ```java
-Model model = FalkorDBModelFactory.createDefaultModel();
+var model = FalkorDBModelFactory.createDefaultModel();
 
 // Define properties
-Property foafName = model.createProperty("http://xmlns.com/foaf/0.1/name");
-Property foafKnows = model.createProperty("http://xmlns.com/foaf/0.1/knows");
-Property foafAge = model.createProperty("http://xmlns.com/foaf/0.1/age");
+var foafName = model.createProperty("http://xmlns.com/foaf/0.1/name");
+var foafKnows = model.createProperty("http://xmlns.com/foaf/0.1/knows");
+var foafAge = model.createProperty("http://xmlns.com/foaf/0.1/age");
 
 // Create resources
-Resource alice = model.createResource("http://example.org/alice")
+var alice = model.createResource("http://example.org/alice")
     .addProperty(foafName, "Alice")
     .addProperty(foafAge, model.createTypedLiteral(30));
 
-Resource bob = model.createResource("http://example.org/bob")
+var bob = model.createResource("http://example.org/bob")
     .addProperty(foafName, "Bob")
     .addProperty(foafAge, model.createTypedLiteral(35));
 
@@ -356,8 +356,8 @@ To customize connection settings, create your own driver and pass it to the fact
 Each model is associated with a FalkorDB graph name. You can use different graph names for different datasets:
 
 ```java
-Model graph1 = FalkorDBModelFactory.createModel("users_graph");
-Model graph2 = FalkorDBModelFactory.createModel("products_graph");
+var graph1 = FalkorDBModelFactory.createModel("users_graph");
+var graph2 = FalkorDBModelFactory.createModel("products_graph");
 ```
 
 ## Limitations
@@ -467,15 +467,15 @@ public class CustomFalkorDBGraph extends FalkorDBGraph {
 For better performance when adding many triples:
 
 ```java
-Model model = FalkorDBModelFactory.createDefaultModel();
+var model = FalkorDBModelFactory.createDefaultModel();
 
 // Disable autocommit if using transactions
 model.begin();
 
 try {
     // Add many triples
-    for (int i = 0; i < 1000; i++) {
-        Resource resource = model.createResource("http://example.org/item" + i);
+    for (var i = 0; i < 1000; i++) {
+        var resource = model.createResource("http://example.org/item" + i);
         resource.addProperty(RDF.type, model.createResource("http://example.org/Item"));
         resource.addProperty(model.createProperty("http://example.org/index"), 
                            model.createTypedLiteral(i));
@@ -494,15 +494,15 @@ try {
 
 ```java
 // Create separate models for different domains
-Model peopleModel = FalkorDBModelFactory.createModel("people_graph");
-Model organizationsModel = FalkorDBModelFactory.createModel("orgs_graph");
+var peopleModel = FalkorDBModelFactory.createModel("people_graph");
+var organizationsModel = FalkorDBModelFactory.createModel("orgs_graph");
 
 try {
     // Add data to different graphs
-    Resource alice = peopleModel.createResource("http://example.org/alice");
+    var alice = peopleModel.createResource("http://example.org/alice");
     alice.addProperty(FOAF.name, "Alice");
     
-    Resource acmeCorp = organizationsModel.createResource("http://example.org/acme");
+    var acmeCorp = organizationsModel.createResource("http://example.org/acme");
     acmeCorp.addProperty(RDFS.label, "ACME Corporation");
     
 } finally {
@@ -537,8 +537,8 @@ public class FalkorDBGraphTest {
     
     @Test
     public void testAddTriple() {
-        Resource subject = model.createResource("http://example.org/test");
-        Property predicate = model.createProperty("http://example.org/prop");
+        var subject = model.createResource("http://example.org/test");
+        var predicate = model.createProperty("http://example.org/prop");
         
         subject.addProperty(predicate, "test value");
         
@@ -788,24 +788,24 @@ For issues and questions:
 ### 1. Knowledge Graph Application
 ```java
 // Build a knowledge graph with entities and relationships
-Model kg = FalkorDBModelFactory.createModel("knowledge_graph");
+var kg = FalkorDBModelFactory.createModel("knowledge_graph");
 
-Resource entity1 = kg.createResource("http://kg.example.org/entity1");
+var entity1 = kg.createResource("http://kg.example.org/entity1");
 entity1.addProperty(RDFS.label, "Entity 1");
 entity1.addProperty(RDF.type, kg.createResource("http://kg.example.org/Concept"));
 
 // Query the knowledge graph
-String query = "SELECT ?entity ?label WHERE { ?entity rdfs:label ?label }";
+var query = "SELECT ?entity ?label WHERE { ?entity rdfs:label ?label }";
 // ... execute query
 ```
 
 ### 2. Social Network
 ```java
-Model social = FalkorDBModelFactory.createModel("social_network");
+var social = FalkorDBModelFactory.createModel("social_network");
 
-Property knows = social.createProperty("http://xmlns.com/foaf/0.1/knows");
-Resource user1 = social.createResource("http://social.example.org/user1");
-Resource user2 = social.createResource("http://social.example.org/user2");
+var knows = social.createProperty("http://xmlns.com/foaf/0.1/knows");
+var user1 = social.createResource("http://social.example.org/user1");
+var user2 = social.createResource("http://social.example.org/user2");
 
 user1.addProperty(knows, user2);
 ```
@@ -813,14 +813,14 @@ user1.addProperty(knows, user2);
 ### 3. Data Integration
 ```java
 // Integrate data from multiple sources using RDF
-Model integration = FalkorDBModelFactory.createModel("data_integration");
+var integration = FalkorDBModelFactory.createModel("data_integration");
 
 // Load data from different sources
 integration.read("data1.ttl", "TURTLE");
 integration.read("data2.rdf", "RDF/XML");
 
 // Query integrated data with SPARQL
-String query = "SELECT * WHERE { ?s ?p ?o } LIMIT 100";
+var query = "SELECT * WHERE { ?s ?p ?o } LIMIT 100";
 ```
 
 ## CI/CD

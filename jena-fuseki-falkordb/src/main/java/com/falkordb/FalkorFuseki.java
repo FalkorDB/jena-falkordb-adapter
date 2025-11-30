@@ -110,34 +110,35 @@ public final class FalkorFuseki {
      * Print usage information to stdout.
      */
     private static void printUsage() {
-        System.out.println("FalkorDB Fuseki Server");
-        System.out.println();
-        System.out.println("Usage:");
-        System.out.println("  java -jar jena-fuseki-falkordb.jar [options]");
-        System.out.println();
-        System.out.println("Options:");
-        System.out.println("  --config <file>  Path to TTL configuration file");
-        System.out.println("  --help           Show this help message");
-        System.out.println();
-        System.out.println("Environment Variables (used when no config file):");
-        System.out.println("  FALKORDB_HOST    FalkorDB host (default: localhost)");
-        System.out.println("  FALKORDB_PORT    FalkorDB port (default: 6379)");
-        System.out.println("  FALKORDB_GRAPH   Graph name (default: my_knowledge_graph)");
-        System.out.println("  FUSEKI_PORT      Fuseki server port (default: 3330)");
-        System.out.println("  FUSEKI_CONFIG    Path to config file (alternative to --config)");
-        System.out.println();
-        System.out.println("Example config file (TTL):");
-        System.out.println("  @prefix falkor:  <http://falkordb.com/jena/assembler#> .");
-        System.out.println("  @prefix fuseki:  <http://jena.apache.org/fuseki#> .");
-        System.out.println("  @prefix ja:      <http://jena.hpl.hp.com/2005/11/Assembler#> .");
-        System.out.println();
-        System.out.println("  :dataset_rdf rdf:type ja:RDFDataset ;");
-        System.out.println("      ja:defaultGraph :falkor_db_model .");
-        System.out.println();
-        System.out.println("  :falkor_db_model rdf:type falkor:FalkorDBModel ;");
-        System.out.println("      falkor:host \"localhost\" ;");
-        System.out.println("      falkor:port 6379 ;");
-        System.out.println("      falkor:graphName \"my_graph\" .");
+        System.out.println("""
+            FalkorDB Fuseki Server
+
+            Usage:
+              java -jar jena-fuseki-falkordb.jar [options]
+
+            Options:
+              --config <file>  Path to TTL configuration file
+              --help           Show this help message
+
+            Environment Variables (used when no config file):
+              FALKORDB_HOST    FalkorDB host (default: localhost)
+              FALKORDB_PORT    FalkorDB port (default: 6379)
+              FALKORDB_GRAPH   Graph name (default: my_knowledge_graph)
+              FUSEKI_PORT      Fuseki server port (default: 3330)
+              FUSEKI_CONFIG    Path to config file (alternative to --config)
+
+            Example config file (TTL):
+              @prefix falkor:  <http://falkordb.com/jena/assembler#> .
+              @prefix fuseki:  <http://jena.apache.org/fuseki#> .
+              @prefix ja:      <http://jena.hpl.hp.com/2005/11/Assembler#> .
+
+              :dataset_rdf rdf:type ja:RDFDataset ;
+                  ja:defaultGraph :falkor_db_model .
+
+              :falkor_db_model rdf:type falkor:FalkorDBModel ;
+                  falkor:host "localhost" ;
+                  falkor:port 6379 ;
+                  falkor:graphName "my_graph" .""");
     }
 
     /**

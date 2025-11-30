@@ -23,11 +23,11 @@ public class FalkorDBGraphTest {
     }
     
     private Model createTestModel(String graphName) {
-        Model model = FalkorDBModelFactory.createModel(graphName);
+        var model = FalkorDBModelFactory.createModel(graphName);
         assertNotNull(model, "Model should not be null after creation");
         // Get the underlying graph and clear it completely
-        if (model.getGraph() instanceof FalkorDBGraph) {
-            ((FalkorDBGraph) model.getGraph()).clear();
+        if (model.getGraph() instanceof FalkorDBGraph falkorGraph) {
+            falkorGraph.clear();
         }
         return model;
     }
@@ -35,7 +35,7 @@ public class FalkorDBGraphTest {
     @Test
     @DisplayName("Test creating and closing model")
     public void testCreateModel() {
-        Model model = createTestModel();
+        var model = createTestModel();
         try {
             assertNotNull(model, "Model should not be null");
             assertTrue(model.isEmpty(), "New model should be empty");
@@ -47,10 +47,10 @@ public class FalkorDBGraphTest {
     @Test
     @DisplayName("Test adding a simple triple")  
     public void testAddTriple() {
-        Model model = createTestModel();
+        var model = createTestModel();
         try {
-            Resource subject = model.createResource("http://test.example.org/person1");
-            Property predicate = model.createProperty("http://test.example.org/name");
+            var subject = model.createResource("http://test.example.org/person1");
+            var predicate = model.createProperty("http://test.example.org/name");
             
             subject.addProperty(predicate, "John Doe");
             
@@ -64,12 +64,12 @@ public class FalkorDBGraphTest {
     @Test
     @DisplayName("Test adding multiple triples")
     public void testAddMultipleTriples() {
-        Model model = createTestModel();
+        var model = createTestModel();
         try {
-            Resource person1 = model.createResource("http://test.example.org/person1");
-            Resource person2 = model.createResource("http://test.example.org/person2");
-            Property name = model.createProperty("http://test.example.org/name");
-            Property age = model.createProperty("http://test.example.org/age");
+            var person1 = model.createResource("http://test.example.org/person1");
+            var person2 = model.createResource("http://test.example.org/person2");
+            var name = model.createProperty("http://test.example.org/name");
+            var age = model.createProperty("http://test.example.org/age");
             
             person1.addProperty(name, "John Doe");
             person1.addProperty(age, model.createTypedLiteral(30));
@@ -85,7 +85,7 @@ public class FalkorDBGraphTest {
     @Test
     @DisplayName("Test factory builder pattern")
     public void testFactoryBuilder() {
-        Model testModel = FalkorDBModelFactory.builder()
+        var testModel = FalkorDBModelFactory.builder()
             .host("localhost")
             .port(6379)
             .graphName("builder_test_graph")
@@ -102,12 +102,12 @@ public class FalkorDBGraphTest {
     @Test
     @DisplayName("Test model size")
     public void testModelSize() {
-        Model model = createTestModel();
+        var model = createTestModel();
         try {
             assertEquals(0, model.size(), "Empty model should have size 0");
             
-            Resource subject = model.createResource("http://test.example.org/person1");
-            Property predicate = model.createProperty("http://test.example.org/name");
+            var subject = model.createResource("http://test.example.org/person1");
+            var predicate = model.createProperty("http://test.example.org/name");
             subject.addProperty(predicate, "Test Person");
             
             assertEquals(1, model.size(), "Model with one triple should have size 1");
@@ -119,13 +119,13 @@ public class FalkorDBGraphTest {
     @Test
     @DisplayName("Test remove triple")
     public void testRemoveTriple() {
-        Model model = createTestModel();
+        var model = createTestModel();
         try {
-            Resource subject = model.createResource("http://test.example.org/person1");
-            Property predicate = model.createProperty("http://test.example.org/name");
+            var subject = model.createResource("http://test.example.org/person1");
+            var predicate = model.createProperty("http://test.example.org/name");
             
             // Add triple
-            Statement stmt = model.createStatement(subject, predicate, "John Doe");
+            var stmt = model.createStatement(subject, predicate, "John Doe");
             model.add(stmt);
             assertEquals(1, model.size());
             
@@ -140,12 +140,12 @@ public class FalkorDBGraphTest {
     @Test
     @DisplayName("Test literals stored as properties")
     public void testLiteralsAsProperties() {
-        Model model = createTestModel();
+        var model = createTestModel();
         try {
-            Resource person = model.createResource("http://test.example.org/person1");
-            Property name = model.createProperty("http://test.example.org/name");
-            Property age = model.createProperty("http://test.example.org/age");
-            Property email = model.createProperty("http://test.example.org/email");
+            var person = model.createResource("http://test.example.org/person1");
+            var name = model.createProperty("http://test.example.org/name");
+            var age = model.createProperty("http://test.example.org/age");
+            var email = model.createProperty("http://test.example.org/email");
             
             // Add multiple literal properties
             person.addProperty(name, "John Doe");
@@ -155,11 +155,11 @@ public class FalkorDBGraphTest {
             assertEquals(3, model.size(), "Model should contain three triples");
             
             // Query for literals
-            Statement nameStmt = person.getProperty(name);
+            var nameStmt = person.getProperty(name);
             assertNotNull(nameStmt, "Name property should be retrievable");
             assertEquals("John Doe", nameStmt.getString(), "Name value should match");
             
-            Statement ageStmt = person.getProperty(age);
+            var ageStmt = person.getProperty(age);
             assertNotNull(ageStmt, "Age property should be retrievable");
             assertEquals(30, ageStmt.getInt(), "Age value should match");
         } finally {
@@ -170,10 +170,10 @@ public class FalkorDBGraphTest {
     @Test
     @DisplayName("Test rdf:type creates labels")
     public void testRdfTypeCreatesLabels() {
-        Model model = createTestModel();
+        var model = createTestModel();
         try {
-            Resource person = model.createResource("http://test.example.org/person1");
-            Resource personType = model.createResource("http://test.example.org/Person");
+            var person = model.createResource("http://test.example.org/person1");
+            var personType = model.createResource("http://test.example.org/Person");
             
             // Add rdf:type - should create a label
             person.addProperty(RDF.type, personType);
@@ -189,18 +189,18 @@ public class FalkorDBGraphTest {
     @Test
     @DisplayName("Test querying rdf:type triples")
     public void testQueryRdfType() {
-        Model model = createTestModel();
+        var model = createTestModel();
         try {
-            Resource person1 = model.createResource("http://test.example.org/person1");
-            Resource person2 = model.createResource("http://test.example.org/person2");
-            Resource personType = model.createResource("http://test.example.org/Person");
+            var person1 = model.createResource("http://test.example.org/person1");
+            var person2 = model.createResource("http://test.example.org/person2");
+            var personType = model.createResource("http://test.example.org/Person");
             
             person1.addProperty(RDF.type, personType);
             person2.addProperty(RDF.type, personType);
             
             // Query for all resources of type Person
-            StmtIterator iter = model.listStatements(null, RDF.type, personType);
-            int count = 0;
+            var iter = model.listStatements(null, RDF.type, personType);
+            var count = 0;
             while (iter.hasNext()) {
                 iter.next();
                 count++;
@@ -215,11 +215,11 @@ public class FalkorDBGraphTest {
     @Test
     @DisplayName("Test delete literal property")
     public void testDeleteLiteralProperty() {
-        Model model = createTestModel();
+        var model = createTestModel();
         try {
-            Resource person = model.createResource("http://test.example.org/person1");
-            Property name = model.createProperty("http://test.example.org/name");
-            Property age = model.createProperty("http://test.example.org/age");
+            var person = model.createResource("http://test.example.org/person1");
+            var name = model.createProperty("http://test.example.org/name");
+            var age = model.createProperty("http://test.example.org/age");
             
             person.addProperty(name, "John Doe");
             person.addProperty(age, model.createTypedLiteral(30));
@@ -238,10 +238,10 @@ public class FalkorDBGraphTest {
     @Test
     @DisplayName("Test delete rdf:type (label)")
     public void testDeleteRdfType() {
-        Model model = createTestModel();
+        var model = createTestModel();
         try {
-            Resource person = model.createResource("http://test.example.org/person1");
-            Resource personType = model.createResource("http://test.example.org/Person");
+            var person = model.createResource("http://test.example.org/person1");
+            var personType = model.createResource("http://test.example.org/Person");
             
             person.addProperty(RDF.type, personType);
             assertEquals(1, model.size());
@@ -259,19 +259,19 @@ public class FalkorDBGraphTest {
     @Test
     @DisplayName("Test custom driver constructor")
     public void testCustomDriverConstructor() throws Exception {
-        Driver customDriver = FalkorDB.driver("localhost", 6379);
+        var customDriver = FalkorDB.driver("localhost", 6379);
         try {
-            FalkorDBGraph graph = new FalkorDBGraph(customDriver, "custom_driver_test");
+            var graph = new FalkorDBGraph(customDriver, "custom_driver_test");
             graph.clear();
             
-            Model model = ModelFactory.createModelForGraph(graph);
+            var model = ModelFactory.createModelForGraph(graph);
             try {
                 assertNotNull(model, "Model with custom driver should not be null");
                 assertTrue(model.isEmpty(), "New model should be empty");
                 
                 // Test basic operations
-                Resource person = model.createResource("http://test.example.org/person1");
-                Property name = model.createProperty("http://test.example.org/name");
+                var person = model.createResource("http://test.example.org/person1");
+                var name = model.createProperty("http://test.example.org/name");
                 person.addProperty(name, "Test");
                 
                 assertEquals(1, model.size(), "Model should contain one triple");
@@ -286,19 +286,19 @@ public class FalkorDBGraphTest {
     @Test
     @DisplayName("Test factory with custom driver")
     public void testFactoryWithCustomDriver() throws Exception {
-        Driver customDriver = FalkorDB.driver("localhost", 6379);
+        var customDriver = FalkorDB.driver("localhost", 6379);
         try {
-            Model model = FalkorDBModelFactory.createModel(customDriver, "factory_driver_test");
+            var model = FalkorDBModelFactory.createModel(customDriver, "factory_driver_test");
             try {
                 assertNotNull(model, "Factory should create model with custom driver");
                 
                 // Clear and test
-                if (model.getGraph() instanceof FalkorDBGraph) {
-                    ((FalkorDBGraph) model.getGraph()).clear();
+                if (model.getGraph() instanceof FalkorDBGraph falkorGraph) {
+                    falkorGraph.clear();
                 }
                 
-                Resource person = model.createResource("http://test.example.org/person1");
-                Property name = model.createProperty("http://test.example.org/ename");
+                var person = model.createResource("http://test.example.org/person1");
+                var name = model.createProperty("http://test.example.org/ename");
                 person.addProperty(name, "Test");
                 
                 assertEquals(1, model.size());
@@ -313,9 +313,9 @@ public class FalkorDBGraphTest {
     @Test
     @DisplayName("Test builder with custom driver")
     public void testBuilderWithCustomDriver() throws Exception {
-        Driver customDriver = FalkorDB.driver("localhost", 6379);
+        var customDriver = FalkorDB.driver("localhost", 6379);
         try {
-            Model model = FalkorDBModelFactory.builder()
+            var model = FalkorDBModelFactory.builder()
                 .driver(customDriver)
                 .graphName("builder_driver_test")
                 .build();
@@ -324,12 +324,12 @@ public class FalkorDBGraphTest {
                 assertNotNull(model, "Builder should create model with custom driver");
                 
                 // Clear and test
-                if (model.getGraph() instanceof FalkorDBGraph) {
-                    ((FalkorDBGraph) model.getGraph()).clear();
+                if (model.getGraph() instanceof FalkorDBGraph falkorGraph) {
+                    falkorGraph.clear();
                 }
                 
-                Resource person = model.createResource("http://test.example.org/person1");
-                Property name = model.createProperty("http://test.example.org/name");
+                var person = model.createResource("http://test.example.org/person1");
+                var name = model.createProperty("http://test.example.org/name");
                 person.addProperty(name, "Test");
                 
                 assertEquals(1, model.size());
@@ -344,12 +344,12 @@ public class FalkorDBGraphTest {
     @Test
     @DisplayName("Test mixed literal and resource triples")
     public void testMixedTriples() {
-        Model model = createTestModel();
+        var model = createTestModel();
         try {
-            Resource person1 = model.createResource("http://test.example.org/person1");
-            Resource person2 = model.createResource("http://test.example.org/person2");
-            Property name = model.createProperty("http://test.example.org/name");
-            Property knows = model.createProperty("http://test.example.org/knows");
+            var person1 = model.createResource("http://test.example.org/person1");
+            var person2 = model.createResource("http://test.example.org/person2");
+            var name = model.createProperty("http://test.example.org/name");
+            var knows = model.createProperty("http://test.example.org/knows");
             
             // Add literal properties
             person1.addProperty(name, "John Doe");
@@ -365,7 +365,7 @@ public class FalkorDBGraphTest {
             assertEquals("Jane Smith", person2.getProperty(name).getString());
             
             // Query relationship
-            Statement knowsStmt = person1.getProperty(knows);
+            var knowsStmt = person1.getProperty(knows);
             assertNotNull(knowsStmt, "Knows relationship should exist");
             assertEquals(person2, knowsStmt.getResource(), "Should know person2");
         } finally {
@@ -376,20 +376,20 @@ public class FalkorDBGraphTest {
     @Test
     @DisplayName("Test querying with patterns")
     public void testQueryPatterns() {
-        Model model = createTestModel();
+        var model = createTestModel();
         try {
-            Resource person1 = model.createResource("http://test.example.org/person1");
-            Resource person2 = model.createResource("http://test.example.org/person2");
-            Property name = model.createProperty("http://test.example.org/name");
+            var person1 = model.createResource("http://test.example.org/person1");
+            var person2 = model.createResource("http://test.example.org/person2");
+            var name = model.createProperty("http://test.example.org/name");
             
             person1.addProperty(name, "John Doe");
             person2.addProperty(name, "Jane Smith");
             
             // Query all name properties
-            StmtIterator iter = model.listStatements(null, name, (RDFNode) null);
-            int count = 0;
+            var iter = model.listStatements(null, name, (RDFNode) null);
+            var count = 0;
             while (iter.hasNext()) {
-                Statement stmt = iter.next();
+                var stmt = iter.next();
                 assertNotNull(stmt.getObject().asLiteral());
                 count++;
             }

@@ -167,14 +167,14 @@ import org.apache.jena.vocabulary.RDF;
 public class MyFirstProgram {
     public static void main(String[] args) {
         // Connect to FalkorDB
-        Model model = FalkorDBModelFactory.createDefaultModel();
+        var model = FalkorDBModelFactory.createDefaultModel();
         
         try {
             // Create a resource
-            Resource john = model.createResource("http://example.org/john");
+            var john = model.createResource("http://example.org/john");
             
             // Add properties
-            Property name = model.createProperty("http://example.org/name");
+            var name = model.createProperty("http://example.org/name");
             john.addProperty(name, "John Doe");
             john.addProperty(RDF.type, 
                 model.createResource("http://example.org/Person"));
@@ -202,30 +202,30 @@ mvn exec:java -Dexec.mainClass="com.falkordb.jena.MyFirstProgram"
 ### Use Case 1: Building a Knowledge Base
 
 ```java
-Model kb = FalkorDBModelFactory.createModel("knowledge_base");
+var kb = FalkorDBModelFactory.createModel("knowledge_base");
 
 // Define concepts
-Resource person = kb.createResource("http://example.org/Person");
-Resource organization = kb.createResource("http://example.org/Organization");
+var person = kb.createResource("http://example.org/Person");
+var organization = kb.createResource("http://example.org/Organization");
 
 // Add instances
-Resource alice = kb.createResource("http://example.org/alice")
+var alice = kb.createResource("http://example.org/alice")
     .addProperty(RDF.type, person)
     .addProperty(RDFS.label, "Alice Johnson");
 
-Resource acme = kb.createResource("http://example.org/acme")
+var acme = kb.createResource("http://example.org/acme")
     .addProperty(RDF.type, organization)
     .addProperty(RDFS.label, "ACME Corp");
 
 // Add relationships
-Property worksFor = kb.createProperty("http://example.org/worksFor");
+var worksFor = kb.createProperty("http://example.org/worksFor");
 alice.addProperty(worksFor, acme);
 ```
 
 ### Use Case 2: Data Integration
 
 ```java
-Model integrated = FalkorDBModelFactory.createModel("integrated_data");
+var integrated = FalkorDBModelFactory.createModel("integrated_data");
 
 // Load from different sources
 integrated.read("data/source1.ttl", "TURTLE");
@@ -233,30 +233,30 @@ integrated.read("data/source2.rdf", "RDF/XML");
 integrated.read("http://example.org/data.ttl", "TURTLE");
 
 // Query across all sources
-String query = "SELECT ?s ?p ?o WHERE { ?s ?p ?o } LIMIT 100";
-QueryExecution qexec = QueryExecutionFactory.create(query, integrated);
-ResultSet results = qexec.execSelect();
+var query = "SELECT ?s ?p ?o WHERE { ?s ?p ?o } LIMIT 100";
+var qexec = QueryExecutionFactory.create(query, integrated);
+var results = qexec.execSelect();
 ResultSetFormatter.out(System.out, results);
 ```
 
 ### Use Case 3: SPARQL Queries
 
 ```java
-String sparql = 
-    "PREFIX foaf: <http://xmlns.com/foaf/0.1/> " +
-    "SELECT ?person ?name ?age " +
-    "WHERE { " +
-    "  ?person a foaf:Person . " +
-    "  ?person foaf:name ?name . " +
-    "  ?person foaf:age ?age . " +
-    "  FILTER(?age > 25) " +
-    "} " +
-    "ORDER BY DESC(?age)";
+var sparql = """
+    PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+    SELECT ?person ?name ?age
+    WHERE {
+      ?person a foaf:Person .
+      ?person foaf:name ?name .
+      ?person foaf:age ?age .
+      FILTER(?age > 25)
+    }
+    ORDER BY DESC(?age)""";
 
-try (QueryExecution qexec = QueryExecutionFactory.create(sparql, model)) {
-    ResultSet results = qexec.execSelect();
+try (var qexec = QueryExecutionFactory.create(sparql, model)) {
+    var results = qexec.execSelect();
     while (results.hasNext()) {
-        QuerySolution soln = results.nextSolution();
+        var soln = results.nextSolution();
         System.out.println(soln.get("name") + " - " + soln.get("age"));
     }
 }
@@ -270,20 +270,20 @@ try (QueryExecution qexec = QueryExecutionFactory.create(sparql, model)) {
 
 ```java
 // Method 1: Direct parameters
-Model model = FalkorDBModelFactory.createModel("localhost", 6379, "my_graph");
+var model = FalkorDBModelFactory.createModel("localhost", 6379, "my_graph");
 
 // Method 2: Builder pattern
-Model model = FalkorDBModelFactory.builder()
+var model = FalkorDBModelFactory.builder()
     .host("192.168.1.100")
     .port(6379)
     .graphName("production_graph")
     .build();
 
-// Method 3: Custom driver (NEW!)
-Driver customDriver = FalkorDB.driver("localhost", 6379);
-Model model = FalkorDBModelFactory.createModel(customDriver, "my_graph");
+// Method 3: Custom driver
+var customDriver = FalkorDB.driver("localhost", 6379);
+var model = FalkorDBModelFactory.createModel(customDriver, "my_graph");
 // Or with builder:
-Model model = FalkorDBModelFactory.builder()
+var model = FalkorDBModelFactory.builder()
     .driver(customDriver)
     .graphName("my_graph")
     .build();

@@ -45,7 +45,7 @@ That's it! You should see the demo running or the Fuseki server started.
 
 ### Prerequisites
 
-- **Java**: Version 11 or higher
+- **Java**: Version 17 or higher
   ```bash
   java -version
   ```
@@ -338,7 +338,7 @@ FALKORDB_GRAPH=my_graph
 
 2. Check Java version:
    ```bash
-   java -version  # Should be 11 or higher
+   java -version  # Should be 17 or higher
    ```
 
 3. Delete Maven cache:

@@ -35,12 +35,12 @@ This is a multi-module Maven project consisting of:
 - ✅ **Inference support** with rule-based reasoning (RDFS/OWL rules)
 - ✅ Connection pooling for better performance
 - ✅ Easy-to-use factory pattern for model creation
-- ✅ Continuous integration with multi-version Java testing (11, 17, 21)
+- ✅ Continuous integration with multi-version Java testing (17, 21)
 - ✅ Automated publishing to Maven Central
 
 ## Prerequisites
 
-- Java 11 or newer (tested with 11, 17, 21)
+- Java 17 or newer (tested with 17, 21)
 - Maven 3.6 or newer
 - FalkorDB running (via Docker or direct installation)
 
@@ -599,7 +599,7 @@ git clone https://github.com/FalkorDB/jena-falkordb-adapter.git
 cd jena-falkordb-adapter
 ```
 
-2. Build with Maven (Java 11+ is required):
+2. Build with Maven (Java 17+ is required):
 
 ```bash
 mvn clean install

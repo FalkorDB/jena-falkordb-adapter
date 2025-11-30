@@ -14,6 +14,9 @@
     <logger name="org.apache.jena" level="WARN"/>
     <logger name="org.apache.jena.fuseki" level="INFO"/>
 
+    <!-- Suppress Apache SIS logs -->
+    <logger name="org.apache.sis" level="ERROR"/>
+
     <!-- Logger for the FalkorDB adapter -->
     <logger name="com.falkordb" level="INFO"/>
 

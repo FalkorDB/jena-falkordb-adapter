@@ -45,7 +45,7 @@ That's it! You should see the demo running or the Fuseki server started.
 
 ### Prerequisites
 
-- **Java**: Version 17 or higher
+- **Java**: Version 17 or higher (tested with 25)
   ```bash
   java -version
   ```

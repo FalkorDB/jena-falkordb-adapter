@@ -44,8 +44,7 @@ public class FusekiFalkorDBIntegrationTest {
     @Container
     private static final GenericContainer<?> falkordb = new GenericContainer<>(
             DockerImageName.parse("falkordb/falkordb:latest"))
-            .withExposedPorts(FALKORDB_PORT)
-            .withReuse(true);
+            .withExposedPorts(FALKORDB_PORT);
     
     private static String falkorHost;
     private static int falkorPort;

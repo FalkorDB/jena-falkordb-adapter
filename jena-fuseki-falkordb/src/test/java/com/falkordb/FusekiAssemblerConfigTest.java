@@ -41,8 +41,7 @@ public class FusekiAssemblerConfigTest {
     @Container
     private static final GenericContainer<?> falkordb = new GenericContainer<>(
             DockerImageName.parse("falkordb/falkordb:latest"))
-            .withExposedPorts(FALKORDB_PORT)
-            .withReuse(true);
+            .withExposedPorts(FALKORDB_PORT);
     
     @TempDir
     Path tempDir;

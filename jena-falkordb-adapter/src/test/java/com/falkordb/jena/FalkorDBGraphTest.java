@@ -5,25 +5,49 @@ import com.falkordb.FalkorDB;
 import org.apache.jena.rdf.model.*;
 import org.apache.jena.vocabulary.RDF;
 import org.junit.jupiter.api.*;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.utility.DockerImageName;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Unit tests for FalkorDB-Jena adapter.
  * 
- * Prerequisites: FalkorDB must be running on localhost:6379
- * Run: docker run -p 6379:6379 -it --rm falkordb/falkordb:latest
+ * Uses Testcontainers to automatically start a FalkorDB container for testing.
+ * No manual Docker setup required - tests work both locally and in CI.
  */
+@Testcontainers
 public class FalkorDBGraphTest {
     
     private static final String TEST_GRAPH = "test_graph";
+    private static final int FALKORDB_PORT = 6379;
+    
+    @Container
+    private static final GenericContainer<?> falkordb = new GenericContainer<>(
+            DockerImageName.parse("falkordb/falkordb:latest"))
+            .withExposedPorts(FALKORDB_PORT);
+    
+    private static String falkorHost;
+    private static int falkorPort;
+    
+    @BeforeAll
+    public static void setUpContainer() {
+        falkorHost = falkordb.getHost();
+        falkorPort = falkordb.getMappedPort(FALKORDB_PORT);
+    }
     
     private Model createTestModel() {
         return createTestModel(TEST_GRAPH);
     }
     
     private Model createTestModel(String graphName) {
-        Model model = FalkorDBModelFactory.createModel(graphName);
+        Model model = FalkorDBModelFactory.builder()
+            .host(falkorHost)
+            .port(falkorPort)
+            .graphName(graphName)
+            .build();
         assertNotNull(model, "Model should not be null after creation");
         // Get the underlying graph and clear it completely
         if (model.getGraph() instanceof FalkorDBGraph) {
@@ -86,8 +110,8 @@ public class FalkorDBGraphTest {
     @DisplayName("Test factory builder pattern")
     public void testFactoryBuilder() {
         Model testModel = FalkorDBModelFactory.builder()
-            .host("localhost")
-            .port(6379)
+            .host(falkorHost)
+            .port(falkorPort)
             .graphName("builder_test_graph")
             .build();
         
@@ -259,7 +283,7 @@ public class FalkorDBGraphTest {
     @Test
     @DisplayName("Test custom driver constructor")
     public void testCustomDriverConstructor() throws Exception {
-        Driver customDriver = FalkorDB.driver("localhost", 6379);
+        Driver customDriver = FalkorDB.driver(falkorHost, falkorPort);
         try {
             FalkorDBGraph graph = new FalkorDBGraph(customDriver, "custom_driver_test");
             graph.clear();
@@ -286,7 +310,7 @@ public class FalkorDBGraphTest {
     @Test
     @DisplayName("Test factory with custom driver")
     public void testFactoryWithCustomDriver() throws Exception {
-        Driver customDriver = FalkorDB.driver("localhost", 6379);
+        Driver customDriver = FalkorDB.driver(falkorHost, falkorPort);
         try {
             Model model = FalkorDBModelFactory.createModel(customDriver, "factory_driver_test");
             try {
@@ -313,7 +337,7 @@ public class FalkorDBGraphTest {
     @Test
     @DisplayName("Test builder with custom driver")
     public void testBuilderWithCustomDriver() throws Exception {
-        Driver customDriver = FalkorDB.driver("localhost", 6379);
+        Driver customDriver = FalkorDB.driver(falkorHost, falkorPort);
         try {
             Model model = FalkorDBModelFactory.builder()
                 .driver(customDriver)

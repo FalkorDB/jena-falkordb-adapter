@@ -513,41 +513,68 @@ try {
 
 ### Unit Tests
 
-Create tests in `src/test/java`:
+The tests use [Testcontainers](https://www.testcontainers.org/) to automatically start a FalkorDB container during test execution. This means:
 
-```java
-import org.junit.jupiter.api.*;
-import static org.junit.jupiter.api.Assertions.*;
-
-public class FalkorDBGraphTest {
-    
-    private Model model;
-    
-    @BeforeEach
-    public void setUp() {
-        model = FalkorDBModelFactory.createModel("test_graph");
-    }
-    
-    @AfterEach
-    public void tearDown() {
-        model.close();
-    }
-    
-    @Test
-    public void testAddTriple() {
-        Resource subject = model.createResource("http://example.org/test");
-        Property predicate = model.createProperty("http://example.org/prop");
-        
-        subject.addProperty(predicate, "test value");
-        
-        assertTrue(model.contains(subject, predicate));
-    }
-}
-```
+- **No manual setup required**: You don't need to start FalkorDB manually before running tests
+- **Works locally and in CI**: Tests work the same way on your local machine and in CI environments
+- **Docker required**: You need Docker installed and running on your machine
 
 Run tests:
 ```bash
 mvn test
+```
+
+The tests will automatically:
+1. Start a FalkorDB container using Testcontainers
+2. Run all tests against the container
+3. Clean up the container when tests complete
+
+### Custom Tests
+
+When writing your own tests, you can use Testcontainers like this:
+
+```java
+import org.junit.jupiter.api.*;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.utility.DockerImageName;
+import static org.junit.jupiter.api.Assertions.*;
+
+@Testcontainers
+public class FalkorDBGraphTest {
+
+    @Container
+    private static final GenericContainer<?> falkordb = new GenericContainer<>(
+            DockerImageName.parse("falkordb/falkordb:latest"))
+            .withExposedPorts(6379);
+
+    private Model model;
+
+    @BeforeEach
+    public void setUp() {
+        model = FalkorDBModelFactory.builder()
+            .host(falkordb.getHost())
+            .port(falkordb.getMappedPort(6379))
+            .graphName("test_graph")
+            .build();
+    }
+
+    @AfterEach
+    public void tearDown() {
+        model.close();
+    }
+
+    @Test
+    public void testAddTriple() {
+        Resource subject = model.createResource("http://example.org/test");
+        Property predicate = model.createProperty("http://example.org/prop");
+
+        subject.addProperty(predicate, "test value");
+
+        assertTrue(model.contains(subject, predicate));
+    }
+}
 ```
 
 ## Performance Tips
@@ -603,12 +630,25 @@ cd jena-falkordb-adapter
 mvn clean install
 ```
 
-3. Run unit tests (requires FalkorDB running on localhost:6379):
+This command will:
+- Compile the code
+- Run all tests using Testcontainers (automatically starts FalkorDB in Docker)
+- Package the artifacts
+- Install to local Maven repository
+
+**Note**: You need Docker installed and running for tests to work. If you want to skip tests, use:
 
 ```bash
-docker run -p 6379:6379 -d --rm --name falkordb falkordb/falkordb:latest
+mvn clean install -DskipTests
+```
+
+3. Run only tests:
+
+```bash
 mvn test
 ```
+
+Tests use Testcontainers to automatically start FalkorDB - no manual Docker setup required!
 
 4. Build executable JARs and run the demo:
 
@@ -641,10 +681,12 @@ Then access:
 
 Developer notes:
 
-- This is a multi-module Maven project with a parent POM and two submodules
+- This is a multi-module Maven project with a parent POM and three submodules
 - The adapter code lives under `jena-falkordb-adapter/src/main/java/com/falkordb/jena/`
 - The Fuseki server code lives under `jena-fuseki-falkordb/src/main/java/com/falkordb/`
-- Tests that interact with FalkorDB assume a local FalkorDB instance; tests use `FalkorDBGraph.clear()` to keep the test graph isolated.
+- **Tests use Testcontainers**: All tests automatically start FalkorDB containers, so no manual Docker setup is required
+- Tests use `FalkorDBGraph.clear()` to keep the test graph isolated between tests
+- CI uses the same Testcontainers approach - the GitHub Actions workflow doesn't need a separate FalkorDB service anymore, but it's kept for compatibility
 - CI publishes snapshots to OSSRH; see `.github/workflows` for publishing details.
 
 ## Contributing
@@ -828,10 +870,12 @@ This project uses GitHub Actions for continuous integration and deployment:
 ### Continuous Integration
 
 The CI workflow automatically runs on every push and pull request to the `main` branch:
-- Tests against Java 11, 17, and 21
+- Tests use Testcontainers to automatically start FalkorDB (same as local development)
 - Runs full test suite against FalkorDB
 - Performs code quality checks
 - Uploads test results and build artifacts
+
+**Note**: Both local development and CI use the same Testcontainers approach, ensuring consistent test behavior across environments.
 
 See [`.github/workflows/ci.yml`](.github/workflows/ci.yml) for details.
 

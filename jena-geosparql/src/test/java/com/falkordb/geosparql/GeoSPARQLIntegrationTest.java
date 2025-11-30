@@ -50,10 +50,6 @@ public class GeoSPARQLIntegrationTest {
         
         sparqlEndpoint = "http://localhost:" + TEST_PORT + DATASET_PATH + "/query";
         updateEndpoint = "http://localhost:" + TEST_PORT + DATASET_PATH + "/update";
-        
-        // Clear any existing data
-        String clearQuery = "DELETE WHERE { ?s ?p ?o }";
-        UpdateExecutionHTTP.service(updateEndpoint).update(clearQuery).execute();
     }
     
     @AfterEach

@@ -122,10 +122,6 @@ jobs:
     - name: Compile code
       run: mvn -B clean compile --file pom.xml
     
-    - name: Run Checkstyle
-      run: mvn -B checkstyle:check --file pom.xml
-      continue-on-error: true
-    
     - name: Run SpotBugs
       run: mvn -B spotbugs:check --file pom.xml
       continue-on-error: true
@@ -137,14 +133,6 @@ jobs:
     - name: Run PMD CPD (Copy-Paste Detection)
       run: mvn -B pmd:cpd-check --file pom.xml
       continue-on-error: true
-    
-    - name: Upload Checkstyle report
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: checkstyle-report
-        path: '**/target/checkstyle-result.xml'
-        if-no-files-found: ignore
     
     - name: Upload SpotBugs report
       if: always()

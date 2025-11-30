@@ -35,12 +35,12 @@ This is a multi-module Maven project consisting of:
 - ✅ **Inference support** with rule-based reasoning (RDFS/OWL rules)
 - ✅ Connection pooling for better performance
 - ✅ Easy-to-use factory pattern for model creation
-- ✅ Continuous integration with multi-version Java testing (17, 21)
+- ✅ Continuous integration with Java 21 testing
 - ✅ Automated publishing to Maven Central
 
 ## Prerequisites
 
-- Java 17 or newer (tested with 17, 21)
+- Java 17 or newer (tested with 21)
 - Maven 3.6 or newer
 - FalkorDB running (via Docker or direct installation)
 

@@ -95,12 +95,26 @@ public final class FalkorFuseki {
 
     /**
      * Gets the static file base path.
-     * First tries to get resources from the classpath, then falls back to
-     * a filesystem path if running from source.
+     * First checks for STATIC_FILES_BASE environment variable,
+     * then tries to get resources from the classpath,
+     * then falls back to filesystem paths if running from source.
      *
      * @return the static file base path, or null if not available
      */
     private static String getStaticFileBase() {
+        // First check for explicit configuration via environment variable
+        String envPath = System.getenv("STATIC_FILES_BASE");
+        if (envPath != null && !envPath.isEmpty()) {
+            File envFile = new File(envPath);
+            if (envFile.exists() && envFile.isDirectory()) {
+                return envFile.getAbsolutePath();
+            }
+            if (LOGGER.isWarnEnabled()) {
+                LOGGER.warn("STATIC_FILES_BASE '{}' does not exist or "
+                    + "is not a directory", envPath);
+            }
+        }
+
         // Try to get from classpath resource
         URL resourceUrl = FalkorFuseki.class.getClassLoader()
             .getResource(WEBAPP_RESOURCE_PATH);

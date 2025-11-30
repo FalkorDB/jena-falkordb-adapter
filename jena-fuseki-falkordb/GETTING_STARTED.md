@@ -372,10 +372,147 @@ Examples:
 
 ---
 
+## Inference with Rules
+
+The server supports inference using Jena's rule-based reasoning system. You can configure custom rules to automatically infer new triples from existing data.
+
+### Grandfather Example
+
+The server includes example rules for inferring grandfather relationships. Given:
+- Abraham ff:father_of Isaac
+- Isaac ff:father_of Jacob
+
+The rule will infer:
+- Abraham ff:grandfather_of Jacob
+
+### Using Inference Configuration
+
+Use the inference configuration file to enable rule-based reasoning:
+
+```bash
+java -jar jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar --config config-falkordb-inference.ttl
+```
+
+**Example inference configuration (`config-falkordb-inference.ttl`):**
+
+```turtle
+@prefix :        <#> .
+@prefix falkor:  <http://falkordb.com/jena/assembler#> .
+@prefix fuseki:  <http://jena.apache.org/fuseki#> .
+@prefix ja:      <http://jena.hpl.hp.com/2005/11/Assembler#> .
+@prefix rdf:     <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+
+# Fuseki server configuration
+[] rdf:type fuseki:Server ;
+   fuseki:services ( :service ) .
+
+# Service with inference endpoint
+:service rdf:type fuseki:Service ;
+    fuseki:name "falkor" ;
+    fuseki:endpoint [ fuseki:operation fuseki:query ; fuseki:name "query" ] ;
+    fuseki:endpoint [ fuseki:operation fuseki:update ; fuseki:name "update" ] ;
+    fuseki:dataset :dataset_rdf .
+
+# RDF Dataset wrapping the inference model
+:dataset_rdf rdf:type ja:RDFDataset ;
+    ja:defaultGraph :model_inf .
+
+# Inference model with Generic Rule Reasoner
+:model_inf rdf:type ja:InfModel ;
+    ja:baseModel :falkor_db_model ;
+    ja:reasoner [
+        ja:reasonerURL <http://jena.hpl.hp.com/2003/GenericRuleReasoner> ;
+        ja:rulesFrom <file:rules/grandfather_of_bwd.rule> ;
+    ] .
+
+# FalkorDB-backed model configuration
+:falkor_db_model rdf:type falkor:FalkorDBModel ;
+    falkor:host "localhost" ;
+    falkor:port 6379 ;
+    falkor:graphName "knowledge_graph" .
+```
+
+### Insert Data and Query Inferred Results
+
+**Insert father relationships:**
+
+```bash
+curl -X POST \
+     -H "Content-Type: application/sparql-update" \
+     --data '
+PREFIX ff: <http://www.semanticweb.org/ontologies/2023/1/fathers_father#>
+INSERT DATA {
+    ff:Jacob a ff:Male .
+    ff:Isaac a ff:Male ;
+        ff:father_of ff:Jacob .
+    ff:Abraham a ff:Male ;
+        ff:father_of ff:Isaac .
+}' \
+     http://localhost:3330/falkor/update
+```
+
+**Query inferred grandfather relationship:**
+
+```bash
+curl -G --data-urlencode "query=
+PREFIX ff: <http://www.semanticweb.org/ontologies/2023/1/fathers_father#>
+SELECT ?grandfather ?grandson
+WHERE {
+    ?grandfather ff:grandfather_of ?grandson .
+}" \
+     http://localhost:3330/falkor/query
+```
+
+**Expected output:**
+```json
+{
+  "head": { "vars": [ "grandfather", "grandson" ] },
+  "results": {
+    "bindings": [
+      {
+        "grandfather": { "type": "uri", "value": "http://www.semanticweb.org/ontologies/2023/1/fathers_father#Abraham" },
+        "grandson": { "type": "uri", "value": "http://www.semanticweb.org/ontologies/2023/1/fathers_father#Jacob" }
+      }
+    ]
+  }
+}
+```
+
+### Available Rule Files
+
+The server includes these rule files in `rules/`:
+
+| File | Description |
+|------|-------------|
+| `grandfather_of_bwd.rule` | Backward-chaining rule for grandfather inference |
+| `grandfather_of_fwd.rule` | Forward-chaining rule for grandfather inference |
+
+### Rule File Format
+
+Rules follow Jena's rule syntax. Example (backward-chaining):
+
+```
+@prefix ff: <http://www.semanticweb.org/ontologies/2023/1/fathers_father#> .
+@include <owlmicro>.
+
+[rule_grandfather_of: 
+    (?x ff:grandfather_of ?z)
+    <- 
+    (?x ff:father_of ?y)  
+    (?y ff:father_of ?z) 
+]
+```
+
+For more information on Jena rules, see the [Jena Inference documentation](https://jena.apache.org/documentation/inference/).
+
+---
+
 ## Next Steps
 
 - Read the [main README](../README.md) for more details on the adapter
 - Explore the [configuration examples](src/main/resources/config-falkordb.ttl)
+- Try the [inference configuration](src/main/resources/config-falkordb-inference.ttl) for rule-based reasoning
 - Check the [Proposal document](../FusekiIntegration/Proposal.md) for architecture details
 - Review the [Apache Jena Fuseki documentation](https://jena.apache.org/documentation/fuseki2/)
 - Learn about [SPARQL query language](https://www.w3.org/TR/sparql11-query/)
+- Learn about [Jena Inference](https://jena.apache.org/documentation/inference/) for rule-based reasoning

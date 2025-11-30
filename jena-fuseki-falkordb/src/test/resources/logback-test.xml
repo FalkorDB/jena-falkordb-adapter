@@ -20,10 +20,6 @@
     <!-- Logger for the FalkorDB adapter -->
     <logger name="com.falkordb" level="INFO"/>
 
-    <!-- Testcontainers logging -->
-    <logger name="org.testcontainers" level="INFO"/>
-    <logger name="com.github.dockerjava" level="WARN"/>
-
     <!-- Root logger configuration -->
     <root level="INFO">
         <appender-ref ref="CONSOLE"/>

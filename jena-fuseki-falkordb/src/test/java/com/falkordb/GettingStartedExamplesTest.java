@@ -16,10 +16,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.DockerImageName;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -31,19 +27,17 @@ import static org.junit.jupiter.api.Assertions.*;
  * 
  * These tests ensure that the documentation examples are accurate and functional.
  * Each test corresponds to an example in the GETTING_STARTED.md file.
+ * 
+ * Prerequisites: FalkorDB must be running. Configure via environment variables:
+ * - FALKORDB_HOST (default: localhost)
+ * - FALKORDB_PORT (default: 6379)
  */
-@Testcontainers
 public class GettingStartedExamplesTest {
 
     private static final String TEST_GRAPH = "getting_started_test_graph";
     private static final int TEST_PORT = 3333;
     private static final String DATASET_PATH = "/falkor";
-    private static final int FALKORDB_PORT = 6379;
-    
-    @Container
-    private static final GenericContainer<?> falkordb = new GenericContainer<>(
-            DockerImageName.parse("falkordb/falkordb:latest"))
-            .withExposedPorts(FALKORDB_PORT);
+    private static final int DEFAULT_FALKORDB_PORT = 6379;
     
     private static String falkorHost;
     private static int falkorPort;
@@ -55,8 +49,8 @@ public class GettingStartedExamplesTest {
     
     @BeforeAll
     public static void setUpContainer() {
-        falkorHost = falkordb.getHost();
-        falkorPort = falkordb.getMappedPort(FALKORDB_PORT);
+        falkorHost = System.getenv().getOrDefault("FALKORDB_HOST", "localhost");
+        falkorPort = Integer.parseInt(System.getenv().getOrDefault("FALKORDB_PORT", String.valueOf(DEFAULT_FALKORDB_PORT)));
     }
     
     @BeforeEach

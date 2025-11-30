@@ -15,10 +15,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.DockerImageName;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -31,20 +27,16 @@ import static org.junit.jupiter.api.Assertions.*;
  * 3. SPARQL updates can be executed against the FalkorDB-backed endpoint
  * 4. The father-grandfather example from requirements works correctly
  * 
- * Uses Testcontainers to automatically start FalkorDB if not already running.
+ * Prerequisites: FalkorDB must be running. Configure via environment variables:
+ * - FALKORDB_HOST (default: localhost)
+ * - FALKORDB_PORT (default: 6379)
  */
-@Testcontainers
 public class FusekiFalkorDBIntegrationTest {
 
     private static final String TEST_GRAPH = "fuseki_test_graph";
     private static final int TEST_PORT = 3331;
     private static final String DATASET_PATH = "/falkor";
-    private static final int FALKORDB_PORT = 6379;
-    
-    @Container
-    private static final GenericContainer<?> falkordb = new GenericContainer<>(
-            DockerImageName.parse("falkordb/falkordb:latest"))
-            .withExposedPorts(FALKORDB_PORT);
+    private static final int DEFAULT_FALKORDB_PORT = 6379;
     
     private static String falkorHost;
     private static int falkorPort;
@@ -56,8 +48,8 @@ public class FusekiFalkorDBIntegrationTest {
     
     @BeforeAll
     public static void setUpContainer() {
-        falkorHost = falkordb.getHost();
-        falkorPort = falkordb.getMappedPort(FALKORDB_PORT);
+        falkorHost = System.getenv().getOrDefault("FALKORDB_HOST", "localhost");
+        falkorPort = Integer.parseInt(System.getenv().getOrDefault("FALKORDB_PORT", String.valueOf(DEFAULT_FALKORDB_PORT)));
     }
     
     @BeforeEach

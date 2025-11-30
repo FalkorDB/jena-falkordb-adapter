@@ -20,10 +20,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.DockerImageName;
 
 import java.io.BufferedReader;
 import java.io.InputStream;
@@ -43,20 +39,18 @@ import static org.junit.jupiter.api.Assertions.*;
  *   <li>Data from fathers_father.ttl works with inference</li>
  * </ul>
  *
- * <p>Uses Testcontainers to automatically start FalkorDB if not already running.</p>
+ * <p>Prerequisites: FalkorDB must be running. Configure via environment variables:</p>
+ * <ul>
+ *   <li>FALKORDB_HOST (default: localhost)</li>
+ *   <li>FALKORDB_PORT (default: 6379)</li>
+ * </ul>
  */
-@Testcontainers
 public class FusekiInferenceIntegrationTest {
 
     private static final String TEST_GRAPH = "fuseki_inference_test_graph";
     private static final int TEST_PORT = 3333;
     private static final String DATASET_PATH = "/falkor";
-    private static final int FALKORDB_PORT = 6379;
-
-    @Container
-    private static final GenericContainer<?> falkordb = new GenericContainer<>(
-            DockerImageName.parse("falkordb/falkordb:latest"))
-            .withExposedPorts(FALKORDB_PORT);
+    private static final int DEFAULT_FALKORDB_PORT = 6379;
 
     private static String falkorHost;
     private static int falkorPort;
@@ -69,8 +63,8 @@ public class FusekiInferenceIntegrationTest {
 
     @BeforeAll
     public static void setUpContainer() {
-        falkorHost = falkordb.getHost();
-        falkorPort = falkordb.getMappedPort(FALKORDB_PORT);
+        falkorHost = System.getenv().getOrDefault("FALKORDB_HOST", "localhost");
+        falkorPort = Integer.parseInt(System.getenv().getOrDefault("FALKORDB_PORT", String.valueOf(DEFAULT_FALKORDB_PORT)));
     }
 
     @BeforeEach

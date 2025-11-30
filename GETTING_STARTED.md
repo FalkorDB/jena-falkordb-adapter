@@ -389,6 +389,294 @@ FALKORDB_GRAPH=my_graph
 
 ---
 
+## GeoSPARQL Support
+
+This project includes support for GeoSPARQL, which enables spatial queries on geographic data using SPARQL. The `jena-geosparql` module bundles Apache Jena's GeoSPARQL implementation with all dependencies.
+
+### Building the GeoSPARQL Module
+
+```bash
+cd jena-geosparql
+mvn clean package
+```
+
+This creates two JAR files:
+- `jena-geosparql-0.2.0-SNAPSHOT.jar` - The module JAR
+- `jena-geosparql-0.2.0-SNAPSHOT-jar-with-dependencies.jar` - JAR with all dependencies bundled
+
+### Running Fuseki with GeoSPARQL
+
+**Option A: Use the bundled configuration**
+
+```bash
+java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar --config config-geosparql.ttl
+```
+
+**Option B: Use the standalone GeoSPARQL JAR with Apache Jena Fuseki**
+
+1. Copy the JAR with dependencies to Fuseki's lib directory:
+   ```bash
+   cp jena-geosparql/target/jena-geosparql-0.2.0-SNAPSHOT-jar-with-dependencies.jar /path/to/fuseki/lib/
+   ```
+
+2. Create a GeoSPARQL configuration file (see `jena-fuseki-falkordb/src/main/resources/config-geosparql.ttl` for an example)
+
+3. Start Fuseki with the config:
+   ```bash
+   java -Xmx4G -cp fuseki-server.jar:lib/* org.apache.jena.fuseki.main.cmds.FusekiServerCmd --config config-geosparql.ttl
+   ```
+
+### GeoSPARQL Configuration Example
+
+```turtle
+@prefix geosparql:  <http://jena.apache.org/geosparql#> .
+@prefix fuseki:     <http://jena.apache.org/fuseki#> .
+@prefix ja:         <http://jena.hpl.hp.com/2005/11/Assembler#> .
+@prefix :           <#> .
+
+[] a fuseki:Server ;
+  fuseki:services (:service) .
+
+:service a fuseki:Service ;
+  fuseki:name "dataset" ;
+  fuseki:endpoint [ fuseki:operation fuseki:query ; ] ;
+  fuseki:endpoint [ fuseki:operation fuseki:update ; ] ;
+  fuseki:dataset :dataset_geosparql .
+
+:dataset_geosparql a geosparql:GeosparqlDataset ;
+  geosparql:inference true ;
+  geosparql:queryRewrite true ;
+  geosparql:indexEnabled true ;
+  geosparql:dataset :dataset_base .
+
+:dataset_base a ja:MemoryDataset .
+```
+
+### Inserting Geospatial Data
+
+Insert geometric data using WKT (Well-Known Text) format:
+
+```sparql
+PREFIX geo: <http://www.opengis.net/ont/geosparql#>
+PREFIX sf: <http://www.opengis.net/ont/sf#>
+PREFIX ex: <http://example.org/>
+
+INSERT DATA {
+  # Rectangle (Polygon)
+  ex:cityPark a geo:Feature ;
+    rdfs:label "City Park" ;
+    geo:hasGeometry ex:cityParkGeom .
+  ex:cityParkGeom a sf:Polygon ;
+    geo:asWKT "POLYGON((-0.15 51.50, -0.15 51.52, -0.10 51.52, -0.10 51.50, -0.15 51.50))"^^geo:wktLiteral .
+
+  # Point (center of a circular area)
+  ex:station a geo:Feature ;
+    rdfs:label "Central Station" ;
+    geo:hasGeometry ex:stationGeom .
+  ex:stationGeom a sf:Point ;
+    geo:asWKT "POINT(-0.125 51.508)"^^geo:wktLiteral .
+
+  # Circle approximation (16-point polygon)
+  ex:garden a geo:Feature ;
+    rdfs:label "Circular Garden" ;
+    geo:hasGeometry ex:gardenGeom .
+  ex:gardenGeom a sf:Polygon ;
+    geo:asWKT "POLYGON((-0.135 51.505, -0.1353 51.5068, -0.1364 51.5082, -0.1382 51.5089, -0.14 51.51, -0.1418 51.5089, -0.1436 51.5082, -0.1447 51.5068, -0.145 51.505, -0.1447 51.5032, -0.1436 51.5018, -0.1418 51.5011, -0.14 51.50, -0.1382 51.5011, -0.1364 51.5018, -0.1353 51.5032, -0.135 51.505))"^^geo:wktLiteral .
+}
+```
+
+### Spatial Queries
+
+**Query 1: Find all features within a bounding box**
+
+```sparql
+PREFIX geo: <http://www.opengis.net/ont/geosparql#>
+PREFIX geof: <http://www.opengis.net/def/function/geosparql/>
+PREFIX ex: <http://example.org/>
+
+SELECT ?feature ?label WHERE {
+  ?feature a geo:Feature ;
+    rdfs:label ?label ;
+    geo:hasGeometry ?geom .
+  ?geom geo:asWKT ?wkt .
+  FILTER(geof:sfWithin(?wkt, "POLYGON((-0.2 51.4, -0.2 51.6, 0 51.6, 0 51.4, -0.2 51.4))"^^geo:wktLiteral))
+}
+```
+
+**Query 2: Find features that contain a specific point**
+
+```sparql
+PREFIX geo: <http://www.opengis.net/ont/geosparql#>
+PREFIX geof: <http://www.opengis.net/def/function/geosparql/>
+PREFIX sf: <http://www.opengis.net/ont/sf#>
+
+SELECT ?feature ?label WHERE {
+  ?feature a geo:Feature ;
+    rdfs:label ?label ;
+    geo:hasGeometry ?geom .
+  ?geom a sf:Polygon ;
+    geo:asWKT ?wkt .
+  FILTER(geof:sfContains(?wkt, "POINT(-0.13 51.51)"^^geo:wktLiteral))
+}
+```
+
+**Query 3: Find intersecting geometries**
+
+```sparql
+PREFIX geo: <http://www.opengis.net/ont/geosparql#>
+PREFIX geof: <http://www.opengis.net/def/function/geosparql/>
+
+SELECT ?feature1 ?feature2 WHERE {
+  ?feature1 a geo:Feature ; geo:hasGeometry ?geom1 .
+  ?feature2 a geo:Feature ; geo:hasGeometry ?geom2 .
+  ?geom1 geo:asWKT ?wkt1 .
+  ?geom2 geo:asWKT ?wkt2 .
+  FILTER(?feature1 != ?feature2)
+  FILTER(geof:sfIntersects(?wkt1, ?wkt2))
+}
+```
+
+### Sample Data File
+
+A sample GeoSPARQL data file with circles and rectangles is available at:
+`jena-fuseki-falkordb/src/main/resources/data/geo_shapes.ttl`
+
+Load it using the Fuseki web interface or via curl:
+
+```bash
+curl -X POST -H "Content-Type: text/turtle" \
+  --data-binary @jena-fuseki-falkordb/src/main/resources/data/geo_shapes.ttl \
+  http://localhost:3030/dataset/data
+```
+
+### Curl Examples
+
+The following curl examples demonstrate common GeoSPARQL operations. These examples correspond to the integration tests in `GeoSPARQLIntegrationTest.java`.
+
+**Example 1: Insert a rectangle (polygon) and a point**
+
+This inserts a park (polygon) and a fountain (point) inside it:
+
+```bash
+curl -X POST http://localhost:3030/dataset/update \
+  -H "Content-Type: application/sparql-update" \
+  --data '
+PREFIX geo: <http://www.opengis.net/ont/geosparql#>
+PREFIX sf: <http://www.opengis.net/ont/sf#>
+PREFIX ex: <http://example.org/>
+INSERT DATA {
+  ex:park a geo:Feature ;
+    ex:name "City Park" ;
+    geo:hasGeometry ex:parkGeom .
+  ex:parkGeom a sf:Polygon ;
+    geo:asWKT "POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))"^^geo:wktLiteral .
+  ex:fountain a geo:Feature ;
+    ex:name "Fountain" ;
+    geo:hasGeometry ex:fountainGeom .
+  ex:fountainGeom a sf:Point ;
+    geo:asWKT "POINT(5 5)"^^geo:wktLiteral .
+}'
+```
+
+**Example 2: Query for spatial containment (sfContains)**
+
+Find which polygon contains which point:
+
+```bash
+curl -X POST http://localhost:3030/dataset/query \
+  -H "Accept: application/sparql-results+json" \
+  --data-urlencode 'query=
+PREFIX geo: <http://www.opengis.net/ont/geosparql#>
+PREFIX geof: <http://www.opengis.net/def/function/geosparql/>
+PREFIX sf: <http://www.opengis.net/ont/sf#>
+PREFIX ex: <http://example.org/>
+SELECT ?parkName ?pointName WHERE {
+  ?park a geo:Feature ; ex:name ?parkName ; geo:hasGeometry ?parkGeom .
+  ?point a geo:Feature ; ex:name ?pointName ; geo:hasGeometry ?pointGeom .
+  ?parkGeom a sf:Polygon ; geo:asWKT ?parkWkt .
+  ?pointGeom a sf:Point ; geo:asWKT ?pointWkt .
+  FILTER(geof:sfContains(?parkWkt, ?pointWkt))
+}'
+```
+
+Expected result:
+```json
+{
+  "results": {
+    "bindings": [
+      { "parkName": { "value": "City Park" }, "pointName": { "value": "Fountain" } }
+    ]
+  }
+}
+```
+
+**Example 3: Query for features within a bounding box (sfWithin)**
+
+First, insert features at different locations:
+
+```bash
+curl -X POST http://localhost:3030/dataset/update \
+  -H "Content-Type: application/sparql-update" \
+  --data '
+PREFIX geo: <http://www.opengis.net/ont/geosparql#>
+PREFIX sf: <http://www.opengis.net/ont/sf#>
+PREFIX ex: <http://example.org/>
+INSERT DATA {
+  ex:feature1 a geo:Feature ; ex:name "Inside" ;
+    geo:hasGeometry [ a sf:Point ; geo:asWKT "POINT(5 5)"^^geo:wktLiteral ] .
+  ex:feature2 a geo:Feature ; ex:name "Outside" ;
+    geo:hasGeometry [ a sf:Point ; geo:asWKT "POINT(15 15)"^^geo:wktLiteral ] .
+}'
+```
+
+Then query for features within a bounding box:
+
+```bash
+curl -X POST http://localhost:3030/dataset/query \
+  -H "Accept: application/sparql-results+json" \
+  --data-urlencode 'query=
+PREFIX geo: <http://www.opengis.net/ont/geosparql#>
+PREFIX geof: <http://www.opengis.net/def/function/geosparql/>
+PREFIX ex: <http://example.org/>
+SELECT ?name WHERE {
+  ?feature a geo:Feature ; ex:name ?name ; geo:hasGeometry ?geom .
+  ?geom geo:asWKT ?wkt .
+  FILTER(geof:sfWithin(?wkt, "POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))"^^geo:wktLiteral))
+}'
+```
+
+Expected result (only the "Inside" feature is returned):
+```json
+{
+  "results": {
+    "bindings": [
+      { "name": { "value": "Inside" } }
+    ]
+  }
+}
+```
+
+### GeoSPARQL Functions
+
+Common spatial functions available:
+
+| Function | Description |
+|----------|-------------|
+| `geof:sfContains` | Tests if geometry A contains geometry B |
+| `geof:sfWithin` | Tests if geometry A is within geometry B |
+| `geof:sfIntersects` | Tests if geometries A and B intersect |
+| `geof:sfOverlaps` | Tests if geometries A and B overlap |
+| `geof:sfTouches` | Tests if geometries A and B touch |
+| `geof:sfCrosses` | Tests if geometries A and B cross |
+| `geof:sfEquals` | Tests if geometries A and B are equal |
+| `geof:sfDisjoint` | Tests if geometries A and B are disjoint |
+| `geof:distance` | Calculates distance between two geometries |
+| `geof:buffer` | Creates a buffer around a geometry |
+
+For more information, see the [Apache Jena GeoSPARQL Documentation](https://jena.apache.org/documentation/geosparql/).
+
+---
+
 ## Next Steps
 
 1. **Explore Examples**: Run all the examples in `QuickStart.java`
@@ -495,8 +783,10 @@ A: The same pattern can be adapted for other graph databases like Neo4j, Neptune
 - **Code Examples**: Check `QuickStart.java` and `Main.java`
 - **Tests**: Review `FalkorDBGraphTest.java` for usage patterns
 - **Apache Jena**: https://jena.apache.org/
+- **Apache Jena GeoSPARQL**: https://jena.apache.org/documentation/geosparql/
 - **FalkorDB**: https://www.falkordb.com/
 - **SPARQL**: https://www.w3.org/TR/sparql11-query/
+- **GeoSPARQL Standard**: https://www.ogc.org/standards/geosparql
 
 ---
 

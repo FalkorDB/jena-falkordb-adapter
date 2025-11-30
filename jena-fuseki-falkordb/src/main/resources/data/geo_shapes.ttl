@@ -1,0 +1,162 @@
+# GeoSPARQL Sample Data - Geometric Shapes
+#
+# This file contains sample geospatial data with circles (represented as buffered points)
+# and rectangles (represented as polygons) for testing GeoSPARQL queries.
+#
+# Geometries are defined using WKT (Well-Known Text) format with WGS84 coordinate system.
+# Note: True circles in WKT require approximation using polygons or buffered points.
+
+@prefix rdf:     <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:    <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix geo:     <http://www.opengis.net/ont/geosparql#> .
+@prefix sf:      <http://www.opengis.net/ont/sf#> .
+@prefix ex:      <http://example.org/shapes/> .
+
+# ==============================================================================
+# Rectangular Areas (Buildings, Parks, Zones)
+# ==============================================================================
+
+# City Park - a rectangular area
+ex:cityPark a geo:Feature, ex:Park ;
+    rdfs:label "City Park" ;
+    rdfs:comment "A rectangular park in the city center" ;
+    geo:hasGeometry ex:cityParkGeom .
+
+ex:cityParkGeom a sf:Polygon ;
+    geo:asWKT "POLYGON((-0.15 51.50, -0.15 51.52, -0.10 51.52, -0.10 51.50, -0.15 51.50))"^^geo:wktLiteral .
+
+# Office Building - a rectangular building footprint
+ex:officeBuilding a geo:Feature, ex:Building ;
+    rdfs:label "Office Building" ;
+    rdfs:comment "A rectangular office building" ;
+    geo:hasGeometry ex:officeBuildingGeom .
+
+ex:officeBuildingGeom a sf:Polygon ;
+    geo:asWKT "POLYGON((-0.12 51.51, -0.12 51.515, -0.11 51.515, -0.11 51.51, -0.12 51.51))"^^geo:wktLiteral .
+
+# Shopping Mall - a larger rectangular area
+ex:shoppingMall a geo:Feature, ex:Building ;
+    rdfs:label "Shopping Mall" ;
+    rdfs:comment "A large rectangular shopping complex" ;
+    geo:hasGeometry ex:shoppingMallGeom .
+
+ex:shoppingMallGeom a sf:Polygon ;
+    geo:asWKT "POLYGON((-0.20 51.48, -0.20 51.50, -0.16 51.50, -0.16 51.48, -0.20 51.48))"^^geo:wktLiteral .
+
+# Residential Zone - a large rectangular zone
+ex:residentialZone a geo:Feature, ex:Zone ;
+    rdfs:label "Residential Zone A" ;
+    rdfs:comment "A rectangular residential area" ;
+    geo:hasGeometry ex:residentialZoneGeom .
+
+ex:residentialZoneGeom a sf:Polygon ;
+    geo:asWKT "POLYGON((-0.25 51.45, -0.25 51.50, -0.20 51.50, -0.20 51.45, -0.25 51.45))"^^geo:wktLiteral .
+
+# ==============================================================================
+# Circular Areas (represented as points with buffer zones)
+# Note: For spatial queries, use geof:buffer() to create circular regions
+# ==============================================================================
+
+# Central Station - a point representing a circular area of influence
+ex:centralStation a geo:Feature, ex:Station ;
+    rdfs:label "Central Station" ;
+    rdfs:comment "Main railway station with circular service area" ;
+    ex:serviceRadius "500"^^<http://www.w3.org/2001/XMLSchema#integer> ;
+    geo:hasGeometry ex:centralStationGeom .
+
+ex:centralStationGeom a sf:Point ;
+    geo:asWKT "POINT(-0.125 51.508)"^^geo:wktLiteral .
+
+# Hospital - a point with emergency response radius
+ex:cityHospital a geo:Feature, ex:Hospital ;
+    rdfs:label "City Hospital" ;
+    rdfs:comment "Hospital with circular emergency response zone" ;
+    ex:serviceRadius "1000"^^<http://www.w3.org/2001/XMLSchema#integer> ;
+    geo:hasGeometry ex:cityHospitalGeom .
+
+ex:cityHospitalGeom a sf:Point ;
+    geo:asWKT "POINT(-0.18 51.52)"^^geo:wktLiteral .
+
+# Fire Station - a point with response area
+ex:fireStation a geo:Feature, ex:EmergencyService ;
+    rdfs:label "Fire Station Alpha" ;
+    rdfs:comment "Fire station with circular coverage area" ;
+    ex:serviceRadius "2000"^^<http://www.w3.org/2001/XMLSchema#integer> ;
+    geo:hasGeometry ex:fireStationGeom .
+
+ex:fireStationGeom a sf:Point ;
+    geo:asWKT "POINT(-0.22 51.47)"^^geo:wktLiteral .
+
+# WiFi Hotspot - a small circular coverage area
+ex:wifiHotspot1 a geo:Feature, ex:WifiHotspot ;
+    rdfs:label "Public WiFi Hotspot 1" ;
+    rdfs:comment "Free public WiFi with circular coverage" ;
+    ex:coverageRadius "50"^^<http://www.w3.org/2001/XMLSchema#integer> ;
+    geo:hasGeometry ex:wifiHotspot1Geom .
+
+ex:wifiHotspot1Geom a sf:Point ;
+    geo:asWKT "POINT(-0.13 51.51)"^^geo:wktLiteral .
+
+# ==============================================================================
+# Circle Approximations using Polygons (32-point approximation)
+# ==============================================================================
+
+# Circular Garden - approximated as a 16-point polygon
+ex:circularGarden a geo:Feature, ex:Garden ;
+    rdfs:label "Circular Garden" ;
+    rdfs:comment "A circular garden approximated as a polygon" ;
+    geo:hasGeometry ex:circularGardenGeom .
+
+# A circle centered at (-0.14, 51.505) with radius ~0.005 degrees
+ex:circularGardenGeom a sf:Polygon ;
+    geo:asWKT "POLYGON((-0.135 51.505, -0.1353 51.5068, -0.1364 51.5082, -0.1382 51.5089, -0.14 51.51, -0.1418 51.5089, -0.1436 51.5082, -0.1447 51.5068, -0.145 51.505, -0.1447 51.5032, -0.1436 51.5018, -0.1418 51.5011, -0.14 51.50, -0.1382 51.5011, -0.1364 51.5018, -0.1353 51.5032, -0.135 51.505))"^^geo:wktLiteral .
+
+# Round Pond - another circular feature
+ex:roundPond a geo:Feature, ex:WaterBody ;
+    rdfs:label "Round Pond" ;
+    rdfs:comment "A circular pond" ;
+    geo:hasGeometry ex:roundPondGeom .
+
+# A circle centered at (-0.17, 51.49) with radius ~0.003 degrees
+ex:roundPondGeom a sf:Polygon ;
+    geo:asWKT "POLYGON((-0.167 51.49, -0.1672 51.4911, -0.1682 51.492, -0.1695 51.4925, -0.17 51.493, -0.1705 51.4925, -0.1718 51.492, -0.1728 51.4911, -0.173 51.49, -0.1728 51.4889, -0.1718 51.488, -0.1705 51.4875, -0.17 51.487, -0.1695 51.4875, -0.1682 51.488, -0.1672 51.4889, -0.167 51.49))"^^geo:wktLiteral .
+
+# ==============================================================================
+# Type Definitions
+# ==============================================================================
+
+ex:Park a rdfs:Class ;
+    rdfs:label "Park" ;
+    rdfs:comment "A public park or green space" .
+
+ex:Building a rdfs:Class ;
+    rdfs:label "Building" ;
+    rdfs:comment "A constructed building" .
+
+ex:Zone a rdfs:Class ;
+    rdfs:label "Zone" ;
+    rdfs:comment "A designated area or zone" .
+
+ex:Station a rdfs:Class ;
+    rdfs:label "Station" ;
+    rdfs:comment "A transportation station" .
+
+ex:Hospital a rdfs:Class ;
+    rdfs:label "Hospital" ;
+    rdfs:comment "A medical facility" .
+
+ex:EmergencyService a rdfs:Class ;
+    rdfs:label "Emergency Service" ;
+    rdfs:comment "An emergency response service location" .
+
+ex:WifiHotspot a rdfs:Class ;
+    rdfs:label "WiFi Hotspot" ;
+    rdfs:comment "A wireless internet access point" .
+
+ex:Garden a rdfs:Class ;
+    rdfs:label "Garden" ;
+    rdfs:comment "A cultivated garden area" .
+
+ex:WaterBody a rdfs:Class ;
+    rdfs:label "Water Body" ;
+    rdfs:comment "A body of water such as a pond or lake" .

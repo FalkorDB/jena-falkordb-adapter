@@ -1,0 +1,96 @@
+# GeoSPARQL Configuration for Fuseki Server
+#
+# This configuration enables GeoSPARQL support for spatial queries in Apache Jena Fuseki.
+# GeoSPARQL allows you to store and query geospatial data (points, lines, polygons, etc.)
+# using SPARQL extensions.
+#
+# To use this configuration:
+# 1. Build the jena-geosparql module: cd jena-geosparql && mvn clean package
+# 2. Ensure the jena-geosparql JAR with dependencies is in the classpath
+# 3. Run Fuseki with this config:
+#    java -jar jena-fuseki-falkordb.jar --config config-geosparql.ttl
+#
+# Supported geometry formats:
+# - WKT (Well-Known Text): POINT, LINESTRING, POLYGON, etc.
+# - GML (Geography Markup Language)
+#
+# Example spatial queries:
+# - geof:sfContains, geof:sfWithin, geof:sfIntersects
+# - geof:distance, geof:buffer
+
+@prefix rdf:        <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:       <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix fuseki:     <http://jena.apache.org/fuseki#> .
+@prefix ja:         <http://jena.hpl.hp.com/2005/11/Assembler#> .
+@prefix geosparql:  <http://jena.apache.org/geosparql#> .
+@prefix :           <#> .
+
+# Fuseki server configuration
+[] a fuseki:Server ;
+  fuseki:services (:service) ;
+  .
+
+# The GeoSPARQL-enabled service
+:service a fuseki:Service ;
+  # Service name - endpoint will be available at /dataset
+  fuseki:name "dataset" ;
+  
+  # SPARQL query endpoint
+  fuseki:endpoint [ fuseki:operation fuseki:query ; ] ;
+  fuseki:endpoint [ fuseki:operation fuseki:query ; fuseki:name "query" ] ;
+  fuseki:endpoint [ fuseki:operation fuseki:query ; fuseki:name "sparql" ] ;
+  
+  # SPARQL update endpoint
+  fuseki:endpoint [ fuseki:operation fuseki:update ; ] ;
+  fuseki:endpoint [ fuseki:operation fuseki:update ; fuseki:name "update" ] ;
+  
+  # Graph Store Protocol (read-only)
+  fuseki:endpoint [ fuseki:operation fuseki:gsp-r ; ] ;
+  fuseki:endpoint [ fuseki:operation fuseki:gsp-r ; fuseki:name "get" ] ;
+  
+  # Graph Store Protocol (read-write)
+  fuseki:endpoint [ fuseki:operation fuseki:gsp-rw ; ] ;
+  fuseki:endpoint [ fuseki:operation fuseki:gsp-rw ; fuseki:name "data" ] ;
+  
+  # File upload endpoint
+  fuseki:endpoint [ fuseki:operation fuseki:upload ; ] ;
+  
+  # SPARQL 1.1 Graph Store HTTP Protocol - PATCH
+  fuseki:endpoint [ fuseki:operation fuseki:patch ; ] ;
+  
+  # Link to the GeoSPARQL dataset
+  fuseki:dataset :dataset_geosparql ;
+  .
+
+# GeoSPARQL Dataset Configuration
+# This wraps the base dataset with GeoSPARQL capabilities
+:dataset_geosparql a geosparql:GeosparqlDataset ;
+  # Spatial index file (optional - omit for in-memory index)
+  # geosparql:spatialIndexFile "spatial.index" ;
+
+  ## GeoSPARQL settings
+  # Enable GeoSPARQL inference (derives additional spatial relations)
+  geosparql:inference            true ;
+  
+  # Enable query rewriting for optimization
+  geosparql:queryRewrite         true ;
+  
+  # Enable spatial indexing for better performance
+  geosparql:indexEnabled         true ;
+  
+  # Whether to apply default geometry to features
+  geosparql:applyDefaultGeometry false ;
+
+  # Index sizes: [Geometry Literal, Geometry Transform, Query Rewrite]
+  # -1 means unlimited
+  geosparql:indexSizes           "-1,-1,-1" ;
+  
+  # Index expiry times in milliseconds
+  geosparql:indexExpires         "5000,5000,5000" ;
+
+  ## Required: the base dataset that stores the actual RDF data
+  geosparql:dataset :dataset_base ;
+  .
+
+# Base in-memory dataset for storing RDF data
+:dataset_base a ja:MemoryDataset .

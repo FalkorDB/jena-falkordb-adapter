@@ -129,8 +129,12 @@ public final class FalkorFuseki {
         System.out.println("Example config file (TTL):");
         System.out.println("  @prefix falkor:  <http://falkordb.com/jena/assembler#> .");
         System.out.println("  @prefix fuseki:  <http://jena.apache.org/fuseki#> .");
+        System.out.println("  @prefix ja:      <http://jena.hpl.hp.com/2005/11/Assembler#> .");
         System.out.println();
-        System.out.println("  :dataset rdf:type falkor:FalkorDBModel ;");
+        System.out.println("  :dataset_rdf rdf:type ja:RDFDataset ;");
+        System.out.println("      ja:defaultGraph :falkor_db_model .");
+        System.out.println();
+        System.out.println("  :falkor_db_model rdf:type falkor:FalkorDBModel ;");
         System.out.println("      falkor:host \"localhost\" ;");
         System.out.println("      falkor:port 6379 ;");
         System.out.println("      falkor:graphName \"my_graph\" .");
@@ -155,7 +159,13 @@ public final class FalkorFuseki {
             URL resourceUrl = FalkorFuseki.class.getClassLoader()
                 .getResource(configPath);
             if (resourceUrl != null) {
-                configFile = new File(resourceUrl.getPath());
+                try {
+                    configFile = new File(resourceUrl.toURI());
+                } catch (java.net.URISyntaxException e) {
+                    LOGGER.error("Invalid config file URI: {}", configPath);
+                    System.exit(1);
+                    return;
+                }
             } else {
                 LOGGER.error("Config file not found: {}", configPath);
                 System.exit(1);

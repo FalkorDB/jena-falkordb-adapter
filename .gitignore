@@ -3,3 +3,6 @@ dependency-reduced-pom.xml
 .history
 *.log
 logs/
+dependency-reduced-pom.xml
+.idea
+*.ipr

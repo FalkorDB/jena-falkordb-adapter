@@ -1,198 +1,46 @@
 package com.falkordb;
 
-import com.falkordb.jena.FalkorDBModelFactory;
-import java.io.File;
-import java.net.URL;
 import org.apache.jena.fuseki.main.FusekiServer;
 import org.apache.jena.query.Dataset;
 import org.apache.jena.query.DatasetFactory;
 import org.apache.jena.rdf.model.Model;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.falkordb.jena.FalkorDBModelFactory;
 
-/**
- * Main entry point for the FalkorDB-backed Fuseki SPARQL server.
- *
- * <p>This class starts an Apache Jena Fuseki server that uses FalkorDB
- * as the underlying graph database for RDF storage.</p>
- */
-public final class FalkorFuseki {
-    /** Logger instance for this class. */
-    private static final Logger LOGGER = LoggerFactory.getLogger(
-        FalkorFuseki.class);
+// Note: Verify the exact factory/class name in your IDE from the adapter library.
+// It is likely 'com.falkordb.jena.FalkorDBModelFactory' or similar.
 
-    /** Default FalkorDB host. */
-    private static final String DEFAULT_HOST = "localhost";
-    /** Default FalkorDB port. */
-    private static final int DEFAULT_PORT = 6379;
-    /** Default graph key name. */
-    private static final String DEFAULT_GRAPH_KEY = "my_knowledge_graph";
-    /** Default Fuseki server port. */
-    private static final int DEFAULT_FUSEKI_PORT = 3330;
-    /** Default dataset path. */
-    private static final String DEFAULT_DATASET_PATH = "/falkor";
-    /** Classpath resource path for webapp. */
-    private static final String WEBAPP_RESOURCE_PATH = "webapp";
-    /** Development webapp path relative to module root. */
-    private static final String DEV_WEBAPP_PATH = "src/main/resources/webapp";
-    /** Module webapp path when running from project root. */
-    private static final String MODULE_WEBAPP_PATH =
-        "jena-fuseki-falkordb/" + DEV_WEBAPP_PATH;
-
-    /** Prevent instantiation of this utility class. */
-    private FalkorFuseki() {
-        throw new AssertionError("No instances");
-    }
-
-    /**
-     * Main entry point for starting the FalkorDB-backed Fuseki server.
-     *
-     * @param args command line arguments (ignored)
-     */
-    public static void main(final String[] args) {
+public class FalkorFuseki {
+    public static void main(String[] args) {
         // 1. Connection Details for FalkorDB (Redis)
-        String host = getEnvOrDefault("FALKORDB_HOST", DEFAULT_HOST);
-        int port = getEnvOrDefaultInt("FALKORDB_PORT", DEFAULT_PORT);
-        String graphKey = getEnvOrDefault("FALKORDB_GRAPH", DEFAULT_GRAPH_KEY);
-        int fusekiPort = getEnvOrDefaultInt(
-            "FUSEKI_PORT", DEFAULT_FUSEKI_PORT);
+        String host = "localhost";
+        int port = 6379;
+        String graphKey = "my_knowledge_graph"; // The key in Redis where the graph is stored
 
-        if (LOGGER.isInfoEnabled()) {
-            LOGGER.info("Connecting to FalkorDB at {}:{}...", host, port);
-        }
+        System.out.println("Connecting to FalkorDB at " + host + ":" + port + "...");
 
         // 2. Create the FalkorDB-backed Jena Model
+        // (You may need to adjust this constructor based on the specific adapter
+        // version API)
         Model falkorGraph = FalkorDBModelFactory.builder()
                 .host(host)
                 .port(port)
                 .graphName(graphKey)
                 .build();
 
-        // 3. Wrap the Model in a Dataset (Fuseki serves Datasets, not Models)
+        // 3. Wrap the Model in a Dataset (Fuseki serves Datasets, not just Models)
         Dataset ds = DatasetFactory.create(falkorGraph);
 
         // 4. Build and Start the Fuseki Server
-        if (LOGGER.isInfoEnabled()) {
-            LOGGER.info("Starting Fuseki Server on port {}...", fusekiPort);
-        }
+        System.out.println("Starting Fuseki Server on port 3330...");
 
-        FusekiServer.Builder serverBuilder = FusekiServer.create()
-                .port(fusekiPort)
-                .add(DEFAULT_DATASET_PATH, ds);
+        FusekiServer server = FusekiServer.create()
+                .port(3330)
+                .add("/falkor", ds)
+                .staticFileBase("src/main/resources/webapp")
+                .build();
 
-        // Try to set up static files from classpath or filesystem
-        String staticBase = getStaticFileBase();
-        if (staticBase != null) {
-            serverBuilder.staticFileBase(staticBase);
-            if (LOGGER.isInfoEnabled()) {
-                LOGGER.info("Serving static files from: {}", staticBase);
-            }
-        }
-
-        FusekiServer server = serverBuilder.build();
         server.start();
 
-        if (LOGGER.isInfoEnabled()) {
-            LOGGER.info("Server running. SPARQL endpoint: "
-                + "http://localhost:{}{}", fusekiPort, DEFAULT_DATASET_PATH);
-        }
-    }
-
-    /**
-     * Gets the static file base path.
-     * First checks for STATIC_FILES_BASE environment variable,
-     * then tries to get resources from the classpath,
-     * then falls back to filesystem paths if running from source.
-     *
-     * @return the static file base path, or null if not available
-     */
-    private static String getStaticFileBase() {
-        // First check for explicit configuration via environment variable
-        String envPath = System.getenv("STATIC_FILES_BASE");
-        if (envPath != null && !envPath.isEmpty()) {
-            File envFile = new File(envPath);
-            try {
-                String canonicalPath = envFile.getCanonicalPath();
-                File canonicalFile = new File(canonicalPath);
-                if (canonicalFile.exists() && canonicalFile.isDirectory()) {
-                    return canonicalPath;
-                } else {
-                    if (LOGGER.isWarnEnabled()) {
-                        LOGGER.warn("STATIC_FILES_BASE '{}' does not exist or is not a directory", envPath);
-                    }
-                }
-            } catch (java.io.IOException e) {
-                if (LOGGER.isWarnEnabled()) {
-                    LOGGER.warn("Invalid path in STATIC_FILES_BASE: {}", envPath);
-                }
-            }
-        }
-
-        // Try to get from classpath resource
-        URL resourceUrl = FalkorFuseki.class.getClassLoader()
-            .getResource(WEBAPP_RESOURCE_PATH);
-        if (resourceUrl != null) {
-            String protocol = resourceUrl.getProtocol();
-            if ("file".equals(protocol)) {
-                // Running from filesystem (e.g., IDE or mvn exec)
-                return resourceUrl.getPath();
-            }
-            // Running from JAR - Fuseki can't serve from JAR directly
-            // Return null and let Fuseki use its default behavior
-        }
-
-        // Fallback: try src/main/resources/webapp for development
-        File devPath = new File(DEV_WEBAPP_PATH);
-        if (devPath.exists() && devPath.isDirectory()) {
-            return devPath.getAbsolutePath();
-        }
-
-        // Try jena-fuseki-falkordb subdir for running from root
-        File submodulePath = new File(MODULE_WEBAPP_PATH);
-        if (submodulePath.exists() && submodulePath.isDirectory()) {
-            return submodulePath.getAbsolutePath();
-        }
-
-        if (LOGGER.isWarnEnabled()) {
-            LOGGER.warn("Static files not available. "
-                + "Web UI may not be accessible.");
-        }
-        return null;
-    }
-
-    /**
-     * Get environment variable value or return the default.
-     *
-     * @param name environment variable name
-     * @param defaultValue default value if not set
-     * @return the environment variable value or default
-     */
-    private static String getEnvOrDefault(final String name,
-            final String defaultValue) {
-        String value = System.getenv(name);
-        return value != null && !value.isEmpty() ? value : defaultValue;
-    }
-
-    /**
-     * Get environment variable value as integer or return the default.
-     *
-     * @param name environment variable name
-     * @param defaultValue default value if not set or invalid
-     * @return the environment variable value as integer or default
-     */
-    private static int getEnvOrDefaultInt(final String name,
-            final int defaultValue) {
-        String value = System.getenv(name);
-        if (value != null && !value.isEmpty()) {
-            try {
-                return Integer.parseInt(value);
-            } catch (NumberFormatException e) {
-                if (LOGGER.isWarnEnabled()) {
-                    LOGGER.warn("Invalid integer value for {}: {}, "
-                        + "using default: {}", name, value, defaultValue);
-                }
-            }
-        }
-        return defaultValue;
+        System.out.println("Server running. SPARQL endpoint: http://localhost:3330/falkor");
     }
 }

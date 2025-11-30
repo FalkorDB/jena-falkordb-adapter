@@ -33,6 +33,11 @@ public final class FalkorFuseki {
     private static final String DEFAULT_DATASET_PATH = "/falkor";
     /** Classpath resource path for webapp. */
     private static final String WEBAPP_RESOURCE_PATH = "webapp";
+    /** Development webapp path relative to module root. */
+    private static final String DEV_WEBAPP_PATH = "src/main/resources/webapp";
+    /** Module webapp path when running from project root. */
+    private static final String MODULE_WEBAPP_PATH =
+        "jena-fuseki-falkordb/" + DEV_WEBAPP_PATH;
 
     /** Prevent instantiation of this utility class. */
     private FalkorFuseki() {
@@ -137,14 +142,13 @@ public final class FalkorFuseki {
         }
 
         // Fallback: try src/main/resources/webapp for development
-        File devPath = new File("src/main/resources/webapp");
+        File devPath = new File(DEV_WEBAPP_PATH);
         if (devPath.exists() && devPath.isDirectory()) {
             return devPath.getAbsolutePath();
         }
 
         // Try jena-fuseki-falkordb subdir for running from root
-        File submodulePath = new File(
-            "jena-fuseki-falkordb/src/main/resources/webapp");
+        File submodulePath = new File(MODULE_WEBAPP_PATH);
         if (submodulePath.exists() && submodulePath.isDirectory()) {
             return submodulePath.getAbsolutePath();
         }

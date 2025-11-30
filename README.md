@@ -872,6 +872,7 @@ This project uses GitHub Actions for continuous integration and deployment:
 ### Continuous Integration
 
 The CI workflow automatically runs on every push and pull request to the `main` branch:
+- Tests against Java 11, 17, and 21
 - Tests use Testcontainers to automatically start FalkorDB (same as local development)
 - Runs full test suite against FalkorDB
 - Performs code quality checks

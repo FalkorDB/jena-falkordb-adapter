@@ -21,8 +21,9 @@ import org.testcontainers.utility.DockerImageName;
 /**
  * Tests that exercise the demo Main class code paths using Testcontainers.
  * 
- * Uses Testcontainers to automatically start a FalkorDB container for testing.
- * No manual Docker setup required - tests work both locally and in CI.
+ * This test class uses its own container with fixed port binding to 6379
+ * so that Main.main() can use default localhost:6379 connection settings.
+ * Other tests use the dynamic port binding from FalkorDBTestBase.
  */
 @Testcontainers
 public class MainTest {
@@ -32,6 +33,10 @@ public class MainTest {
     /**
      * Container bound to fixed port 6379 so Main.main() can connect using
      * default localhost:6379 connection settings.
+     * 
+     * Note: This test class intentionally does NOT extend FalkorDBTestBase
+     * because it needs a fixed port binding for testing Main.main() which
+     * uses default connection settings (localhost:6379).
      * 
      * The @SuppressWarnings("resource") is needed because the static container
      * field is managed by Testcontainers lifecycle (via @Container annotation)

@@ -5,38 +5,18 @@ import com.falkordb.FalkorDB;
 import org.apache.jena.rdf.model.*;
 import org.apache.jena.vocabulary.RDF;
 import org.junit.jupiter.api.*;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.DockerImageName;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Unit tests for FalkorDB-Jena adapter.
  * 
- * Uses Testcontainers to automatically start a FalkorDB container for testing.
+ * Extends FalkorDBTestBase which provides Testcontainers setup for FalkorDB.
  * No manual Docker setup required - tests work both locally and in CI.
  */
-@Testcontainers
-public class FalkorDBGraphTest {
+public class FalkorDBGraphTest extends FalkorDBTestBase {
     
     private static final String TEST_GRAPH = "test_graph";
-    private static final int FALKORDB_PORT = 6379;
-    
-    @Container
-    private static final GenericContainer<?> falkordb = new GenericContainer<>(
-            DockerImageName.parse("falkordb/falkordb:latest"))
-            .withExposedPorts(FALKORDB_PORT);
-    
-    private static String falkorHost;
-    private static int falkorPort;
-    
-    @BeforeAll
-    public static void setUpContainer() {
-        falkorHost = falkordb.getHost();
-        falkorPort = falkordb.getMappedPort(FALKORDB_PORT);
-    }
     
     private Model createTestModel() {
         return createTestModel(TEST_GRAPH);

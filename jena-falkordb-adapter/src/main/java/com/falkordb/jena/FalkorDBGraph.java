@@ -39,8 +39,13 @@ public final class FalkorDBGraph extends GraphBase {
     private final String graphName;
 
     /** Cached reflection objects for OpenTelemetry - initialized lazily. */
-    private static volatile Method spanCurrentMethod;
+    private static volatile Object tracer;
+    private static volatile Method spanBuilderMethod;
+    private static volatile Method startSpanMethod;
     private static volatile Method setAttributeMethod;
+    private static volatile Method endSpanMethod;
+    private static volatile Method makeCurrentMethod;
+    private static volatile Method scopeCloseMethod;
     private static volatile boolean otelInitialized = false;
     private static volatile boolean otelAvailable = false;
 
@@ -60,37 +65,98 @@ public final class FalkorDBGraph extends GraphBase {
                 cl = FalkorDBGraph.class.getClassLoader();
             }
             
+            // Get GlobalOpenTelemetry.get()
+            Class<?> globalOtelClass = Class.forName("io.opentelemetry.api.GlobalOpenTelemetry", true, cl);
+            Method getMethod = globalOtelClass.getMethod("get");
+            Object otel = getMethod.invoke(null);
+            
+            // Get tracer
+            Method getTracerMethod = otel.getClass().getMethod("getTracer", String.class);
+            tracer = getTracerMethod.invoke(otel, "com.falkordb.jena");
+            
+            // Get spanBuilder method from tracer
+            spanBuilderMethod = tracer.getClass().getMethod("spanBuilder", String.class);
+            
+            // Get SpanBuilder.startSpan method
+            Class<?> spanBuilderClass = Class.forName("io.opentelemetry.api.trace.SpanBuilder", true, cl);
+            startSpanMethod = spanBuilderClass.getMethod("startSpan");
+            
+            // Get Span methods
             Class<?> spanClass = Class.forName("io.opentelemetry.api.trace.Span", true, cl);
-            spanCurrentMethod = spanClass.getMethod("current");
             setAttributeMethod = spanClass.getMethod("setAttribute", String.class, String.class);
+            endSpanMethod = spanClass.getMethod("end");
+            makeCurrentMethod = spanClass.getMethod("makeCurrent");
+            
+            // Get Scope.close method
+            Class<?> scopeClass = Class.forName("io.opentelemetry.context.Scope", true, cl);
+            scopeCloseMethod = scopeClass.getMethod("close");
             
             otelAvailable = true;
-            LOGGER.info("OpenTelemetry API initialized via classloader: {}", cl);
+            LOGGER.info("OpenTelemetry tracing initialized successfully via classloader: {}", cl);
         } catch (ClassNotFoundException e) {
             LOGGER.debug("OpenTelemetry API not available: {}", e.getMessage());
         } catch (Exception e) {
-            LOGGER.warn("Failed to initialize OpenTelemetry reflection: {}", e.getMessage());
+            LOGGER.warn("Failed to initialize OpenTelemetry reflection: {}", e.getMessage(), e);
         }
     }
 
     /**
-     * Sets an attribute on the current span if OpenTelemetry is available.
-     * The span must be created by the Java agent via otel.instrumentation.methods.include.
+     * Executes an operation wrapped in a span with a custom attribute.
+     * Creates its own span using GlobalOpenTelemetry.get().getTracer().
      */
-    private static void setSpanAttribute(final String key, final String value) {
+    private static <T> T withSpan(String spanName, String attrKey, String attrValue, 
+                                   java.util.function.Supplier<T> operation) {
         if (!otelInitialized) {
             initOtelReflection();
         }
         if (!otelAvailable) {
-            return;
+            return operation.get();
         }
+        
+        Object span = null;
+        Object scope = null;
         try {
-            Object currentSpan = spanCurrentMethod.invoke(null);
-            setAttributeMethod.invoke(currentSpan, key, value);
-            LOGGER.info("Set span attribute: {}={}", key, value);
+            // Create and start span: tracer.spanBuilder(spanName).startSpan()
+            Object spanBuilder = spanBuilderMethod.invoke(tracer, spanName);
+            span = startSpanMethod.invoke(spanBuilder);
+            
+            // Make span current: span.makeCurrent()
+            scope = makeCurrentMethod.invoke(span);
+            
+            // Set attribute: span.setAttribute(key, value)
+            setAttributeMethod.invoke(span, attrKey, attrValue);
+            
+            LOGGER.debug("Created span {} with {}={}", spanName, attrKey, attrValue);
+            
+            // Execute operation
+            return operation.get();
         } catch (Exception e) {
-            LOGGER.warn("Could not set span attribute: key={}, error={}", key, e.getMessage());
+            LOGGER.warn("Tracing error in {}: {}", spanName, e.getMessage());
+            return operation.get();
+        } finally {
+            try {
+                // Close scope: scope.close()
+                if (scope != null) {
+                    scopeCloseMethod.invoke(scope);
+                }
+                // End span: span.end()
+                if (span != null) {
+                    endSpanMethod.invoke(span);
+                }
+            } catch (Exception e) {
+                LOGGER.debug("Error closing span: {}", e.getMessage());
+            }
         }
+    }
+
+    /**
+     * Executes a void operation wrapped in a span with a custom attribute.
+     */
+    private static void withSpanVoid(String spanName, String attrKey, String attrValue, Runnable operation) {
+        withSpan(spanName, attrKey, attrValue, () -> {
+            operation.run();
+            return null;
+        });
     }
 
     /**
@@ -175,7 +241,12 @@ public final class FalkorDBGraph extends GraphBase {
      */
     @Override
     public void performAdd(final Triple triple) {
-        setSpanAttribute("triple", tripleToString(triple));
+        withSpanVoid("FalkorDBGraph.performAdd", "triple", tripleToString(triple), () -> {
+            performAddInternal(triple);
+        });
+    }
+
+    private void performAddInternal(final Triple triple) {
         // Translate RDF triple to Cypher CREATE/MERGE
         var subject = nodeToString(triple.getSubject());
         var predicate = nodeToString(triple.getPredicate());
@@ -221,7 +292,12 @@ public final class FalkorDBGraph extends GraphBase {
     /** Delete a triple from the backing FalkorDB graph. */
     @Override
     public void performDelete(final Triple triple) {
-        setSpanAttribute("triple", tripleToString(triple));
+        withSpanVoid("FalkorDBGraph.performDelete", "triple", tripleToString(triple), () -> {
+            performDeleteInternal(triple);
+        });
+    }
+
+    private void performDeleteInternal(final Triple triple) {
         var subject = nodeToString(triple.getSubject());
         var predicate = nodeToString(triple.getPredicate());
 
@@ -261,7 +337,12 @@ public final class FalkorDBGraph extends GraphBase {
     /** Find triples matching the given pattern. */
     @Override
     protected ExtendedIterator<Triple> graphBaseFind(final Triple pattern) {
-        setSpanAttribute("pattern", tripleToString(pattern));
+        return withSpan("FalkorDBGraph.graphBaseFind", "pattern", tripleToString(pattern), () -> {
+            return graphBaseFindInternal(pattern);
+        });
+    }
+
+    private ExtendedIterator<Triple> graphBaseFindInternal(final Triple pattern) {
         var triples = new ArrayList<Triple>();
 
         // Check if this is an rdf:type query

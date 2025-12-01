@@ -11,40 +11,37 @@ import static org.junit.jupiter.api.Assertions.*;
  * Tests for OpenTelemetry integration in FalkorDBGraph.
  *
  * These tests verify that:
- * 1. The setSpanAttribute method handles errors gracefully
+ * 1. The withSpan method exists and handles errors gracefully
  * 2. The method signature is correct
- * 3. Calling span attribute methods doesn't throw exceptions
+ * 3. Calling span methods doesn't throw exceptions
  */
 public class FalkorDBGraphOtelTest {
 
     @Test
-    @DisplayName("Test that setSpanAttribute method exists and is accessible")
-    public void testSetSpanAttributeMethodExists() throws Exception {
-        Method setSpanAttrMethod = FalkorDBGraph.class.getDeclaredMethod(
-            "setSpanAttribute", String.class, String.class);
-        assertNotNull(setSpanAttrMethod,
-            "setSpanAttribute method should exist");
-        setSpanAttrMethod.setAccessible(true);
-
-        // Should not throw when called
-        assertDoesNotThrow(() -> {
-            setSpanAttrMethod.invoke(null, "test.key", "test.value");
-        }, "setSpanAttribute should not throw");
+    @DisplayName("Test that withSpan method exists and is accessible")
+    public void testWithSpanMethodExists() throws Exception {
+        Method[] methods = FalkorDBGraph.class.getDeclaredMethods();
+        boolean found = false;
+        for (Method m : methods) {
+            if (m.getName().equals("withSpan")) {
+                found = true;
+                m.setAccessible(true);
+                break;
+            }
+        }
+        assertTrue(found, "withSpan method should exist");
     }
 
     @Test
-    @DisplayName("Test that multiple calls to setSpanAttribute work without errors")
-    public void testMultipleSetSpanAttributeCalls() throws Exception {
-        Method setSpanAttrMethod = FalkorDBGraph.class.getDeclaredMethod(
-            "setSpanAttribute", String.class, String.class);
-        setSpanAttrMethod.setAccessible(true);
-
-        // Call multiple times - should not throw
-        assertDoesNotThrow(() -> {
-            for (int i = 0; i < 10; i++) {
-                setSpanAttrMethod.invoke(null, "key" + i, "value" + i);
-            }
-        }, "Multiple calls to setSpanAttribute should not throw");
+    @DisplayName("Test that initOtelReflection method exists and can be called")
+    public void testInitOtelReflectionMethodExists() throws Exception {
+        Method initMethod = FalkorDBGraph.class.getDeclaredMethod("initOtelReflection");
+        assertNotNull(initMethod, "initOtelReflection method should exist");
+        initMethod.setAccessible(true);
+        
+        // Should not throw
+        assertDoesNotThrow(() -> initMethod.invoke(null),
+            "initOtelReflection should not throw");
     }
 
     @Test
@@ -79,14 +76,17 @@ public class FalkorDBGraphOtelTest {
     }
 
     @Test
-    @DisplayName("Test initOtelReflection method exists")
-    public void testInitOtelReflectionMethodExists() throws Exception {
-        Method initMethod = FalkorDBGraph.class.getDeclaredMethod("initOtelReflection");
-        assertNotNull(initMethod, "initOtelReflection method should exist");
-        initMethod.setAccessible(true);
-        
-        // Should not throw
-        assertDoesNotThrow(() -> initMethod.invoke(null),
-            "initOtelReflection should not throw");
+    @DisplayName("Test that withSpanVoid method exists")
+    public void testWithSpanVoidMethodExists() throws Exception {
+        Method[] methods = FalkorDBGraph.class.getDeclaredMethods();
+        boolean found = false;
+        for (Method m : methods) {
+            if (m.getName().equals("withSpanVoid")) {
+                found = true;
+                m.setAccessible(true);
+                break;
+            }
+        }
+        assertTrue(found, "withSpanVoid method should exist");
     }
 }

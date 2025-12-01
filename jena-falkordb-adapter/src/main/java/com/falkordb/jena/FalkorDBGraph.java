@@ -37,50 +37,87 @@ public final class FalkorDBGraph extends GraphBase {
     /** Name of the FalkorDB graph in use. */
     private final String graphName;
 
-    /** Flag indicating if OpenTelemetry is available at runtime. */
-    private static final boolean OTEL_AVAILABLE;
-    /** Cached reflection references for OpenTelemetry API. */
-    private static java.lang.reflect.Method spanCurrentMethod;
-    private static java.lang.reflect.Method setAttributeMethod;
+    /**
+     * Flag indicating if OpenTelemetry lookup has been attempted.
+     * Once true, we won't try to find the classes again.
+     */
+    private static volatile boolean otelLookupAttempted = false;
 
-    static {
-        boolean available = false;
-        try {
-            // Use reflection to access OpenTelemetry classes from the agent's
-            // classloader. This avoids classloader conflicts between the
-            // application and the Java agent.
-            Class<?> spanClass = Class.forName(
-                "io.opentelemetry.api.trace.Span");
-            spanCurrentMethod = spanClass.getMethod("current");
-            setAttributeMethod = spanClass.getMethod(
-                "setAttribute", String.class, String.class);
-            available = true;
-        } catch (ClassNotFoundException | NoSuchMethodException e) {
-            // OpenTelemetry not available, tracing will be disabled
+    /**
+     * Flag indicating if OpenTelemetry is available after lookup.
+     */
+    private static volatile boolean otelAvailable = false;
+
+    /**
+     * Cached reflection reference for Span.current() method.
+     */
+    private static volatile java.lang.reflect.Method spanCurrentMethod;
+
+    /**
+     * Cached reflection reference for Span.setAttribute(String, String) method.
+     */
+    private static volatile java.lang.reflect.Method setAttributeMethod;
+
+    /**
+     * Initializes OpenTelemetry reflection references if not already done.
+     * Uses the context classloader to find OpenTelemetry classes, which allows
+     * proper access to classes loaded by the OpenTelemetry Java agent.
+     *
+     * <p>This method is thread-safe using double-checked locking pattern.
+     */
+    private static void initOtelReflection() {
+        if (!otelLookupAttempted) {
+            synchronized (FalkorDBGraph.class) {
+                if (!otelLookupAttempted) {
+                    try {
+                        // Use context classloader to find OpenTelemetry classes.
+                        // The OpenTelemetry Java agent sets up the context
+                        // classloader to include its classes.
+                        ClassLoader contextLoader = Thread.currentThread()
+                            .getContextClassLoader();
+                        Class<?> spanClass = Class.forName(
+                            "io.opentelemetry.api.trace.Span",
+                            true,
+                            contextLoader);
+                        spanCurrentMethod = spanClass.getMethod("current");
+                        setAttributeMethod = spanClass.getMethod(
+                            "setAttribute", String.class, String.class);
+                        otelAvailable = true;
+                    } catch (ClassNotFoundException | NoSuchMethodException e) {
+                        // OpenTelemetry not available
+                        otelAvailable = false;
+                    }
+                    otelLookupAttempted = true;
+                }
+            }
         }
-        OTEL_AVAILABLE = available;
     }
 
     /**
      * Sets a span attribute if OpenTelemetry is available.
-     * Uses reflection to access the OpenTelemetry API from the agent's
-     * classloader, which avoids classloader conflicts.
+     * Uses reflection to access the OpenTelemetry API at runtime using the
+     * context classloader, which allows proper access to classes loaded by
+     * the OpenTelemetry Java agent.
      *
      * @param key the attribute key
      * @param value the attribute value
      */
     private static void setSpanAttribute(final String key, final String value) {
-        if (OTEL_AVAILABLE && spanCurrentMethod != null
-                && setAttributeMethod != null) {
-            try {
-                // Get current span via reflection
-                Object currentSpan = spanCurrentMethod.invoke(null);
-                // Set attribute on current span
-                setAttributeMethod.invoke(currentSpan, key, value);
-            } catch (LinkageError | ReflectiveOperationException
-                    | RuntimeException e) {
-                // Silently ignore any tracing errors
-            }
+        // Ensure OpenTelemetry reflection is initialized
+        initOtelReflection();
+
+        if (!otelAvailable) {
+            return;
+        }
+
+        try {
+            // Get current span via cached reflection method
+            Object currentSpan = spanCurrentMethod.invoke(null);
+            // Set attribute on current span
+            setAttributeMethod.invoke(currentSpan, key, value);
+        } catch (LinkageError | ReflectiveOperationException
+                | RuntimeException e) {
+            // Silently ignore any tracing errors
         }
     }
 

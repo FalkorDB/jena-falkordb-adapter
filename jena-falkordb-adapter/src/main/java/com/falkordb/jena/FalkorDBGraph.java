@@ -4,12 +4,15 @@ import com.falkordb.Driver;
 import com.falkordb.FalkorDB;
 import com.falkordb.Graph;
 import com.falkordb.Record;
-import com.falkordb.ResultSet;
-import java.lang.reflect.Method;
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Scope;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 import org.apache.jena.graph.Node;
 import org.apache.jena.graph.Triple;
 import org.apache.jena.graph.impl.GraphBase;
@@ -38,60 +41,60 @@ public final class FalkorDBGraph extends GraphBase {
     /** Name of the FalkorDB graph in use. */
     private final String graphName;
 
-    /** Cached reflection objects for OpenTelemetry - initialized lazily. */
-    private static volatile Method spanCurrentMethod;
-    private static volatile Method setAttributeMethod;
-    private static volatile boolean otelInitialized = false;
-    private static volatile boolean otelAvailable = false;
+    /** Tracer for OpenTelemetry spans. */
+    private static final Tracer tracer;
+
+    static {
+        // Get tracer from GlobalOpenTelemetry
+        // This will use the SDK if configured, or a no-op tracer if not
+        tracer = GlobalOpenTelemetry.get().getTracer(
+            "com.falkordb.jena.FalkorDBGraph", "0.2.0");
+        LOGGER.info("OpenTelemetry tracer initialized: {}", tracer.getClass().getName());
+    }
 
     /**
-     * Initialize OpenTelemetry reflection objects.
-     * Uses the context classloader to access the agent's classes.
+     * Execute an operation within an OpenTelemetry span.
+     * Creates a span with the given name, sets the attribute, executes the operation,
+     * and properly ends the span.
+     *
+     * @param spanName name of the span
+     * @param attrKey attribute key
+     * @param attrValue attribute value
+     * @param operation the operation to execute
+     * @return the result of the operation
      */
-    private static synchronized void initOtelReflection() {
-        if (otelInitialized) {
-            return;
-        }
-        otelInitialized = true;
-        try {
-            // Use context classloader to access agent's classes
-            ClassLoader cl = Thread.currentThread().getContextClassLoader();
-            if (cl == null) {
-                cl = FalkorDBGraph.class.getClassLoader();
-            }
-            
-            // Get Span.current() method
-            Class<?> spanClass = Class.forName("io.opentelemetry.api.trace.Span", true, cl);
-            spanCurrentMethod = spanClass.getMethod("current");
-            setAttributeMethod = spanClass.getMethod("setAttribute", String.class, String.class);
-            
-            otelAvailable = true;
-            LOGGER.info("OpenTelemetry API initialized via classloader: {}", cl);
-        } catch (ClassNotFoundException e) {
-            LOGGER.debug("OpenTelemetry API not available: {}", e.getMessage());
+    private static <T> T withSpan(String spanName, String attrKey, String attrValue, 
+                                   Supplier<T> operation) {
+        Span span = tracer.spanBuilder(spanName).startSpan();
+        try (Scope scope = span.makeCurrent()) {
+            span.setAttribute(attrKey, attrValue);
+            LOGGER.debug("Started span '{}' with {}={}", spanName, attrKey, attrValue);
+            return operation.get();
         } catch (Exception e) {
-            LOGGER.warn("Failed to initialize OpenTelemetry reflection: {}", e.getMessage());
+            span.recordException(e);
+            throw e;
+        } finally {
+            span.end();
+            LOGGER.debug("Ended span '{}'", spanName);
         }
     }
 
     /**
-     * Sets an attribute on the current span (if OpenTelemetry is available).
-     * The span is created by the Java agent via otel.instrumentation.methods.include.
+     * Execute a void operation within an OpenTelemetry span.
      */
-    private static void setSpanAttribute(final String key, final String value) {
-        try {
-            if (!otelInitialized) {
-                initOtelReflection();
-            }
-            if (!otelAvailable) {
-                return;
-            }
-
-            Object currentSpan = spanCurrentMethod.invoke(null);
-            setAttributeMethod.invoke(currentSpan, key, value);
-            LOGGER.info("Set span attribute: {}={}", key, value);
+    private static void withSpanVoid(String spanName, String attrKey, String attrValue, 
+                                      Runnable operation) {
+        Span span = tracer.spanBuilder(spanName).startSpan();
+        try (Scope scope = span.makeCurrent()) {
+            span.setAttribute(attrKey, attrValue);
+            LOGGER.debug("Started span '{}' with {}={}", spanName, attrKey, attrValue);
+            operation.run();
         } catch (Exception e) {
-            LOGGER.warn("Could not set span attribute: key={}, error={}", key, e.getMessage());
+            span.recordException(e);
+            throw e;
+        } finally {
+            span.end();
+            LOGGER.debug("Ended span '{}'", spanName);
         }
     }
 
@@ -163,8 +166,9 @@ public final class FalkorDBGraph extends GraphBase {
     /** Clear all nodes and relationships from the graph. */
     @Override
     public void clear() {
-        // Delete all nodes and relationships
-        graph.query("MATCH (n) DETACH DELETE n");
+        withSpanVoid("FalkorDBGraph.clear", "operation", "clear", () -> {
+            graph.query("MATCH (n) DETACH DELETE n");
+        });
     }
 
     /**

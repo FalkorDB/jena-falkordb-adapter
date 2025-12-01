@@ -1,6 +1,7 @@
 package com.falkordb;
 
 import com.falkordb.jena.FalkorDBModelFactory;
+import com.falkordb.jena.tracing.TracingInitializer;
 import java.io.File;
 import java.net.URL;
 import org.apache.jena.fuseki.main.FusekiServer;
@@ -36,6 +37,12 @@ import org.slf4j.LoggerFactory;
  * export FALKORDB_GRAPH=my_graph
  * export FUSEKI_PORT=3330
  * java -jar jena-fuseki-falkordb.jar
+ * </pre>
+ *
+ * <p>OpenTelemetry tracing can be enabled by setting:</p>
+ * <pre>
+ * export OTEL_SERVICE_NAME=fuseki-falkordb
+ * export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
  * </pre>
  */
 public final class FalkorFuseki {
@@ -80,6 +87,13 @@ public final class FalkorFuseki {
      * @param args command line arguments
      */
     public static void main(final String[] args) {
+        // Initialize OpenTelemetry tracing if OTEL_EXPORTER_OTLP_ENDPOINT is set
+        String otelEndpoint = System.getenv("OTEL_EXPORTER_OTLP_ENDPOINT");
+        if (otelEndpoint != null && !otelEndpoint.isEmpty()) {
+            LOGGER.info("Initializing OpenTelemetry tracing...");
+            TracingInitializer.initialize();
+        }
+
         // Parse command line arguments
         String configFile = null;
         for (int i = 0; i < args.length; i++) {

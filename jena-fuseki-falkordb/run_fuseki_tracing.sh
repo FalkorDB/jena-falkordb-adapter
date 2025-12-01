@@ -10,9 +10,7 @@
 # Environment Variables:
 #   ENABLE_PROFILING              - Set to "true" to enable tracing
 #   OTEL_SERVICE_NAME             - Service name in Jaeger (default: fuseki-falkordb)
-#   OTEL_EXPORTER_OTLP_ENDPOINT   - Jaeger collector endpoint (default: http://localhost:4318)
-#   OTEL_TRACES_SAMPLER           - Sampling strategy (default: always_on)
-#   OTEL_DEBUG                    - Set to "true" to enable debug logging for traces
+#   OTEL_EXPORTER_OTLP_ENDPOINT   - Jaeger collector endpoint (default: http://localhost:4317)
 #   FALKORDB_HOST                 - FalkorDB host (default: localhost)
 #   FALKORDB_PORT                 - FalkorDB port (default: 6379)
 #   FUSEKI_PORT                   - Fuseki server port (default: 3330)
@@ -27,7 +25,6 @@ cd "$SCRIPT_DIR"
 # Default configuration
 JAVA_OPTS="${JAVA_OPTS:--Xmx4G}"
 JAR_FILE="target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar"
-AGENT_PATH="target/agents/opentelemetry-javaagent.jar"
 
 # Check if JAR exists
 if [ ! -f "$JAR_FILE" ]; then
@@ -54,14 +51,11 @@ while [[ $# -gt 0 ]]; do
             echo "Environment Variables:"
             echo "  ENABLE_PROFILING              Enable OpenTelemetry tracing (default: false)"
             echo "  OTEL_SERVICE_NAME             Service name in Jaeger (default: fuseki-falkordb)"
-            echo "  OTEL_EXPORTER_OTLP_ENDPOINT   Jaeger OTLP endpoint (default: http://localhost:4318)"
-            echo "  OTEL_TRACES_SAMPLER           Sampling strategy (default: always_on)"
-            echo "  OTEL_DEBUG                    Enable debug logging for traces (default: false)"
+            echo "  OTEL_EXPORTER_OTLP_ENDPOINT   Jaeger OTLP endpoint (default: http://localhost:4317)"
             echo ""
             echo "Examples:"
             echo "  ./run_fuseki_tracing.sh                           # Normal mode"
             echo "  ENABLE_PROFILING=true ./run_fuseki_tracing.sh     # With tracing"
-            echo "  ENABLE_PROFILING=true OTEL_DEBUG=true ./run_fuseki_tracing.sh  # With debug"
             echo "  ENABLE_PROFILING=true ./run_fuseki_tracing.sh --config config.ttl"
             exit 0
             ;;
@@ -75,52 +69,15 @@ done
 
 # Profiling configuration
 if [ "$ENABLE_PROFILING" == "true" ]; then
-    echo "🔍 Profiling ENABLED (OpenTelemetry + Jaeger)"
+    echo "🔍 Profiling ENABLED (OpenTelemetry SDK - No Agent Required)"
     
-    # Check if agent exists
-    if [ ! -f "$AGENT_PATH" ]; then
-        echo "⚠️  OpenTelemetry agent not found at: $AGENT_PATH"
-        echo "   Please run 'mvn clean package -DskipTests' to download the agent."
-        exit 1
-    fi
+    # Set environment variables for TracingInitializer
+    export OTEL_SERVICE_NAME="${OTEL_SERVICE_NAME:-fuseki-falkordb}"
+    export OTEL_EXPORTER_OTLP_ENDPOINT="${OTEL_EXPORTER_OTLP_ENDPOINT:-http://localhost:4317}"
     
-    # OpenTelemetry configuration
-    OTEL_OPTS="-javaagent:$AGENT_PATH"
-    OTEL_OPTS="$OTEL_OPTS -Dotel.service.name=${OTEL_SERVICE_NAME:-fuseki-falkordb}"
-    OTEL_OPTS="$OTEL_OPTS -Dotel.exporter.otlp.endpoint=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://localhost:4318}"
-    OTEL_OPTS="$OTEL_OPTS -Dotel.traces.sampler=${OTEL_TRACES_SAMPLER:-always_on}"
-    
-    # Disable logs and metrics exporters (Jaeger only supports traces)
-    OTEL_OPTS="$OTEL_OPTS -Dotel.logs.exporter=none"
-    OTEL_OPTS="$OTEL_OPTS -Dotel.metrics.exporter=none"
-    
-    # Enable full db statement capture (show actual Cypher queries instead of sanitized ?)
-    OTEL_OPTS="$OTEL_OPTS -Dotel.instrumentation.common.db-statement-sanitizer.enabled=false"
-    
-    # Instrument FalkorDBGraph methods to create spans
-    # The graphBaseFind, findTypeTriples, findPropertyTriples, performAdd, performDelete, and clear methods
-    # will be instrumented by the agent
-    OTEL_OPTS="$OTEL_OPTS -Dotel.instrumentation.methods.include=com.falkordb.jena.FalkorDBGraph[graphBaseFind,findTypeTriples,findPropertyTriples,performAdd,performDelete,clear]"
-    
-    # Debug logging configuration
-    if [ "$OTEL_DEBUG" == "true" ]; then
-        echo "🐛 Debug logging ENABLED"
-        # Enable detailed agent logging
-        OTEL_OPTS="$OTEL_OPTS -Dotel.javaagent.debug=true"
-        # Log spans to console (in addition to exporting to Jaeger)
-        OTEL_OPTS="$OTEL_OPTS -Dotel.traces.exporter=otlp,logging"
-        # Set logging exporter to show span details
-        OTEL_OPTS="$OTEL_OPTS -Dotel.exporter.logging.prefix=[OTEL-SPAN]"
-    else
-        OTEL_OPTS="$OTEL_OPTS -Dotel.javaagent.logging=simple"
-    fi
-    
-    JAVA_OPTS="$JAVA_OPTS $OTEL_OPTS"
-    
-    echo "   Service Name: ${OTEL_SERVICE_NAME:-fuseki-falkordb}"
-    echo "   OTLP Endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://localhost:4318}"
-    echo "   Sampler: ${OTEL_TRACES_SAMPLER:-always_on}"
-    echo "   FalkorDBGraph methods: graphBaseFind, performAdd, performDelete (with pattern/triple attributes)"
+    echo "   Service Name: $OTEL_SERVICE_NAME"
+    echo "   OTLP Endpoint: $OTEL_EXPORTER_OTLP_ENDPOINT"
+    echo "   FalkorDBGraph spans will include pattern/triple attributes"
     echo ""
     echo "   Jaeger UI: http://localhost:16686"
     echo ""

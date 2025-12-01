@@ -43,8 +43,7 @@
         </dependency>
 
         <!-- OpenTelemetry API for tracing support -->
-        <!-- The API is used to set span attributes on spans created by the Java agent -->
-        <!-- Marked as provided since the agent includes this at runtime -->
+        <!-- NOT included at runtime - accessed via reflection when agent is present -->
         <dependency>
             <groupId>io.opentelemetry</groupId>
             <artifactId>opentelemetry-api</artifactId>
@@ -56,20 +55,6 @@
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter-engine</artifactId>
-            <scope>test</scope>
-        </dependency>
-
-        <!-- OpenTelemetry SDK for testing - allows capturing spans in tests -->
-        <dependency>
-            <groupId>io.opentelemetry</groupId>
-            <artifactId>opentelemetry-sdk</artifactId>
-            <version>1.43.0</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>io.opentelemetry</groupId>
-            <artifactId>opentelemetry-sdk-testing</artifactId>
-            <version>1.43.0</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

@@ -5,7 +5,7 @@ import com.falkordb.FalkorDB;
 import com.falkordb.Graph;
 import com.falkordb.Record;
 import com.falkordb.ResultSet;
-import io.opentelemetry.api.trace.Span;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -38,23 +38,60 @@ public final class FalkorDBGraph extends GraphBase {
     /** Name of the FalkorDB graph in use. */
     private final String graphName;
 
+    /** Cached reflection objects for OpenTelemetry - initialized lazily. */
+    private static volatile Method spanCurrentMethod;
+    private static volatile Method setAttributeMethod;
+    private static volatile boolean otelInitialized = false;
+    private static volatile boolean otelAvailable = false;
+
+    /**
+     * Initialize OpenTelemetry reflection objects.
+     * Uses the context classloader to access the agent's classes.
+     */
+    private static synchronized void initOtelReflection() {
+        if (otelInitialized) {
+            return;
+        }
+        otelInitialized = true;
+        try {
+            // Use context classloader to access agent's classes
+            ClassLoader cl = Thread.currentThread().getContextClassLoader();
+            if (cl == null) {
+                cl = FalkorDBGraph.class.getClassLoader();
+            }
+            Class<?> spanClass = Class.forName("io.opentelemetry.api.trace.Span", true, cl);
+            spanCurrentMethod = spanClass.getMethod("current");
+            setAttributeMethod = spanClass.getMethod("setAttribute", String.class, String.class);
+            otelAvailable = true;
+            LOGGER.info("OpenTelemetry API initialized successfully via classloader: {}", cl);
+        } catch (ClassNotFoundException e) {
+            LOGGER.debug("OpenTelemetry API not available: {}", e.getMessage());
+        } catch (Exception e) {
+            LOGGER.warn("Failed to initialize OpenTelemetry reflection: {}", e.getMessage());
+        }
+    }
+
     /**
      * Sets a span attribute on the current OpenTelemetry span if available.
-     * Uses the OpenTelemetry API directly, which works with spans created
-     * by the OpenTelemetry Java agent.
+     * Uses reflection to access OpenTelemetry classes from the Java agent's classloader.
      *
      * @param key the attribute key
      * @param value the attribute value
      */
     private static void setSpanAttribute(final String key, final String value) {
+        if (!otelInitialized) {
+            initOtelReflection();
+        }
+        if (!otelAvailable) {
+            return;
+        }
         try {
-            Span span = Span.current();
+            Object span = spanCurrentMethod.invoke(null);
             if (LOGGER.isDebugEnabled()) {
-                LOGGER.debug("setSpanAttribute: key={}, value={}, span={}, spanContext.isValid={}",
-                    key, value, span.getClass().getName(), span.getSpanContext().isValid());
+                LOGGER.debug("setSpanAttribute: key={}, value={}, span={}", key, value, span.getClass().getName());
             }
-            span.setAttribute(key, value);
-        } catch (LinkageError | RuntimeException e) {
+            setAttributeMethod.invoke(span, key, value);
+        } catch (Exception e) {
             LOGGER.warn("Failed to set span attribute: key={}, error={}", key, e.getMessage());
         }
     }

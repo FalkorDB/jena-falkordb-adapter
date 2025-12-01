@@ -301,9 +301,9 @@ This prevents 404 errors when the agent tries to export logs/metrics to Jaeger.
 
 ### FalkorDBGraph Method Tracing with Arguments
 
-The `FalkorDBGraph` class creates its own spans using `GlobalOpenTelemetry.get().getTracer()` to ensure span attributes are correctly captured. This approach provides full control over the span lifecycle and attributes.
+The `FalkorDBGraph` class uses `otel.instrumentation.methods.include` to create spans for key methods, and inside those methods calls `Span.current().setAttribute()` (via reflection) to add custom attributes like `pattern` and `triple`.
 
-When tracing is enabled with `ENABLE_PROFILING=true`, you will automatically see these methods in your trace tree:
+When tracing is enabled with `ENABLE_PROFILING=true`, you will see these methods in your trace tree:
 
 - `FalkorDBGraph.performAdd` - Adding triples to the graph
   - Span attribute: `triple` showing the full Triple in format `(subject predicate object)`
@@ -311,6 +311,9 @@ When tracing is enabled with `ENABLE_PROFILING=true`, you will automatically see
   - Span attribute: `triple` showing the full Triple in format `(subject predicate object)`
 - `FalkorDBGraph.graphBaseFind` - Finding/querying triples
   - Span attribute: `pattern` showing the query pattern (variables shown as `?s`, `?p`, `?o`)
+- `FalkorDBGraph.findTypeTriples` - Finding type relationships
+- `FalkorDBGraph.findPropertyTriples` - Finding property relationships
+- `FalkorDBGraph.clear` - Clearing the graph
 
 Example of what you'll see in Jaeger for a span:
 ```json
@@ -405,8 +408,9 @@ if [ "$ENABLE_PROFILING" == "true" ]; then
     OTEL_OPTS="$OTEL_OPTS -Dotel.exporter.otlp.endpoint=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://localhost:4318}"
     OTEL_OPTS="$OTEL_OPTS -Dotel.traces.sampler=${OTEL_TRACES_SAMPLER:-always_on}"
     
-    # NOTE: FalkorDBGraph creates its own spans with attributes using 
-    # GlobalOpenTelemetry.get().getTracer(). No otel.instrumentation.methods.include needed.
+    # NOTE: Uses otel.instrumentation.methods.include to create spans for FalkorDBGraph
+    # methods. Inside those methods, we call Span.current().setAttribute() via reflection
+    # to add custom attributes like 'pattern' and 'triple'.
     
     # Debug logging (optional)
     if [ "$OTEL_DEBUG" == "true" ]; then

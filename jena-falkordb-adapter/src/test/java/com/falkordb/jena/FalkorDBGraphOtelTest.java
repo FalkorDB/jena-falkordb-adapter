@@ -89,19 +89,4 @@ public class FalkorDBGraphOtelTest {
         assertDoesNotThrow(() -> initMethod.invoke(null),
             "initOtelReflection should not throw");
     }
-
-    @Test
-    @DisplayName("Test withSpan method exists")
-    public void testWithSpanMethodExists() throws Exception {
-        // Check that the withSpan helper method exists
-        Method[] methods = FalkorDBGraph.class.getDeclaredMethods();
-        boolean found = false;
-        for (Method m : methods) {
-            if (m.getName().equals("withSpan")) {
-                found = true;
-                break;
-            }
-        }
-        assertTrue(found, "withSpan method should exist");
-    }
 }

@@ -97,10 +97,9 @@ if [ "$ENABLE_PROFILING" == "true" ]; then
     # Enable full db statement capture (show actual Cypher queries instead of sanitized ?)
     OTEL_OPTS="$OTEL_OPTS -Dotel.instrumentation.common.db-statement-sanitizer.enabled=false"
     
-    # NOTE: We do NOT use otel.instrumentation.methods.include because it creates
-    # spans that wrap the method externally. Instead, FalkorDBGraph creates its own
-    # spans with attributes using GlobalOpenTelemetry.get().getTracer().
-    # This gives us full control over span attributes like 'pattern' and 'triple'.
+    # Use method instrumentation to create spans for key FalkorDBGraph methods
+    # Inside these methods, we call Span.current().setAttribute() to add custom attributes
+    OTEL_OPTS="$OTEL_OPTS -Dotel.instrumentation.methods.include=com.falkordb.jena.FalkorDBGraph[graphBaseFind,performAdd,performDelete,findTypeTriples,findPropertyTriples,clear]"
     
     # Debug logging configuration
     if [ "$OTEL_DEBUG" == "true" ]; then

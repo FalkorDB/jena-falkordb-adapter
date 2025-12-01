@@ -18,8 +18,8 @@
     <logger name="org.apache.jena" level="WARN"/>
     <logger name="org.apache.jena.fuseki" level="INFO"/>
 
-    <!-- Logger for the FalkorDB adapter -->
-    <logger name="com.falkordb" level="INFO"/>
+    <!-- Logger for the FalkorDB adapter - set to DEBUG to see span attribute logging -->
+    <logger name="com.falkordb" level="DEBUG"/>
 
     <!-- Root logger configuration -->
     <root level="INFO">

@@ -516,6 +516,7 @@ For more information on Jena rules, see the [Jena Inference documentation](https
 - Read the [main README](../README.md) for more details on the adapter
 - Explore the [configuration examples](src/main/resources/config-falkordb.ttl)
 - Try the [inference configuration](src/main/resources/config-falkordb-inference.ttl) for rule-based reasoning
+- Enable [distributed tracing](TRACING.md) with OpenTelemetry and Jaeger for debugging
 - Check the [Proposal document](../FusekiIntegration/Proposal.md) for architecture details
 - Review the [Apache Jena Fuseki documentation](https://jena.apache.org/documentation/fuseki2/)
 - Learn about [SPARQL query language](https://www.w3.org/TR/sparql11-query/)

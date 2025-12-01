@@ -16,6 +16,11 @@
     <name>Jena Fuseki FalkorDB</name>
     <description>Apache Jena Fuseki server with FalkorDB backend</description>
 
+    <properties>
+        <!-- OpenTelemetry Java Agent version for tracing -->
+        <otel.agent.version>2.10.0</otel.agent.version>
+    </properties>
+
     <dependencies>
         <!-- Jena FalkorDB Adapter -->
         <dependency>
@@ -121,6 +126,35 @@
                 <configuration>
                     <mainClass>com.falkordb.FalkorFuseki</mainClass>
                 </configuration>
+            </plugin>
+
+            <!-- Download OpenTelemetry Java Agent for tracing support -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <version>3.6.1</version>
+                <executions>
+                    <execution>
+                        <id>download-otel-agent</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>copy</goal>
+                        </goals>
+                        <configuration>
+                            <artifactItems>
+                                <artifactItem>
+                                    <groupId>io.opentelemetry.javaagent</groupId>
+                                    <artifactId>opentelemetry-javaagent</artifactId>
+                                    <version>${otel.agent.version}</version>
+                                    <type>jar</type>
+                                    <overWrite>true</overWrite>
+                                    <outputDirectory>${project.build.directory}/agents</outputDirectory>
+                                    <destFileName>opentelemetry-javaagent.jar</destFileName>
+                                </artifactItem>
+                            </artifactItems>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
 
         </plugins>

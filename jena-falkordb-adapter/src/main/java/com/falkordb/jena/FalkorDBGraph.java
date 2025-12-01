@@ -37,6 +37,53 @@ public final class FalkorDBGraph extends GraphBase {
     /** Name of the FalkorDB graph in use. */
     private final String graphName;
 
+    /** Flag indicating if OpenTelemetry is available at runtime. */
+    private static final boolean OTEL_AVAILABLE;
+    /** Cached reflection references for OpenTelemetry API. */
+    private static java.lang.reflect.Method spanCurrentMethod;
+    private static java.lang.reflect.Method setAttributeMethod;
+
+    static {
+        boolean available = false;
+        try {
+            // Use reflection to access OpenTelemetry classes from the agent's
+            // classloader. This avoids classloader conflicts between the
+            // application and the Java agent.
+            Class<?> spanClass = Class.forName(
+                "io.opentelemetry.api.trace.Span");
+            spanCurrentMethod = spanClass.getMethod("current");
+            setAttributeMethod = spanClass.getMethod(
+                "setAttribute", String.class, String.class);
+            available = true;
+        } catch (ClassNotFoundException | NoSuchMethodException e) {
+            // OpenTelemetry not available, tracing will be disabled
+        }
+        OTEL_AVAILABLE = available;
+    }
+
+    /**
+     * Sets a span attribute if OpenTelemetry is available.
+     * Uses reflection to access the OpenTelemetry API from the agent's
+     * classloader, which avoids classloader conflicts.
+     *
+     * @param key the attribute key
+     * @param value the attribute value
+     */
+    private static void setSpanAttribute(final String key, final String value) {
+        if (OTEL_AVAILABLE && spanCurrentMethod != null
+                && setAttributeMethod != null) {
+            try {
+                // Get current span via reflection
+                Object currentSpan = spanCurrentMethod.invoke(null);
+                // Set attribute on current span
+                setAttributeMethod.invoke(currentSpan, key, value);
+            } catch (LinkageError | ReflectiveOperationException
+                    | RuntimeException e) {
+                // Silently ignore any tracing errors
+            }
+        }
+    }
+
     /**
      * Create a FalkorDB-backed graph for the given graph name. Uses the
      * default driver configuration (typically localhost:6379).
@@ -119,6 +166,8 @@ public final class FalkorDBGraph extends GraphBase {
      */
     @Override
     public void performAdd(final Triple triple) {
+        // Add triple as span attribute using OpenTelemetry API (if available)
+        setSpanAttribute("triple", tripleToString(triple));
         // Translate RDF triple to Cypher CREATE/MERGE
         var subject = nodeToString(triple.getSubject());
         var predicate = nodeToString(triple.getPredicate());
@@ -164,6 +213,8 @@ public final class FalkorDBGraph extends GraphBase {
     /** Delete a triple from the backing FalkorDB graph. */
     @Override
     public void performDelete(final Triple triple) {
+        // Add triple as span attribute using OpenTelemetry API (if available)
+        setSpanAttribute("triple", tripleToString(triple));
         var subject = nodeToString(triple.getSubject());
         var predicate = nodeToString(triple.getPredicate());
 
@@ -203,6 +254,8 @@ public final class FalkorDBGraph extends GraphBase {
     /** Find triples matching the given pattern. */
     @Override
     protected ExtendedIterator<Triple> graphBaseFind(final Triple pattern) {
+        // Add pattern as span attribute using OpenTelemetry API (if available)
+        setSpanAttribute("pattern", tripleToString(pattern));
         var triples = new ArrayList<Triple>();
 
         // Check if this is an rdf:type query
@@ -274,6 +327,8 @@ public final class FalkorDBGraph extends GraphBase {
     }
 
     private List<Triple> findPropertyTriples(final Triple pattern) {
+        // Add pattern as span attribute using OpenTelemetry API (if available)
+        setSpanAttribute("pattern", tripleToString(pattern));
         var triples = new ArrayList<Triple>();
 
         // Build query to get nodes with their properties as map
@@ -338,6 +393,8 @@ public final class FalkorDBGraph extends GraphBase {
     }
 
     private List<Triple> findTypeTriples(final Triple pattern) {
+        // Add pattern as span attribute using OpenTelemetry API (if available)
+        setSpanAttribute("pattern", tripleToString(pattern));
         var triples = new ArrayList<Triple>();
 
         // Build query to get nodes with their labels
@@ -422,6 +479,31 @@ public final class FalkorDBGraph extends GraphBase {
             return "_:" + node.getBlankNodeLabel();
         }
         return node.toString();
+    }
+
+    /**
+     * Converts a Triple to a human-readable string for tracing.
+     * This provides a cleaner representation than Triple.toString().
+     *
+     * @param triple the Triple to convert
+     * @return formatted string representation
+     */
+    private String tripleToString(final Triple triple) {
+        var subject = triple.getSubject().isConcrete()
+            ? nodeToString(triple.getSubject()) : "?s";
+        var predicate = triple.getPredicate().isConcrete()
+            ? nodeToString(triple.getPredicate()) : "?p";
+        String object;
+        if (triple.getObject().isConcrete()) {
+            if (triple.getObject().isLiteral()) {
+                object = "\"" + nodeToString(triple.getObject()) + "\"";
+            } else {
+                object = nodeToString(triple.getObject());
+            }
+        } else {
+            object = "?o";
+        }
+        return "(" + subject + " " + predicate + " " + object + ")";
     }
 
     @Override

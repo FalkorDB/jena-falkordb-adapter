@@ -61,6 +61,7 @@ Run Jaeger using Docker:
 ```bash
 docker run -d --name jaeger \
   -e COLLECTOR_ZIPKIN_HOST_PORT=:9411 \
+  -e COLLECTOR_OTLP_ENABLED=true \
   -p 6831:6831/udp \
   -p 6832:6832/udp \
   -p 5778:5778 \
@@ -356,6 +357,7 @@ services:
       - "4318:4318"    # OTLP HTTP
     environment:
       - COLLECTOR_ZIPKIN_HOST_PORT=:9411
+      - COLLECTOR_OTLP_ENABLED=true
 
   fuseki:
     build:

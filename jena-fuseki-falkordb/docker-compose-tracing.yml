@@ -42,6 +42,7 @@ services:
       - "14268:14268"  # Jaeger thrift HTTP
     environment:
       - COLLECTOR_ZIPKIN_HOST_PORT=:9411
+      - COLLECTOR_OTLP_ENABLED=true
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:16686"]
       interval: 5s

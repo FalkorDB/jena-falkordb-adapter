@@ -65,7 +65,6 @@ public class FalkorDBGraphOtelTest {
     @DisplayName("Test that key methods exist for tracing")
     public void testTracedMethodsExist() throws Exception {
         // Verify key methods exist that are configured for tracing
-        // via otel.instrumentation.methods.include
         assertNotNull(FalkorDBGraph.class.getDeclaredMethod(
             "graphBaseFind", org.apache.jena.graph.Triple.class),
             "graphBaseFind method should exist");
@@ -89,5 +88,20 @@ public class FalkorDBGraphOtelTest {
         // Should not throw
         assertDoesNotThrow(() -> initMethod.invoke(null),
             "initOtelReflection should not throw");
+    }
+
+    @Test
+    @DisplayName("Test withSpan method exists")
+    public void testWithSpanMethodExists() throws Exception {
+        // Check that the withSpan helper method exists
+        Method[] methods = FalkorDBGraph.class.getDeclaredMethods();
+        boolean found = false;
+        for (Method m : methods) {
+            if (m.getName().equals("withSpan")) {
+                found = true;
+                break;
+            }
+        }
+        assertTrue(found, "withSpan method should exist");
     }
 }

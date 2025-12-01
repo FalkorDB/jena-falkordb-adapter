@@ -301,26 +301,16 @@ This prevents 404 errors when the agent tries to export logs/metrics to Jaeger.
 
 ### FalkorDBGraph Method Tracing with Arguments
 
-The `FalkorDBGraph` class is traced using **method instrumentation** via `otel.instrumentation.methods.include` combined with `Span.current().setAttribute()` calls to add custom attributes to the spans.
-
-The startup script configures the agent to create spans for these methods:
-```
--Dotel.instrumentation.methods.include=com.falkordb.jena.FalkorDBGraph[performAdd,performDelete,graphBaseFind,clear,findTypeTriples,findPropertyTriples]
-```
+The `FalkorDBGraph` class creates its own spans using `GlobalOpenTelemetry.get().getTracer()` to ensure span attributes are correctly captured. This approach provides full control over the span lifecycle and attributes.
 
 When tracing is enabled with `ENABLE_PROFILING=true`, you will automatically see these methods in your trace tree:
 
-- `FalkorDBGraph.performAdd(Triple)` - Adding triples to the graph
+- `FalkorDBGraph.performAdd` - Adding triples to the graph
   - Span attribute: `triple` showing the full Triple in format `(subject predicate object)`
-- `FalkorDBGraph.performDelete(Triple)` - Deleting triples from the graph
+- `FalkorDBGraph.performDelete` - Deleting triples from the graph
   - Span attribute: `triple` showing the full Triple in format `(subject predicate object)`
-- `FalkorDBGraph.graphBaseFind(Triple)` - Finding/querying triples
+- `FalkorDBGraph.graphBaseFind` - Finding/querying triples
   - Span attribute: `pattern` showing the query pattern (variables shown as `?s`, `?p`, `?o`)
-- `FalkorDBGraph.clear()` - Clearing all data from the graph
-- `FalkorDBGraph.findTypeTriples(Triple)` - Finding rdf:type triples
-  - Span attribute: `pattern` showing the query pattern
-- `FalkorDBGraph.findPropertyTriples(Triple)` - Finding property-based triples
-  - Span attribute: `pattern` showing the query pattern
 
 Example of what you'll see in Jaeger for a span:
 ```json
@@ -415,8 +405,8 @@ if [ "$ENABLE_PROFILING" == "true" ]; then
     OTEL_OPTS="$OTEL_OPTS -Dotel.exporter.otlp.endpoint=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://localhost:4318}"
     OTEL_OPTS="$OTEL_OPTS -Dotel.traces.sampler=${OTEL_TRACES_SAMPLER:-always_on}"
     
-    # FalkorDBGraph methods to trace
-    OTEL_OPTS="$OTEL_OPTS -Dotel.instrumentation.methods.include=com.falkordb.jena.FalkorDBGraph[performAdd,performDelete,graphBaseFind,clear,findTypeTriples,findPropertyTriples]"
+    # NOTE: FalkorDBGraph creates its own spans with attributes using 
+    # GlobalOpenTelemetry.get().getTracer(). No otel.instrumentation.methods.include needed.
     
     # Debug logging (optional)
     if [ "$OTEL_DEBUG" == "true" ]; then

@@ -165,9 +165,21 @@ WHERE {
 }
 ```
 
-**Step 6b: Query grandfather relationships (with inference):**
+**Step 6b: Query grandfather relationships (requires inference):**
 
-If using the inference configuration:
+> **Note**: The grandfather query requires running Fuseki with inference configuration enabled. 
+> By default, the server runs without inference, so this query won't return results unless you 
+> start with the inference configuration.
+
+To enable inference, **restart** Fuseki with the inference configuration:
+
+```bash
+# Stop the running Fuseki server (Ctrl+C)
+# Then start with inference configuration:
+ENABLE_PROFILING=true ./run_fuseki_tracing.sh --config src/main/resources/config-falkordb-inference.ttl
+```
+
+After restarting with inference, **re-insert the data** (Step 5a) since inference uses a different graph name (`knowledge_graph`), then run the grandfather query:
 
 ```bash
 curl -G --data-urlencode "query=
@@ -177,6 +189,21 @@ WHERE {
     ?grandfather ff:grandfather_of ?grandson .
 }" \
      http://localhost:3330/falkor/query
+```
+
+**Expected result with inference:**
+```json
+{
+  "head": { "vars": [ "grandfather", "grandson" ] },
+  "results": {
+    "bindings": [
+      {
+        "grandfather": { "type": "uri", "value": "http://www.semanticweb.org/ontologies/2023/1/fathers_father#Abraham" },
+        "grandson": { "type": "uri", "value": "http://www.semanticweb.org/ontologies/2023/1/fathers_father#Jacob" }
+      }
+    ]
+  }
+}
 ```
 
 ### Step 7: View Traces in Jaeger

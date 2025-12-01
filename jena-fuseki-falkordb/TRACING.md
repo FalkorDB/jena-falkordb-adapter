@@ -107,11 +107,13 @@ java -javaagent:target/agents/opentelemetry-javaagent.jar \
      -jar target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar
 ```
 
-### Step 5: Execute Queries and View Traces
+### Step 5: Load Test Data
+
+> **Important**: You must insert data before running queries. The FalkorDB graph starts empty.
 
 Run the Grandfather Example (from [GETTING_STARTED.md](GETTING_STARTED.md#grandfather-example)):
 
-**Insert father relationships:**
+**Step 5a: Insert the test data first** (required):
 
 ```bash
 curl -X POST \
@@ -128,7 +130,11 @@ INSERT DATA {
      http://localhost:3330/falkor/update
 ```
 
-**Query father-son relationships:**
+You should see an empty response (HTTP 204 No Content), which indicates success.
+
+### Step 6: Query Data and View Traces
+
+**Step 6a: Query father-son relationships:**
 
 ```bash
 curl -G --data-urlencode "query=
@@ -140,7 +146,26 @@ WHERE {
      http://localhost:3330/falkor/query
 ```
 
-**Query grandfather relationships (with inference):**
+**Expected result:**
+```json
+{
+  "head": { "vars": [ "father", "son" ] },
+  "results": {
+    "bindings": [
+      {
+        "father": { "type": "uri", "value": "http://www.semanticweb.org/ontologies/2023/1/fathers_father#Isaac" },
+        "son": { "type": "uri", "value": "http://www.semanticweb.org/ontologies/2023/1/fathers_father#Jacob" }
+      },
+      {
+        "father": { "type": "uri", "value": "http://www.semanticweb.org/ontologies/2023/1/fathers_father#Abraham" },
+        "son": { "type": "uri", "value": "http://www.semanticweb.org/ontologies/2023/1/fathers_father#Isaac" }
+      }
+    ]
+  }
+}
+```
+
+**Step 6b: Query grandfather relationships (with inference):**
 
 If using the inference configuration:
 
@@ -154,7 +179,7 @@ WHERE {
      http://localhost:3330/falkor/query
 ```
 
-### Step 6: View Traces in Jaeger
+### Step 7: View Traces in Jaeger
 
 1. Open Jaeger UI: **http://localhost:16686**
 2. Select Service: **fuseki-falkordb**

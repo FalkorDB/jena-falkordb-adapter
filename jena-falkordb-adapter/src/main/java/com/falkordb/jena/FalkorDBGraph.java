@@ -106,7 +106,8 @@ public final class FalkorDBGraph extends GraphBase {
         // Ensure OpenTelemetry reflection is initialized
         initOtelReflection();
 
-        if (!otelAvailable) {
+        if (!otelAvailable || spanCurrentMethod == null
+                || setAttributeMethod == null) {
             return;
         }
 

@@ -97,8 +97,8 @@ if [ "$ENABLE_PROFILING" == "true" ]; then
     # Enable full db statement capture (show actual Cypher queries instead of sanitized ?)
     OTEL_OPTS="$OTEL_OPTS -Dotel.instrumentation.common.db-statement-sanitizer.enabled=false"
     
-    # FalkorDBGraph methods are traced via @WithSpan annotations in the code
-    # No need for otel.instrumentation.methods.include as it would create duplicate spans
+    # Enable @WithSpan annotation instrumentation (required for annotations to work)
+    OTEL_OPTS="$OTEL_OPTS -Dotel.instrumentation.opentelemetry-instrumentation-annotations.enabled=true"
     
     # Debug logging configuration
     if [ "$OTEL_DEBUG" == "true" ]; then
@@ -118,7 +118,8 @@ if [ "$ENABLE_PROFILING" == "true" ]; then
     echo "   Service Name: ${OTEL_SERVICE_NAME:-fuseki-falkordb}"
     echo "   OTLP Endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://localhost:4318}"
     echo "   Sampler: ${OTEL_TRACES_SAMPLER:-always_on}"
-    echo "   FalkorDBGraph methods: traced via @WithSpan annotations"
+    echo "   Annotation instrumentation: ENABLED"
+    echo "   FalkorDBGraph methods: traced via @WithSpan annotations with span attributes"
     echo ""
     echo "   Jaeger UI: http://localhost:16686"
     echo ""

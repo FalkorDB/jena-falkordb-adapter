@@ -1,6 +1,7 @@
 package com.falkordb.jena;
 
 import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.instrumentation.annotations.WithSpan;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -15,6 +16,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * 1. The setSpanAttribute method handles errors gracefully
  * 2. The method signature is correct
  * 3. Calling span attribute methods doesn't throw exceptions
+ * 4. The @WithSpan annotations are present on key methods
  */
 public class FalkorDBGraphOtelTest {
 
@@ -84,5 +86,40 @@ public class FalkorDBGraphOtelTest {
         // The span should be invalid when no tracer is configured
         assertFalse(span.getSpanContext().isValid(),
             "Span context should be invalid when no tracer is configured");
+    }
+
+    @Test
+    @DisplayName("Test that graphBaseFind has @WithSpan annotation")
+    public void testGraphBaseFindHasWithSpanAnnotation() throws Exception {
+        Method method = FalkorDBGraph.class.getDeclaredMethod(
+            "graphBaseFind", org.apache.jena.graph.Triple.class);
+        assertNotNull(method.getAnnotation(WithSpan.class),
+            "graphBaseFind should have @WithSpan annotation");
+    }
+
+    @Test
+    @DisplayName("Test that performAdd has @WithSpan annotation")
+    public void testPerformAddHasWithSpanAnnotation() throws Exception {
+        Method method = FalkorDBGraph.class.getDeclaredMethod(
+            "performAdd", org.apache.jena.graph.Triple.class);
+        assertNotNull(method.getAnnotation(WithSpan.class),
+            "performAdd should have @WithSpan annotation");
+    }
+
+    @Test
+    @DisplayName("Test that performDelete has @WithSpan annotation")
+    public void testPerformDeleteHasWithSpanAnnotation() throws Exception {
+        Method method = FalkorDBGraph.class.getDeclaredMethod(
+            "performDelete", org.apache.jena.graph.Triple.class);
+        assertNotNull(method.getAnnotation(WithSpan.class),
+            "performDelete should have @WithSpan annotation");
+    }
+
+    @Test
+    @DisplayName("Test that clear has @WithSpan annotation")
+    public void testClearHasWithSpanAnnotation() throws Exception {
+        Method method = FalkorDBGraph.class.getDeclaredMethod("clear");
+        assertNotNull(method.getAnnotation(WithSpan.class),
+            "clear should have @WithSpan annotation");
     }
 }

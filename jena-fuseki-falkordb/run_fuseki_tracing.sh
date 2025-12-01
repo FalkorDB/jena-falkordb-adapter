@@ -12,7 +12,7 @@
 #   OTEL_SERVICE_NAME             - Service name in Jaeger (default: fuseki-falkordb)
 #   OTEL_EXPORTER_OTLP_ENDPOINT   - Jaeger collector endpoint (default: http://localhost:4318)
 #   OTEL_TRACES_SAMPLER           - Sampling strategy (default: always_on)
-#   OTEL_INSTRUMENTATION_METHODS_INCLUDE - Additional methods to trace
+#   OTEL_DEBUG                    - Set to "true" to enable debug logging for traces
 #   FALKORDB_HOST                 - FalkorDB host (default: localhost)
 #   FALKORDB_PORT                 - FalkorDB port (default: 6379)
 #   FUSEKI_PORT                   - Fuseki server port (default: 3330)
@@ -56,10 +56,12 @@ while [[ $# -gt 0 ]]; do
             echo "  OTEL_SERVICE_NAME             Service name in Jaeger (default: fuseki-falkordb)"
             echo "  OTEL_EXPORTER_OTLP_ENDPOINT   Jaeger OTLP endpoint (default: http://localhost:4318)"
             echo "  OTEL_TRACES_SAMPLER           Sampling strategy (default: always_on)"
+            echo "  OTEL_DEBUG                    Enable debug logging for traces (default: false)"
             echo ""
             echo "Examples:"
             echo "  ./run_fuseki_tracing.sh                           # Normal mode"
             echo "  ENABLE_PROFILING=true ./run_fuseki_tracing.sh     # With tracing"
+            echo "  ENABLE_PROFILING=true OTEL_DEBUG=true ./run_fuseki_tracing.sh  # With debug"
             echo "  ENABLE_PROFILING=true ./run_fuseki_tracing.sh --config config.ttl"
             exit 0
             ;;
@@ -95,26 +97,28 @@ if [ "$ENABLE_PROFILING" == "true" ]; then
     # Enable full db statement capture (show actual Cypher queries instead of sanitized ?)
     OTEL_OPTS="$OTEL_OPTS -Dotel.instrumentation.common.db-statement-sanitizer.enabled=false"
     
-    # Default FalkorDBGraph methods to trace
-    # These methods also have @WithSpan annotations for additional argument capture
-    DEFAULT_METHODS="com.falkordb.jena.FalkorDBGraph[performAdd,performDelete,graphBaseFind,clear,findTypeTriples,findPropertyTriples]"
+    # FalkorDBGraph methods are traced via @WithSpan annotations in the code
+    # No need for otel.instrumentation.methods.include as it would create duplicate spans
     
-    # Combine default methods with any user-specified methods
-    if [ -n "$OTEL_INSTRUMENTATION_METHODS_INCLUDE" ]; then
-        OTEL_OPTS="$OTEL_OPTS -Dotel.instrumentation.methods.include=$DEFAULT_METHODS;$OTEL_INSTRUMENTATION_METHODS_INCLUDE"
+    # Debug logging configuration
+    if [ "$OTEL_DEBUG" == "true" ]; then
+        echo "🐛 Debug logging ENABLED"
+        # Enable detailed agent logging
+        OTEL_OPTS="$OTEL_OPTS -Dotel.javaagent.debug=true"
+        # Log spans to console (in addition to exporting to Jaeger)
+        OTEL_OPTS="$OTEL_OPTS -Dotel.traces.exporter=otlp,logging"
+        # Set logging exporter to show span details
+        OTEL_OPTS="$OTEL_OPTS -Dotel.exporter.logging.prefix=[OTEL-SPAN]"
     else
-        OTEL_OPTS="$OTEL_OPTS -Dotel.instrumentation.methods.include=$DEFAULT_METHODS"
+        OTEL_OPTS="$OTEL_OPTS -Dotel.javaagent.logging=simple"
     fi
-    
-    # Log configuration
-    OTEL_OPTS="$OTEL_OPTS -Dotel.javaagent.logging=simple"
     
     JAVA_OPTS="$JAVA_OPTS $OTEL_OPTS"
     
     echo "   Service Name: ${OTEL_SERVICE_NAME:-fuseki-falkordb}"
     echo "   OTLP Endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://localhost:4318}"
     echo "   Sampler: ${OTEL_TRACES_SAMPLER:-always_on}"
-    echo "   FalkorDBGraph methods: performAdd, performDelete, graphBaseFind, clear, findTypeTriples, findPropertyTriples (with arguments)"
+    echo "   FalkorDBGraph methods: traced via @WithSpan annotations"
     echo ""
     echo "   Jaeger UI: http://localhost:16686"
     echo ""

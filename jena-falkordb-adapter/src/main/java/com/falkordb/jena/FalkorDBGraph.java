@@ -6,6 +6,7 @@ import com.falkordb.Graph;
 import com.falkordb.Record;
 import com.falkordb.ResultSet;
 import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.instrumentation.annotations.WithSpan;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -121,6 +122,7 @@ public final class FalkorDBGraph extends GraphBase {
     }
 
     /** Clear all nodes and relationships from the graph. */
+    @WithSpan
     @Override
     public void clear() {
         // Delete all nodes and relationships
@@ -135,6 +137,7 @@ public final class FalkorDBGraph extends GraphBase {
      * subject node. When the object is a resource, it creates a relationship
      * between nodes.
      */
+    @WithSpan
     @Override
     public void performAdd(final Triple triple) {
         // Add triple as span attribute using OpenTelemetry API (if available)
@@ -182,6 +185,7 @@ public final class FalkorDBGraph extends GraphBase {
     }
 
     /** Delete a triple from the backing FalkorDB graph. */
+    @WithSpan
     @Override
     public void performDelete(final Triple triple) {
         // Add triple as span attribute using OpenTelemetry API (if available)
@@ -223,6 +227,7 @@ public final class FalkorDBGraph extends GraphBase {
     }
 
     /** Find triples matching the given pattern. */
+    @WithSpan
     @Override
     protected ExtendedIterator<Triple> graphBaseFind(final Triple pattern) {
         // Add pattern as span attribute using OpenTelemetry API (if available)
@@ -297,6 +302,7 @@ public final class FalkorDBGraph extends GraphBase {
         return cypher.toString();
     }
 
+    @WithSpan
     private List<Triple> findPropertyTriples(final Triple pattern) {
         // Add pattern as span attribute using OpenTelemetry API (if available)
         setSpanAttribute("pattern", tripleToString(pattern));
@@ -363,6 +369,7 @@ public final class FalkorDBGraph extends GraphBase {
         return triples;
     }
 
+    @WithSpan
     private List<Triple> findTypeTriples(final Triple pattern) {
         // Add pattern as span attribute using OpenTelemetry API (if available)
         setSpanAttribute("pattern", tripleToString(pattern));

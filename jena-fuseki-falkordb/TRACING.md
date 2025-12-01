@@ -267,6 +267,7 @@ POST /falkor/update (45ms)
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:4318` | Jaeger collector endpoint (OTLP HTTP) |
 | `OTEL_TRACES_SAMPLER` | `always_on` | Sampling strategy |
 | `OTEL_TRACES_SAMPLER_ARG` | `1.0` | Sampling rate (for ratio samplers) |
+| `OTEL_DEBUG` | `false` | Enable debug logging to see spans in console |
 
 ### Database Statement Visibility
 
@@ -300,10 +301,7 @@ This prevents 404 errors when the agent tries to export logs/metrics to Jaeger.
 
 ### FalkorDBGraph Method Tracing with Arguments
 
-The `FalkorDBGraph` class is traced using **two complementary approaches**:
-
-1. **Method instrumentation via `otel.instrumentation.methods.include`** - Ensures methods appear in traces even if annotation processing fails
-2. **OpenTelemetry `@WithSpan` annotations with programmatic `Span.current().setAttribute()`** - Captures method arguments (Triple patterns) as span attributes
+The `FalkorDBGraph` class is traced using **`@WithSpan` annotations** from the OpenTelemetry instrumentation library. This is the recommended approach for adding custom span attributes.
 
 When tracing is enabled with `ENABLE_PROFILING=true`, you will automatically see these methods in your trace tree:
 
@@ -337,13 +335,18 @@ For query patterns with unbound variables:
 }
 ```
 
-### Additional Method-Level Tracing
+### Debug Logging
 
-To trace additional methods, use the `OTEL_INSTRUMENTATION_METHODS_INCLUDE` environment variable:
+To see what spans and attributes are being sent to Jaeger, enable debug mode:
 
 ```bash
-OTEL_INSTRUMENTATION_METHODS_INCLUDE="com.falkordb.jena.FalkorDBModelFactory[createModel]"
+ENABLE_PROFILING=true OTEL_DEBUG=true ./run_fuseki_tracing.sh
 ```
+
+This will:
+- Enable detailed OpenTelemetry agent logging
+- Log all spans to the console with `[OTEL-SPAN]` prefix
+- Help diagnose issues with tracing
 
 ### Sampling Strategies
 
@@ -407,9 +410,11 @@ if [ "$ENABLE_PROFILING" == "true" ]; then
     OTEL_OPTS="$OTEL_OPTS -Dotel.exporter.otlp.endpoint=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://localhost:4318}"
     OTEL_OPTS="$OTEL_OPTS -Dotel.traces.sampler=${OTEL_TRACES_SAMPLER:-always_on}"
     
-    # Optional: Add method-level instrumentation
-    if [ -n "$OTEL_INSTRUMENTATION_METHODS_INCLUDE" ]; then
-        OTEL_OPTS="$OTEL_OPTS -Dotel.instrumentation.methods.include=$OTEL_INSTRUMENTATION_METHODS_INCLUDE"
+    # FalkorDBGraph methods are traced via @WithSpan annotations
+    # Debug logging (optional)
+    if [ "$OTEL_DEBUG" == "true" ]; then
+        OTEL_OPTS="$OTEL_OPTS -Dotel.javaagent.debug=true"
+        OTEL_OPTS="$OTEL_OPTS -Dotel.traces.exporter=otlp,logging"
     fi
     
     JAVA_OPTS="$JAVA_OPTS $OTEL_OPTS"
@@ -433,16 +438,14 @@ exec java $JAVA_OPTS -jar $JAR_FILE $CONFIG_ARGS
 ENABLE_PROFILING=true ./run_fuseki_tracing.sh
 ```
 
+**With profiling and debug logging (to see spans in console):**
+```bash
+ENABLE_PROFILING=true OTEL_DEBUG=true ./run_fuseki_tracing.sh
+```
+
 **With profiling and custom config:**
 ```bash
 ENABLE_PROFILING=true ./run_fuseki_tracing.sh --config src/main/resources/config-falkordb-inference.ttl
-```
-
-**With method-level tracing:**
-```bash
-ENABLE_PROFILING=true \
-OTEL_INSTRUMENTATION_METHODS_INCLUDE="com.falkordb.jena.FalkorDBGraph[performAdd,performDelete,graphBaseFind]" \
-./run_fuseki_tracing.sh
 ```
 
 ## Docker Compose Setup

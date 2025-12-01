@@ -216,6 +216,36 @@ POST /falkor/update (45ms)
 | `OTEL_TRACES_SAMPLER` | `always_on` | Sampling strategy |
 | `OTEL_TRACES_SAMPLER_ARG` | `1.0` | Sampling rate (for ratio samplers) |
 
+### Database Statement Visibility
+
+By default, the startup script disables database statement sanitization so you can see the full Cypher queries in traces. This is controlled by:
+
+```
+-Dotel.instrumentation.common.db-statement-sanitizer.enabled=false
+```
+
+With this setting, you will see the actual Cypher queries like:
+```
+MATCH (s:Resource {uri: $subjectUri})-[r]->(o) RETURN s, r, o
+```
+
+Instead of sanitized placeholders:
+```
+graph.QUERY ? ? ?
+```
+
+**Note**: In production environments with sensitive data, you may want to re-enable sanitization for security.
+
+### Logs and Metrics
+
+The startup script disables logs and metrics exporters since Jaeger only supports traces:
+```
+-Dotel.logs.exporter=none
+-Dotel.metrics.exporter=none
+```
+
+This prevents 404 errors when the agent tries to export logs/metrics to Jaeger.
+
 ### Advanced: Method-Level Tracing
 
 To trace specific FalkorDB adapter methods, add custom instrumentation rules:

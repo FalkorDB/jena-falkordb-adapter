@@ -88,6 +88,13 @@ if [ "$ENABLE_PROFILING" == "true" ]; then
     OTEL_OPTS="$OTEL_OPTS -Dotel.exporter.otlp.endpoint=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://localhost:4318}"
     OTEL_OPTS="$OTEL_OPTS -Dotel.traces.sampler=${OTEL_TRACES_SAMPLER:-always_on}"
     
+    # Disable logs and metrics exporters (Jaeger only supports traces)
+    OTEL_OPTS="$OTEL_OPTS -Dotel.logs.exporter=none"
+    OTEL_OPTS="$OTEL_OPTS -Dotel.metrics.exporter=none"
+    
+    # Enable full db statement capture (show actual Cypher queries instead of sanitized ?)
+    OTEL_OPTS="$OTEL_OPTS -Dotel.instrumentation.common.db-statement-sanitizer.enabled=false"
+    
     # Optional: Add method-level instrumentation for FalkorDB adapter
     if [ -n "$OTEL_INSTRUMENTATION_METHODS_INCLUDE" ]; then
         OTEL_OPTS="$OTEL_OPTS -Dotel.instrumentation.methods.include=$OTEL_INSTRUMENTATION_METHODS_INCLUDE"

@@ -5,6 +5,8 @@ import com.falkordb.FalkorDB;
 import com.falkordb.Graph;
 import com.falkordb.Record;
 import com.falkordb.ResultSet;
+import io.opentelemetry.instrumentation.annotations.SpanAttribute;
+import io.opentelemetry.instrumentation.annotations.WithSpan;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -104,6 +106,7 @@ public final class FalkorDBGraph extends GraphBase {
 
     /** Clear all nodes and relationships from the graph. */
     @Override
+    @WithSpan("FalkorDBGraph.clear")
     public void clear() {
         // Delete all nodes and relationships
         graph.query("MATCH (n) DETACH DELETE n");
@@ -118,7 +121,8 @@ public final class FalkorDBGraph extends GraphBase {
      * between nodes.
      */
     @Override
-    public void performAdd(final Triple triple) {
+    @WithSpan("FalkorDBGraph.performAdd")
+    public void performAdd(@SpanAttribute("triple") final Triple triple) {
         // Translate RDF triple to Cypher CREATE/MERGE
         var subject = nodeToString(triple.getSubject());
         var predicate = nodeToString(triple.getPredicate());
@@ -163,7 +167,8 @@ public final class FalkorDBGraph extends GraphBase {
 
     /** Delete a triple from the backing FalkorDB graph. */
     @Override
-    public void performDelete(final Triple triple) {
+    @WithSpan("FalkorDBGraph.performDelete")
+    public void performDelete(@SpanAttribute("triple") final Triple triple) {
         var subject = nodeToString(triple.getSubject());
         var predicate = nodeToString(triple.getPredicate());
 
@@ -202,7 +207,8 @@ public final class FalkorDBGraph extends GraphBase {
 
     /** Find triples matching the given pattern. */
     @Override
-    protected ExtendedIterator<Triple> graphBaseFind(final Triple pattern) {
+    @WithSpan("FalkorDBGraph.graphBaseFind")
+    protected ExtendedIterator<Triple> graphBaseFind(@SpanAttribute("pattern") final Triple pattern) {
         var triples = new ArrayList<Triple>();
 
         // Check if this is an rdf:type query
@@ -273,7 +279,8 @@ public final class FalkorDBGraph extends GraphBase {
         return cypher.toString();
     }
 
-    private List<Triple> findPropertyTriples(final Triple pattern) {
+    @WithSpan("FalkorDBGraph.findPropertyTriples")
+    private List<Triple> findPropertyTriples(@SpanAttribute("pattern") final Triple pattern) {
         var triples = new ArrayList<Triple>();
 
         // Build query to get nodes with their properties as map
@@ -337,7 +344,8 @@ public final class FalkorDBGraph extends GraphBase {
         return triples;
     }
 
-    private List<Triple> findTypeTriples(final Triple pattern) {
+    @WithSpan("FalkorDBGraph.findTypeTriples")
+    private List<Triple> findTypeTriples(@SpanAttribute("pattern") final Triple pattern) {
         var triples = new ArrayList<Triple>();
 
         // Build query to get nodes with their labels

@@ -246,31 +246,38 @@ The startup script disables logs and metrics exporters since Jaeger only support
 
 This prevents 404 errors when the agent tries to export logs/metrics to Jaeger.
 
-### FalkorDBGraph Method Tracing (Enabled by Default)
+### FalkorDBGraph Method Tracing with Arguments
 
-By default, the startup script enables tracing for all key `FalkorDBGraph` methods:
+The `FalkorDBGraph` class is instrumented with OpenTelemetry `@WithSpan` and `@SpanAttribute` annotations. This means when tracing is enabled, you will see these methods **with their arguments** in your trace tree:
 
-```
--Dotel.instrumentation.methods.include=com.falkordb.jena.FalkorDBGraph[performAdd,performDelete,graphBaseFind,clear,findTypeTriples,findPropertyTriples]
-```
-
-This means you will see these methods in your trace tree:
 - `FalkorDBGraph.performAdd(Triple)` - Adding triples to the graph
+  - Span attribute: `triple` showing the full Triple being added
 - `FalkorDBGraph.performDelete(Triple)` - Deleting triples from the graph
+  - Span attribute: `triple` showing the full Triple being deleted
 - `FalkorDBGraph.graphBaseFind(Triple)` - Finding/querying triples
+  - Span attribute: `pattern` showing the query pattern
 - `FalkorDBGraph.clear()` - Clearing all data from the graph
 - `FalkorDBGraph.findTypeTriples(Triple)` - Finding rdf:type triples
+  - Span attribute: `pattern` showing the query pattern
 - `FalkorDBGraph.findPropertyTriples(Triple)` - Finding property-based triples
+  - Span attribute: `pattern` showing the query pattern
+
+Example of what you'll see in Jaeger for a span:
+```json
+{
+  "key": "triple",
+  "type": "string",
+  "value": "(http://example.org/Jacob http://example.org/father_of http://example.org/Isaac)"
+}
+```
 
 ### Additional Method-Level Tracing
 
-To trace additional methods beyond the defaults, use the `OTEL_INSTRUMENTATION_METHODS_INCLUDE` environment variable:
+To trace additional methods, use the `OTEL_INSTRUMENTATION_METHODS_INCLUDE` environment variable:
 
 ```bash
 OTEL_INSTRUMENTATION_METHODS_INCLUDE="com.falkordb.jena.FalkorDBModelFactory[createModel]"
 ```
-
-This will be appended to the default FalkorDBGraph methods.
 
 ### Sampling Strategies
 

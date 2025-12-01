@@ -246,19 +246,31 @@ The startup script disables logs and metrics exporters since Jaeger only support
 
 This prevents 404 errors when the agent tries to export logs/metrics to Jaeger.
 
-### Advanced: Method-Level Tracing
+### FalkorDBGraph Method Tracing (Enabled by Default)
 
-To trace specific FalkorDB adapter methods, add custom instrumentation rules:
+By default, the startup script enables tracing for all key `FalkorDBGraph` methods:
 
-```bash
-OTEL_INSTRUMENTATION_METHODS_INCLUDE="com.falkordb.jena.FalkorDBGraph[performAdd,performDelete,graphBaseFind];com.falkordb.jena.FalkorDBModelFactory[createModel]"
+```
+-Dotel.instrumentation.methods.include=com.falkordb.jena.FalkorDBGraph[performAdd,performDelete,graphBaseFind,clear,findTypeTriples,findPropertyTriples]
 ```
 
-This traces the following methods with their parameters:
-- `FalkorDBGraph.performAdd(Triple)` - Adding triples
-- `FalkorDBGraph.performDelete(Triple)` - Deleting triples
+This means you will see these methods in your trace tree:
+- `FalkorDBGraph.performAdd(Triple)` - Adding triples to the graph
+- `FalkorDBGraph.performDelete(Triple)` - Deleting triples from the graph
 - `FalkorDBGraph.graphBaseFind(Triple)` - Finding/querying triples
-- `FalkorDBModelFactory.createModel(...)` - Model creation
+- `FalkorDBGraph.clear()` - Clearing all data from the graph
+- `FalkorDBGraph.findTypeTriples(Triple)` - Finding rdf:type triples
+- `FalkorDBGraph.findPropertyTriples(Triple)` - Finding property-based triples
+
+### Additional Method-Level Tracing
+
+To trace additional methods beyond the defaults, use the `OTEL_INSTRUMENTATION_METHODS_INCLUDE` environment variable:
+
+```bash
+OTEL_INSTRUMENTATION_METHODS_INCLUDE="com.falkordb.jena.FalkorDBModelFactory[createModel]"
+```
+
+This will be appended to the default FalkorDBGraph methods.
 
 ### Sampling Strategies
 

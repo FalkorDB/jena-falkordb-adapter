@@ -95,9 +95,13 @@ if [ "$ENABLE_PROFILING" == "true" ]; then
     # Enable full db statement capture (show actual Cypher queries instead of sanitized ?)
     OTEL_OPTS="$OTEL_OPTS -Dotel.instrumentation.common.db-statement-sanitizer.enabled=false"
     
-    # Optional: Add method-level instrumentation for FalkorDB adapter
+    # Enable method-level tracing for FalkorDBGraph by default
+    DEFAULT_METHODS="com.falkordb.jena.FalkorDBGraph[performAdd,performDelete,graphBaseFind,clear,findTypeTriples,findPropertyTriples]"
     if [ -n "$OTEL_INSTRUMENTATION_METHODS_INCLUDE" ]; then
-        OTEL_OPTS="$OTEL_OPTS -Dotel.instrumentation.methods.include=$OTEL_INSTRUMENTATION_METHODS_INCLUDE"
+        # Append user-provided methods to default methods
+        OTEL_OPTS="$OTEL_OPTS -Dotel.instrumentation.methods.include=$DEFAULT_METHODS;$OTEL_INSTRUMENTATION_METHODS_INCLUDE"
+    else
+        OTEL_OPTS="$OTEL_OPTS -Dotel.instrumentation.methods.include=$DEFAULT_METHODS"
     fi
     
     # Log configuration
@@ -108,6 +112,7 @@ if [ "$ENABLE_PROFILING" == "true" ]; then
     echo "   Service Name: ${OTEL_SERVICE_NAME:-fuseki-falkordb}"
     echo "   OTLP Endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://localhost:4318}"
     echo "   Sampler: ${OTEL_TRACES_SAMPLER:-always_on}"
+    echo "   FalkorDBGraph methods: performAdd, performDelete, graphBaseFind, clear, findTypeTriples, findPropertyTriples"
     echo ""
     echo "   Jaeger UI: http://localhost:16686"
     echo ""

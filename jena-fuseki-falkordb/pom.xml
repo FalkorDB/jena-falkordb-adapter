@@ -16,6 +16,11 @@
     <name>Jena Fuseki FalkorDB</name>
     <description>Apache Jena Fuseki server with FalkorDB backend</description>
 
+    <properties>
+        <!-- OpenTelemetry Java Agent version for tracing -->
+        <otel.agent.version>2.10.0</otel.agent.version>
+    </properties>
+
     <dependencies>
         <!-- Jena FalkorDB Adapter -->
         <dependency>
@@ -154,9 +159,4 @@
 
         </plugins>
     </build>
-
-    <properties>
-        <!-- OpenTelemetry Java Agent version for tracing -->
-        <otel.agent.version>2.10.0</otel.agent.version>
-    </properties>
 </project>

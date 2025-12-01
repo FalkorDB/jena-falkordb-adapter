@@ -90,6 +90,13 @@
                                     <addHeader>false</addHeader>
                                 </transformer>
                             </transformers>
+                            <artifactSet>
+                                <excludes>
+                                    <!-- Exclude OpenTelemetry API - provided by the Java agent at runtime -->
+                                    <exclude>io.opentelemetry:opentelemetry-api</exclude>
+                                    <exclude>io.opentelemetry:opentelemetry-context</exclude>
+                                </excludes>
+                            </artifactSet>
                             <filters>
                                 <filter>
                                     <artifact>*:*</artifact>

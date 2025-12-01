@@ -138,8 +138,8 @@ public class TracingConfigurationTest {
     @Test
     @DisplayName("Test OTEL endpoint configuration")
     public void testOtelEndpointConfiguration() {
-        // Default endpoint as documented
-        String defaultEndpoint = "http://localhost:4317";
+        // Default endpoint as documented (port 4318 for HTTP/protobuf protocol)
+        String defaultEndpoint = "http://localhost:4318";
         
         String endpoint = System.getenv("OTEL_EXPORTER_OTLP_ENDPOINT");
         if (endpoint == null || endpoint.isEmpty()) {

@@ -10,7 +10,7 @@
 # Environment Variables:
 #   ENABLE_PROFILING              - Set to "true" to enable tracing
 #   OTEL_SERVICE_NAME             - Service name in Jaeger (default: fuseki-falkordb)
-#   OTEL_EXPORTER_OTLP_ENDPOINT   - Jaeger collector endpoint (default: http://localhost:4317)
+#   OTEL_EXPORTER_OTLP_ENDPOINT   - Jaeger collector endpoint (default: http://localhost:4318)
 #   OTEL_TRACES_SAMPLER           - Sampling strategy (default: always_on)
 #   OTEL_INSTRUMENTATION_METHODS_INCLUDE - Additional methods to trace
 #   FALKORDB_HOST                 - FalkorDB host (default: localhost)
@@ -54,7 +54,7 @@ while [[ $# -gt 0 ]]; do
             echo "Environment Variables:"
             echo "  ENABLE_PROFILING              Enable OpenTelemetry tracing (default: false)"
             echo "  OTEL_SERVICE_NAME             Service name in Jaeger (default: fuseki-falkordb)"
-            echo "  OTEL_EXPORTER_OTLP_ENDPOINT   Jaeger OTLP endpoint (default: http://localhost:4317)"
+            echo "  OTEL_EXPORTER_OTLP_ENDPOINT   Jaeger OTLP endpoint (default: http://localhost:4318)"
             echo "  OTEL_TRACES_SAMPLER           Sampling strategy (default: always_on)"
             echo ""
             echo "Examples:"
@@ -85,7 +85,7 @@ if [ "$ENABLE_PROFILING" == "true" ]; then
     # OpenTelemetry configuration
     OTEL_OPTS="-javaagent:$AGENT_PATH"
     OTEL_OPTS="$OTEL_OPTS -Dotel.service.name=${OTEL_SERVICE_NAME:-fuseki-falkordb}"
-    OTEL_OPTS="$OTEL_OPTS -Dotel.exporter.otlp.endpoint=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://localhost:4317}"
+    OTEL_OPTS="$OTEL_OPTS -Dotel.exporter.otlp.endpoint=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://localhost:4318}"
     OTEL_OPTS="$OTEL_OPTS -Dotel.traces.sampler=${OTEL_TRACES_SAMPLER:-always_on}"
     
     # Optional: Add method-level instrumentation for FalkorDB adapter
@@ -99,7 +99,7 @@ if [ "$ENABLE_PROFILING" == "true" ]; then
     JAVA_OPTS="$JAVA_OPTS $OTEL_OPTS"
     
     echo "   Service Name: ${OTEL_SERVICE_NAME:-fuseki-falkordb}"
-    echo "   OTLP Endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://localhost:4317}"
+    echo "   OTLP Endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://localhost:4318}"
     echo "   Sampler: ${OTEL_TRACES_SAMPLER:-always_on}"
     echo ""
     echo "   Jaeger UI: http://localhost:16686"

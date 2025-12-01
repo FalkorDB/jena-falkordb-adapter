@@ -100,7 +100,7 @@ Or manually with environment variables:
 ```bash
 ENABLE_PROFILING=true \
 OTEL_SERVICE_NAME=fuseki-falkordb \
-OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317 \
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 \
 OTEL_TRACES_SAMPLER=always_on \
 java -javaagent:target/agents/opentelemetry-javaagent.jar \
      -jar target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar
@@ -211,7 +211,7 @@ POST /falkor/update (45ms)
 |----------|---------|-------------|
 | `ENABLE_PROFILING` | `false` | Enable/disable tracing |
 | `OTEL_SERVICE_NAME` | `fuseki-falkordb` | Service name in Jaeger |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:4317` | Jaeger collector endpoint |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:4318` | Jaeger collector endpoint (OTLP HTTP) |
 | `OTEL_TRACES_SAMPLER` | `always_on` | Sampling strategy |
 | `OTEL_TRACES_SAMPLER_ARG` | `1.0` | Sampling rate (for ratio samplers) |
 
@@ -288,7 +288,7 @@ if [ "$ENABLE_PROFILING" == "true" ]; then
     # OpenTelemetry configuration
     OTEL_OPTS="-javaagent:$AGENT_PATH"
     OTEL_OPTS="$OTEL_OPTS -Dotel.service.name=${OTEL_SERVICE_NAME:-fuseki-falkordb}"
-    OTEL_OPTS="$OTEL_OPTS -Dotel.exporter.otlp.endpoint=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://localhost:4317}"
+    OTEL_OPTS="$OTEL_OPTS -Dotel.exporter.otlp.endpoint=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://localhost:4318}"
     OTEL_OPTS="$OTEL_OPTS -Dotel.traces.sampler=${OTEL_TRACES_SAMPLER:-always_on}"
     
     # Optional: Add method-level instrumentation
@@ -366,7 +366,7 @@ services:
     environment:
       - ENABLE_PROFILING=true
       - FALKORDB_HOST=falkordb
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
       - OTEL_SERVICE_NAME=fuseki-falkordb
       - OTEL_TRACES_SAMPLER=always_on
     depends_on:

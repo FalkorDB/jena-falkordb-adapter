@@ -5,8 +5,6 @@ import com.falkordb.FalkorDB;
 import com.falkordb.Graph;
 import com.falkordb.Record;
 import com.falkordb.ResultSet;
-import io.opentelemetry.api.trace.Span;
-import io.opentelemetry.instrumentation.annotations.WithSpan;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -38,6 +36,38 @@ public final class FalkorDBGraph extends GraphBase {
     private final Graph graph;
     /** Name of the FalkorDB graph in use. */
     private final String graphName;
+
+    /** Flag indicating if OpenTelemetry is available at runtime. */
+    private static final boolean OTEL_AVAILABLE;
+
+    static {
+        boolean available = false;
+        try {
+            Class.forName("io.opentelemetry.api.trace.Span");
+            available = true;
+        } catch (ClassNotFoundException e) {
+            // OpenTelemetry not available, tracing will be disabled
+        }
+        OTEL_AVAILABLE = available;
+    }
+
+    /**
+     * Sets a span attribute if OpenTelemetry is available.
+     * This method handles the case when OpenTelemetry is not on the classpath.
+     *
+     * @param key the attribute key
+     * @param value the attribute value
+     */
+    private static void setSpanAttribute(final String key, final String value) {
+        if (OTEL_AVAILABLE) {
+            try {
+                io.opentelemetry.api.trace.Span.current().setAttribute(
+                    key, value);
+            } catch (Throwable t) {
+                // Silently ignore any tracing errors
+            }
+        }
+    }
 
     /**
      * Create a FalkorDB-backed graph for the given graph name. Uses the
@@ -106,7 +136,6 @@ public final class FalkorDBGraph extends GraphBase {
 
     /** Clear all nodes and relationships from the graph. */
     @Override
-    @WithSpan("FalkorDBGraph.clear")
     public void clear() {
         // Delete all nodes and relationships
         graph.query("MATCH (n) DETACH DELETE n");
@@ -121,10 +150,9 @@ public final class FalkorDBGraph extends GraphBase {
      * between nodes.
      */
     @Override
-    @WithSpan("FalkorDBGraph.performAdd")
     public void performAdd(final Triple triple) {
-        // Add triple as span attribute using OpenTelemetry API
-        Span.current().setAttribute("triple", tripleToString(triple));
+        // Add triple as span attribute using OpenTelemetry API (if available)
+        setSpanAttribute("triple", tripleToString(triple));
         // Translate RDF triple to Cypher CREATE/MERGE
         var subject = nodeToString(triple.getSubject());
         var predicate = nodeToString(triple.getPredicate());
@@ -169,10 +197,9 @@ public final class FalkorDBGraph extends GraphBase {
 
     /** Delete a triple from the backing FalkorDB graph. */
     @Override
-    @WithSpan("FalkorDBGraph.performDelete")
     public void performDelete(final Triple triple) {
-        // Add triple as span attribute using OpenTelemetry API
-        Span.current().setAttribute("triple", tripleToString(triple));
+        // Add triple as span attribute using OpenTelemetry API (if available)
+        setSpanAttribute("triple", tripleToString(triple));
         var subject = nodeToString(triple.getSubject());
         var predicate = nodeToString(triple.getPredicate());
 
@@ -211,10 +238,9 @@ public final class FalkorDBGraph extends GraphBase {
 
     /** Find triples matching the given pattern. */
     @Override
-    @WithSpan("FalkorDBGraph.graphBaseFind")
     protected ExtendedIterator<Triple> graphBaseFind(final Triple pattern) {
-        // Add pattern as span attribute using OpenTelemetry API
-        Span.current().setAttribute("pattern", tripleToString(pattern));
+        // Add pattern as span attribute using OpenTelemetry API (if available)
+        setSpanAttribute("pattern", tripleToString(pattern));
         var triples = new ArrayList<Triple>();
 
         // Check if this is an rdf:type query
@@ -285,10 +311,9 @@ public final class FalkorDBGraph extends GraphBase {
         return cypher.toString();
     }
 
-    @WithSpan("FalkorDBGraph.findPropertyTriples")
     private List<Triple> findPropertyTriples(final Triple pattern) {
-        // Add pattern as span attribute using OpenTelemetry API
-        Span.current().setAttribute("pattern", tripleToString(pattern));
+        // Add pattern as span attribute using OpenTelemetry API (if available)
+        setSpanAttribute("pattern", tripleToString(pattern));
         var triples = new ArrayList<Triple>();
 
         // Build query to get nodes with their properties as map
@@ -352,10 +377,9 @@ public final class FalkorDBGraph extends GraphBase {
         return triples;
     }
 
-    @WithSpan("FalkorDBGraph.findTypeTriples")
     private List<Triple> findTypeTriples(final Triple pattern) {
-        // Add pattern as span attribute using OpenTelemetry API
-        Span.current().setAttribute("pattern", tripleToString(pattern));
+        // Add pattern as span attribute using OpenTelemetry API (if available)
+        setSpanAttribute("pattern", tripleToString(pattern));
         var triples = new ArrayList<Triple>();
 
         // Build query to get nodes with their labels

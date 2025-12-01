@@ -49,15 +49,7 @@
             <scope>test</scope>
         </dependency>
 
-        <!-- OpenTelemetry Instrumentation Annotations (for tracing method arguments) -->
-        <dependency>
-            <groupId>io.opentelemetry.instrumentation</groupId>
-            <artifactId>opentelemetry-instrumentation-annotations</artifactId>
-            <version>2.10.0</version>
-            <scope>provided</scope>
-        </dependency>
-
-        <!-- OpenTelemetry API (for programmatic span attributes) -->
+        <!-- OpenTelemetry API (for programmatic span attributes when agent is attached) -->
         <dependency>
             <groupId>io.opentelemetry</groupId>
             <artifactId>opentelemetry-api</artifactId>

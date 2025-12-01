@@ -5,6 +5,7 @@ import com.falkordb.FalkorDB;
 import com.falkordb.Graph;
 import com.falkordb.Record;
 import com.falkordb.ResultSet;
+import io.opentelemetry.api.trace.Span;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -38,87 +39,19 @@ public final class FalkorDBGraph extends GraphBase {
     private final String graphName;
 
     /**
-     * Flag indicating if OpenTelemetry lookup has been attempted.
-     * Once true, we won't try to find the classes again.
-     */
-    private static volatile boolean otelLookupAttempted = false;
-
-    /**
-     * Flag indicating if OpenTelemetry is available after lookup.
-     */
-    private static volatile boolean otelAvailable = false;
-
-    /**
-     * Cached reflection reference for Span.current() method.
-     */
-    private static volatile java.lang.reflect.Method spanCurrentMethod;
-
-    /**
-     * Cached reflection reference for Span.setAttribute(String, String) method.
-     */
-    private static volatile java.lang.reflect.Method setAttributeMethod;
-
-    /**
-     * Initializes OpenTelemetry reflection references if not already done.
-     * Uses the context classloader to find OpenTelemetry classes, which allows
-     * proper access to classes loaded by the OpenTelemetry Java agent.
-     *
-     * <p>This method is thread-safe using double-checked locking pattern.
-     */
-    private static void initOtelReflection() {
-        if (!otelLookupAttempted) {
-            synchronized (FalkorDBGraph.class) {
-                if (!otelLookupAttempted) {
-                    try {
-                        // Use context classloader to find OpenTelemetry classes.
-                        // The OpenTelemetry Java agent sets up the context
-                        // classloader to include its classes.
-                        ClassLoader contextLoader = Thread.currentThread()
-                            .getContextClassLoader();
-                        Class<?> spanClass = Class.forName(
-                            "io.opentelemetry.api.trace.Span",
-                            true,
-                            contextLoader);
-                        spanCurrentMethod = spanClass.getMethod("current");
-                        setAttributeMethod = spanClass.getMethod(
-                            "setAttribute", String.class, String.class);
-                        otelAvailable = true;
-                    } catch (ClassNotFoundException | NoSuchMethodException e) {
-                        // OpenTelemetry not available
-                        otelAvailable = false;
-                    }
-                    otelLookupAttempted = true;
-                }
-            }
-        }
-    }
-
-    /**
-     * Sets a span attribute if OpenTelemetry is available.
-     * Uses reflection to access the OpenTelemetry API at runtime using the
-     * context classloader, which allows proper access to classes loaded by
-     * the OpenTelemetry Java agent.
+     * Sets a span attribute on the current OpenTelemetry span if available.
+     * Uses the OpenTelemetry API directly, which works with spans created
+     * by the OpenTelemetry Java agent.
      *
      * @param key the attribute key
      * @param value the attribute value
      */
     private static void setSpanAttribute(final String key, final String value) {
-        // Ensure OpenTelemetry reflection is initialized
-        initOtelReflection();
-
-        if (!otelAvailable || spanCurrentMethod == null
-                || setAttributeMethod == null) {
-            return;
-        }
-
         try {
-            // Get current span via cached reflection method
-            Object currentSpan = spanCurrentMethod.invoke(null);
-            // Set attribute on current span
-            setAttributeMethod.invoke(currentSpan, key, value);
-        } catch (LinkageError | ReflectiveOperationException
-                | RuntimeException e) {
+            Span.current().setAttribute(key, value);
+        } catch (LinkageError | RuntimeException e) {
             // Silently ignore any tracing errors
+            // This handles cases where OpenTelemetry is not available at runtime
         }
     }
 

@@ -42,6 +42,16 @@
             <artifactId>logback-classic</artifactId>
         </dependency>
 
+        <!-- OpenTelemetry API for tracing support -->
+        <!-- The API is used to set span attributes on spans created by the Java agent -->
+        <!-- Marked as provided since the agent includes this at runtime -->
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-api</artifactId>
+            <version>1.43.0</version>
+            <scope>provided</scope>
+        </dependency>
+
         <!-- JUnit for testing -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>

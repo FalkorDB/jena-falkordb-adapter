@@ -63,8 +63,9 @@ public final class FalkorDBGraph extends GraphBase {
             try {
                 io.opentelemetry.api.trace.Span.current().setAttribute(
                     key, value);
-            } catch (Throwable t) {
-                // Silently ignore any tracing errors
+            } catch (LinkageError | RuntimeException e) {
+                // Silently ignore any tracing errors (e.g., NoClassDefFoundError,
+                // UnsatisfiedLinkError, or runtime issues with OpenTelemetry)
             }
         }
     }

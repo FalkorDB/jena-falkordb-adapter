@@ -303,16 +303,16 @@ This prevents 404 errors when the agent tries to export logs/metrics to Jaeger.
 The `FalkorDBGraph` class is traced using **two complementary approaches**:
 
 1. **Method instrumentation via `otel.instrumentation.methods.include`** - Ensures methods appear in traces even if annotation processing fails
-2. **OpenTelemetry `@WithSpan` and `@SpanAttribute` annotations** - Captures method arguments (Triple patterns) as span attributes
+2. **OpenTelemetry `@WithSpan` annotations with programmatic `Span.current().setAttribute()`** - Captures method arguments (Triple patterns) as span attributes
 
 When tracing is enabled with `ENABLE_PROFILING=true`, you will automatically see these methods in your trace tree:
 
 - `FalkorDBGraph.performAdd(Triple)` - Adding triples to the graph
-  - Span attribute: `triple` showing the full Triple being added
+  - Span attribute: `triple` showing the full Triple in format `(subject predicate object)`
 - `FalkorDBGraph.performDelete(Triple)` - Deleting triples from the graph
-  - Span attribute: `triple` showing the full Triple being deleted
+  - Span attribute: `triple` showing the full Triple in format `(subject predicate object)`
 - `FalkorDBGraph.graphBaseFind(Triple)` - Finding/querying triples
-  - Span attribute: `pattern` showing the query pattern
+  - Span attribute: `pattern` showing the query pattern (variables shown as `?s`, `?p`, `?o`)
 - `FalkorDBGraph.clear()` - Clearing all data from the graph
 - `FalkorDBGraph.findTypeTriples(Triple)` - Finding rdf:type triples
   - Span attribute: `pattern` showing the query pattern
@@ -325,6 +325,15 @@ Example of what you'll see in Jaeger for a span:
   "key": "triple",
   "type": "string",
   "value": "(http://example.org/Jacob http://example.org/father_of http://example.org/Isaac)"
+}
+```
+
+For query patterns with unbound variables:
+```json
+{
+  "key": "pattern",
+  "type": "string",
+  "value": "(http://example.org/Jacob ?p ?o)"
 }
 ```
 

@@ -5,7 +5,7 @@ import com.falkordb.FalkorDB;
 import com.falkordb.Graph;
 import com.falkordb.Record;
 import com.falkordb.ResultSet;
-import io.opentelemetry.instrumentation.annotations.SpanAttribute;
+import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.instrumentation.annotations.WithSpan;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -122,7 +122,9 @@ public final class FalkorDBGraph extends GraphBase {
      */
     @Override
     @WithSpan("FalkorDBGraph.performAdd")
-    public void performAdd(@SpanAttribute("triple") final Triple triple) {
+    public void performAdd(final Triple triple) {
+        // Add triple as span attribute using OpenTelemetry API
+        Span.current().setAttribute("triple", tripleToString(triple));
         // Translate RDF triple to Cypher CREATE/MERGE
         var subject = nodeToString(triple.getSubject());
         var predicate = nodeToString(triple.getPredicate());
@@ -168,7 +170,9 @@ public final class FalkorDBGraph extends GraphBase {
     /** Delete a triple from the backing FalkorDB graph. */
     @Override
     @WithSpan("FalkorDBGraph.performDelete")
-    public void performDelete(@SpanAttribute("triple") final Triple triple) {
+    public void performDelete(final Triple triple) {
+        // Add triple as span attribute using OpenTelemetry API
+        Span.current().setAttribute("triple", tripleToString(triple));
         var subject = nodeToString(triple.getSubject());
         var predicate = nodeToString(triple.getPredicate());
 
@@ -208,7 +212,9 @@ public final class FalkorDBGraph extends GraphBase {
     /** Find triples matching the given pattern. */
     @Override
     @WithSpan("FalkorDBGraph.graphBaseFind")
-    protected ExtendedIterator<Triple> graphBaseFind(@SpanAttribute("pattern") final Triple pattern) {
+    protected ExtendedIterator<Triple> graphBaseFind(final Triple pattern) {
+        // Add pattern as span attribute using OpenTelemetry API
+        Span.current().setAttribute("pattern", tripleToString(pattern));
         var triples = new ArrayList<Triple>();
 
         // Check if this is an rdf:type query
@@ -280,7 +286,9 @@ public final class FalkorDBGraph extends GraphBase {
     }
 
     @WithSpan("FalkorDBGraph.findPropertyTriples")
-    private List<Triple> findPropertyTriples(@SpanAttribute("pattern") final Triple pattern) {
+    private List<Triple> findPropertyTriples(final Triple pattern) {
+        // Add pattern as span attribute using OpenTelemetry API
+        Span.current().setAttribute("pattern", tripleToString(pattern));
         var triples = new ArrayList<Triple>();
 
         // Build query to get nodes with their properties as map
@@ -345,7 +353,9 @@ public final class FalkorDBGraph extends GraphBase {
     }
 
     @WithSpan("FalkorDBGraph.findTypeTriples")
-    private List<Triple> findTypeTriples(@SpanAttribute("pattern") final Triple pattern) {
+    private List<Triple> findTypeTriples(final Triple pattern) {
+        // Add pattern as span attribute using OpenTelemetry API
+        Span.current().setAttribute("pattern", tripleToString(pattern));
         var triples = new ArrayList<Triple>();
 
         // Build query to get nodes with their labels
@@ -430,6 +440,31 @@ public final class FalkorDBGraph extends GraphBase {
             return "_:" + node.getBlankNodeLabel();
         }
         return node.toString();
+    }
+
+    /**
+     * Converts a Triple to a human-readable string for tracing.
+     * This provides a cleaner representation than Triple.toString().
+     *
+     * @param triple the Triple to convert
+     * @return formatted string representation
+     */
+    private String tripleToString(final Triple triple) {
+        var subject = triple.getSubject().isConcrete()
+            ? nodeToString(triple.getSubject()) : "?s";
+        var predicate = triple.getPredicate().isConcrete()
+            ? nodeToString(triple.getPredicate()) : "?p";
+        String object;
+        if (triple.getObject().isConcrete()) {
+            if (triple.getObject().isLiteral()) {
+                object = "\"" + nodeToString(triple.getObject()) + "\"";
+            } else {
+                object = nodeToString(triple.getObject());
+            }
+        } else {
+            object = "?o";
+        }
+        return "(" + subject + " " + predicate + " " + object + ")";
     }
 
     @Override

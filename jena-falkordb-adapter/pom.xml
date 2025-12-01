@@ -56,6 +56,14 @@
             <version>2.10.0</version>
             <scope>provided</scope>
         </dependency>
+
+        <!-- OpenTelemetry API (for programmatic span attributes) -->
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-api</artifactId>
+            <version>1.43.0</version>
+            <scope>provided</scope>
+        </dependency>
     </dependencies>
 
     <build>

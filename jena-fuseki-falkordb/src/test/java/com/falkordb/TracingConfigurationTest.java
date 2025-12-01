@@ -4,8 +4,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
-import java.nio.file.Files;
-import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -34,8 +32,9 @@ public class TracingConfigurationTest {
             exists = resource != null;
         }
         
-        // This test may be skipped if run from jar or different working directory
-        // The main purpose is to ensure TRACING.md is included in version control
+        // Assert the documentation exists (may be skipped if run from jar)
+        assertTrue(exists || isRunningFromJar(), 
+            "TRACING.md should exist in version control");
     }
 
     @Test
@@ -46,7 +45,9 @@ public class TracingConfigurationTest {
             || new File("jena-fuseki-falkordb/run_fuseki_tracing.sh").exists()
             || new File("../run_fuseki_tracing.sh").exists();
         
-        // This test may be skipped if run from jar
+        // Assert the script exists (may be skipped if run from jar)
+        assertTrue(exists || isRunningFromJar(),
+            "run_fuseki_tracing.sh should exist");
     }
 
     @Test
@@ -57,7 +58,9 @@ public class TracingConfigurationTest {
             || new File("jena-fuseki-falkordb/docker-compose-tracing.yml").exists()
             || new File("../docker-compose-tracing.yml").exists();
         
-        // This test may be skipped if run from jar
+        // Assert the docker-compose exists (may be skipped if run from jar)
+        assertTrue(exists || isRunningFromJar(),
+            "docker-compose-tracing.yml should exist");
     }
 
     @Test
@@ -67,14 +70,9 @@ public class TracingConfigurationTest {
         String enableProfiling = System.getenv("ENABLE_PROFILING");
         
         // If profiling is not enabled, we should not have OTEL agent attached
-        if (!"true".equals(enableProfiling)) {
-            // Check that java agent is not attached (no OTel classes loaded unexpectedly)
-            // This is a basic sanity check
-            assertDoesNotThrow(() -> {
-                // Simply verify the test runs without OTEL overhead
-                Thread.sleep(10);
-            });
-        }
+        // This is a basic sanity check that the test environment is clean
+        assertNotEquals("true", enableProfiling,
+            "Tests should run without ENABLE_PROFILING to avoid agent overhead");
     }
 
     @Test
@@ -149,5 +147,14 @@ public class TracingConfigurationTest {
         // Verify endpoint format looks valid (starts with http/https)
         assertTrue(endpoint.startsWith("http://") || endpoint.startsWith("https://"),
             "OTLP endpoint should be a valid HTTP(S) URL");
+    }
+
+    /**
+     * Helper to detect if tests are running from a JAR file.
+     */
+    private boolean isRunningFromJar() {
+        String classPath = getClass().getProtectionDomain()
+            .getCodeSource().getLocation().getPath();
+        return classPath.endsWith(".jar");
     }
 }

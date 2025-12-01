@@ -515,7 +515,7 @@ docker-compose -f docker-compose-tracing.yml up
 
 3. **Check OTLP endpoint:**
    ```bash
-   curl -v http://localhost:4317
+   curl -v http://localhost:4318
    ```
 
 4. **Verify service name:**

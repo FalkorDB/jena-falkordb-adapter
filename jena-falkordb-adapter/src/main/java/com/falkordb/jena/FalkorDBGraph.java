@@ -39,13 +39,23 @@ public final class FalkorDBGraph extends GraphBase {
 
     /** Flag indicating if OpenTelemetry is available at runtime. */
     private static final boolean OTEL_AVAILABLE;
+    /** Cached reflection references for OpenTelemetry API. */
+    private static java.lang.reflect.Method spanCurrentMethod;
+    private static java.lang.reflect.Method setAttributeMethod;
 
     static {
         boolean available = false;
         try {
-            Class.forName("io.opentelemetry.api.trace.Span");
+            // Use reflection to access OpenTelemetry classes from the agent's
+            // classloader. This avoids classloader conflicts between the
+            // application and the Java agent.
+            Class<?> spanClass = Class.forName(
+                "io.opentelemetry.api.trace.Span");
+            spanCurrentMethod = spanClass.getMethod("current");
+            setAttributeMethod = spanClass.getMethod(
+                "setAttribute", String.class, String.class);
             available = true;
-        } catch (ClassNotFoundException e) {
+        } catch (ClassNotFoundException | NoSuchMethodException e) {
             // OpenTelemetry not available, tracing will be disabled
         }
         OTEL_AVAILABLE = available;
@@ -53,19 +63,23 @@ public final class FalkorDBGraph extends GraphBase {
 
     /**
      * Sets a span attribute if OpenTelemetry is available.
-     * This method handles the case when OpenTelemetry is not on the classpath.
+     * Uses reflection to access the OpenTelemetry API from the agent's
+     * classloader, which avoids classloader conflicts.
      *
      * @param key the attribute key
      * @param value the attribute value
      */
     private static void setSpanAttribute(final String key, final String value) {
-        if (OTEL_AVAILABLE) {
+        if (OTEL_AVAILABLE && spanCurrentMethod != null
+                && setAttributeMethod != null) {
             try {
-                io.opentelemetry.api.trace.Span.current().setAttribute(
-                    key, value);
-            } catch (LinkageError | RuntimeException e) {
-                // Silently ignore any tracing errors (e.g., NoClassDefFoundError,
-                // UnsatisfiedLinkError, or runtime issues with OpenTelemetry)
+                // Get current span via reflection
+                Object currentSpan = spanCurrentMethod.invoke(null);
+                // Set attribute on current span
+                setAttributeMethod.invoke(currentSpan, key, value);
+            } catch (LinkageError | ReflectiveOperationException
+                    | RuntimeException e) {
+                // Silently ignore any tracing errors
             }
         }
     }

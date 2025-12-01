@@ -62,7 +62,6 @@
         <slf4j.version>2.0.17</slf4j.version>
         <logback.version>1.5.12</logback.version>
         <junit.version>5.10.0</junit.version>
-        <opentelemetry.version>1.43.0</opentelemetry.version>
     </properties>
 
     <dependencyManagement>
@@ -123,13 +122,6 @@
                 <artifactId>junit-jupiter-engine</artifactId>
                 <version>${junit.version}</version>
                 <scope>test</scope>
-            </dependency>
-
-            <!-- OpenTelemetry API (for programmatic span attributes when agent is attached) -->
-            <dependency>
-                <groupId>io.opentelemetry</groupId>
-                <artifactId>opentelemetry-api</artifactId>
-                <version>${opentelemetry.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

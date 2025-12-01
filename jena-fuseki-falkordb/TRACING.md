@@ -299,18 +299,14 @@ The startup script disables logs and metrics exporters since Jaeger only support
 
 This prevents 404 errors when the agent tries to export logs/metrics to Jaeger.
 
-### Annotation Instrumentation
-
-The startup script explicitly enables annotation instrumentation so that `@WithSpan` annotations are processed:
-```
--Dotel.instrumentation.opentelemetry-instrumentation-annotations.enabled=true
-```
-
-This is required for the `@WithSpan` annotations on `FalkorDBGraph` methods to work properly.
-
 ### FalkorDBGraph Method Tracing with Arguments
 
-The `FalkorDBGraph` class is traced using **`@WithSpan` annotations** from the OpenTelemetry instrumentation library combined with `Span.current().setAttribute()` calls to add custom attributes to the spans.
+The `FalkorDBGraph` class is traced using **method instrumentation** via `otel.instrumentation.methods.include` combined with `Span.current().setAttribute()` calls to add custom attributes to the spans.
+
+The startup script configures the agent to create spans for these methods:
+```
+-Dotel.instrumentation.methods.include=com.falkordb.jena.FalkorDBGraph[performAdd,performDelete,graphBaseFind,clear,findTypeTriples,findPropertyTriples]
+```
 
 When tracing is enabled with `ENABLE_PROFILING=true`, you will automatically see these methods in your trace tree:
 
@@ -419,8 +415,8 @@ if [ "$ENABLE_PROFILING" == "true" ]; then
     OTEL_OPTS="$OTEL_OPTS -Dotel.exporter.otlp.endpoint=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://localhost:4318}"
     OTEL_OPTS="$OTEL_OPTS -Dotel.traces.sampler=${OTEL_TRACES_SAMPLER:-always_on}"
     
-    # Enable @WithSpan annotation instrumentation (required!)
-    OTEL_OPTS="$OTEL_OPTS -Dotel.instrumentation.opentelemetry-instrumentation-annotations.enabled=true"
+    # FalkorDBGraph methods to trace
+    OTEL_OPTS="$OTEL_OPTS -Dotel.instrumentation.methods.include=com.falkordb.jena.FalkorDBGraph[performAdd,performDelete,graphBaseFind,clear,findTypeTriples,findPropertyTriples]"
     
     # Debug logging (optional)
     if [ "$OTEL_DEBUG" == "true" ]; then

@@ -97,8 +97,10 @@ if [ "$ENABLE_PROFILING" == "true" ]; then
     # Enable full db statement capture (show actual Cypher queries instead of sanitized ?)
     OTEL_OPTS="$OTEL_OPTS -Dotel.instrumentation.common.db-statement-sanitizer.enabled=false"
     
-    # Enable @WithSpan annotation instrumentation (required for annotations to work)
-    OTEL_OPTS="$OTEL_OPTS -Dotel.instrumentation.opentelemetry-instrumentation-annotations.enabled=true"
+    # FalkorDBGraph methods to trace - creates spans for these methods
+    # The code uses Span.current().setAttribute() to add custom attributes to these spans
+    DEFAULT_METHODS="com.falkordb.jena.FalkorDBGraph[performAdd,performDelete,graphBaseFind,clear,findTypeTriples,findPropertyTriples]"
+    OTEL_OPTS="$OTEL_OPTS -Dotel.instrumentation.methods.include=$DEFAULT_METHODS"
     
     # Debug logging configuration
     if [ "$OTEL_DEBUG" == "true" ]; then
@@ -118,8 +120,8 @@ if [ "$ENABLE_PROFILING" == "true" ]; then
     echo "   Service Name: ${OTEL_SERVICE_NAME:-fuseki-falkordb}"
     echo "   OTLP Endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://localhost:4318}"
     echo "   Sampler: ${OTEL_TRACES_SAMPLER:-always_on}"
-    echo "   Annotation instrumentation: ENABLED"
-    echo "   FalkorDBGraph methods: traced via @WithSpan annotations with span attributes"
+    echo "   FalkorDBGraph methods: performAdd, performDelete, graphBaseFind, clear, findTypeTriples, findPropertyTriples"
+    echo "   Span attributes: pattern, triple (added via Span.current().setAttribute())"
     echo ""
     echo "   Jaeger UI: http://localhost:16686"
     echo ""

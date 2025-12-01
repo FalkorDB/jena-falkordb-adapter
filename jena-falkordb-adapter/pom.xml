@@ -52,15 +52,6 @@
             <scope>provided</scope>
         </dependency>
 
-        <!-- OpenTelemetry Instrumentation Annotations for @WithSpan and @SpanAttribute -->
-        <!-- These annotations are processed by the OpenTelemetry Java agent -->
-        <dependency>
-            <groupId>io.opentelemetry.instrumentation</groupId>
-            <artifactId>opentelemetry-instrumentation-annotations</artifactId>
-            <version>2.10.0</version>
-            <scope>provided</scope>
-        </dependency>
-
         <!-- JUnit for testing -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>

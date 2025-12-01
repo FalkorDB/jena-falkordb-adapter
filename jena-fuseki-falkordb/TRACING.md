@@ -300,7 +300,12 @@ This prevents 404 errors when the agent tries to export logs/metrics to Jaeger.
 
 ### FalkorDBGraph Method Tracing with Arguments
 
-The `FalkorDBGraph` class is instrumented with OpenTelemetry `@WithSpan` and `@SpanAttribute` annotations. This means when tracing is enabled, you will see these methods **with their arguments** in your trace tree:
+The `FalkorDBGraph` class is traced using **two complementary approaches**:
+
+1. **Method instrumentation via `otel.instrumentation.methods.include`** - Ensures methods appear in traces even if annotation processing fails
+2. **OpenTelemetry `@WithSpan` and `@SpanAttribute` annotations** - Captures method arguments (Triple patterns) as span attributes
+
+When tracing is enabled with `ENABLE_PROFILING=true`, you will automatically see these methods in your trace tree:
 
 - `FalkorDBGraph.performAdd(Triple)` - Adding triples to the graph
   - Span attribute: `triple` showing the full Triple being added

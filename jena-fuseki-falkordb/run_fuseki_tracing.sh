@@ -95,11 +95,15 @@ if [ "$ENABLE_PROFILING" == "true" ]; then
     # Enable full db statement capture (show actual Cypher queries instead of sanitized ?)
     OTEL_OPTS="$OTEL_OPTS -Dotel.instrumentation.common.db-statement-sanitizer.enabled=false"
     
-    # FalkorDBGraph methods are now traced via @WithSpan annotations with @SpanAttribute for arguments
-    # The annotations capture method arguments (Triple patterns) automatically
-    # Additional methods can still be traced via OTEL_INSTRUMENTATION_METHODS_INCLUDE
+    # Default FalkorDBGraph methods to trace
+    # These methods also have @WithSpan annotations for additional argument capture
+    DEFAULT_METHODS="com.falkordb.jena.FalkorDBGraph[performAdd,performDelete,graphBaseFind,clear,findTypeTriples,findPropertyTriples]"
+    
+    # Combine default methods with any user-specified methods
     if [ -n "$OTEL_INSTRUMENTATION_METHODS_INCLUDE" ]; then
-        OTEL_OPTS="$OTEL_OPTS -Dotel.instrumentation.methods.include=$OTEL_INSTRUMENTATION_METHODS_INCLUDE"
+        OTEL_OPTS="$OTEL_OPTS -Dotel.instrumentation.methods.include=$DEFAULT_METHODS;$OTEL_INSTRUMENTATION_METHODS_INCLUDE"
+    else
+        OTEL_OPTS="$OTEL_OPTS -Dotel.instrumentation.methods.include=$DEFAULT_METHODS"
     fi
     
     # Log configuration

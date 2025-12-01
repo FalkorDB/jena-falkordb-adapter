@@ -48,10 +48,14 @@ public final class FalkorDBGraph extends GraphBase {
      */
     private static void setSpanAttribute(final String key, final String value) {
         try {
-            Span.current().setAttribute(key, value);
+            Span span = Span.current();
+            if (LOGGER.isDebugEnabled()) {
+                LOGGER.debug("setSpanAttribute: key={}, value={}, span={}, spanContext.isValid={}",
+                    key, value, span.getClass().getName(), span.getSpanContext().isValid());
+            }
+            span.setAttribute(key, value);
         } catch (LinkageError | RuntimeException e) {
-            // Silently ignore any tracing errors
-            // This handles cases where OpenTelemetry is not available at runtime
+            LOGGER.warn("Failed to set span attribute: key={}, error={}", key, e.getMessage());
         }
     }
 

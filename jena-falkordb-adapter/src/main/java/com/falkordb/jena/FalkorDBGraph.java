@@ -18,6 +18,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.apache.jena.graph.Node;
+import org.apache.jena.graph.TransactionHandler;
 import org.apache.jena.graph.Triple;
 import org.apache.jena.graph.impl.GraphBase;
 import org.apache.jena.graph.NodeFactory;
@@ -30,9 +31,16 @@ import org.slf4j.LoggerFactory;
 /**
  * Jena Graph implementation backed by a FalkorDB graph.
  *
- * This class implements the minimal GraphBase hooks to translate Jena
+ * <p>This class implements the minimal GraphBase hooks to translate Jena
  * Triple operations into FalkorDB (Cypher-like) queries using the JFalkorDB
- * API.
+ * API.</p>
+ *
+ * <p>Key features:</p>
+ * <ul>
+ *   <li>Transaction support via {@link FalkorDBTransactionHandler}</li>
+ *   <li>Batch operations using Cypher UNWIND for efficiency</li>
+ *   <li>OpenTelemetry tracing support</li>
+ * </ul>
  */
 public final class FalkorDBGraph extends GraphBase {
     /** Logger instance. */
@@ -46,6 +54,8 @@ public final class FalkorDBGraph extends GraphBase {
     private final String graphName;
     /** Tracer for FalkorDBGraph operations. */
     private final Tracer tracer;
+    /** Transaction handler for batch operations. */
+    private final FalkorDBTransactionHandler transactionHandler;
 
     /** Attribute key for operation type. */
     private static final AttributeKey<String> ATTR_OPERATION =
@@ -110,6 +120,12 @@ public final class FalkorDBGraph extends GraphBase {
         this.graph = new TracedGraph(this.driver.graph(name), name);
         this.graphName = name;
         this.tracer = TracingUtil.getTracer(TracingUtil.SCOPE_FALKORDB_GRAPH);
+        this.transactionHandler = new FalkorDBTransactionHandler(
+            this.graph,
+            this.graphName,
+            this::performAddDirect,
+            this::performDeleteDirect
+        );
         ensureIndexes();
     }
 
@@ -152,6 +168,20 @@ public final class FalkorDBGraph extends GraphBase {
         return graph.getDelegate();
     }
 
+    /**
+     * Returns the transaction handler for this graph.
+     *
+     * <p>The transaction handler supports efficient batch operations by
+     * buffering triples during a transaction and flushing them in bulk
+     * using Cypher's UNWIND.</p>
+     *
+     * @return the FalkorDB transaction handler
+     */
+    @Override
+    public TransactionHandler getTransactionHandler() {
+        return transactionHandler;
+    }
+
     /** Clear all nodes and relationships from the graph. */
     @Override
     public void clear() {
@@ -162,10 +192,10 @@ public final class FalkorDBGraph extends GraphBase {
     /**
      * Add a triple to the backing FalkorDB graph.
      *
-     * This method translates a Jena Triple to a FalkorDB/Cypher create
-     * query. When the object is a literal, it is stored as a property on the
-     * subject node. When the object is a resource, it creates a relationship
-     * between nodes.
+     * <p>This method delegates to the transaction handler to enable batch
+     * operations. When in a transaction, triples are buffered and flushed
+     * in bulk on commit. When not in a transaction, triples are added
+     * immediately.</p>
      */
     @Override
     public void performAdd(final Triple triple) {
@@ -179,7 +209,8 @@ public final class FalkorDBGraph extends GraphBase {
             .startSpan();
 
         try (Scope scope = span.makeCurrent()) {
-            performAddInternal(triple);
+            // Delegate to transaction handler for buffering or immediate add
+            transactionHandler.bufferAdd(triple);
             span.setStatus(StatusCode.OK);
         } catch (Exception e) {
             span.setStatus(StatusCode.ERROR, e.getMessage());
@@ -188,6 +219,16 @@ public final class FalkorDBGraph extends GraphBase {
         } finally {
             span.end();
         }
+    }
+
+    /**
+     * Direct add implementation, bypassing transaction buffering.
+     * Used by the transaction handler for immediate non-transactional adds.
+     *
+     * @param triple the triple to add directly
+     */
+    void performAddDirect(final Triple triple) {
+        performAddInternal(triple);
     }
 
     /**
@@ -236,7 +277,14 @@ public final class FalkorDBGraph extends GraphBase {
         graph.query(cypher, params);
     }
 
-    /** Delete a triple from the backing FalkorDB graph. */
+    /**
+     * Delete a triple from the backing FalkorDB graph.
+     *
+     * <p>This method delegates to the transaction handler to enable batch
+     * operations. When in a transaction, deletes are buffered and flushed
+     * in bulk on commit. When not in a transaction, deletes are executed
+     * immediately.</p>
+     */
     @Override
     public void performDelete(final Triple triple) {
         Span span = tracer.spanBuilder("FalkorDBGraph.performDelete")
@@ -249,7 +297,8 @@ public final class FalkorDBGraph extends GraphBase {
             .startSpan();
 
         try (Scope scope = span.makeCurrent()) {
-            performDeleteInternal(triple);
+            // Delegate to transaction handler for buffering or immediate delete
+            transactionHandler.bufferDelete(triple);
             span.setStatus(StatusCode.OK);
         } catch (Exception e) {
             span.setStatus(StatusCode.ERROR, e.getMessage());
@@ -258,6 +307,16 @@ public final class FalkorDBGraph extends GraphBase {
         } finally {
             span.end();
         }
+    }
+
+    /**
+     * Direct delete implementation, bypassing transaction buffering.
+     * Used by the transaction handler for immediate non-transactional deletes.
+     *
+     * @param triple the triple to delete directly
+     */
+    void performDeleteDirect(final Triple triple) {
+        performDeleteInternal(triple);
     }
 
     /**

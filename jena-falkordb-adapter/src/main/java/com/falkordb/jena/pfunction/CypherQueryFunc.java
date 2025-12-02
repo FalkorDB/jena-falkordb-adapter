@@ -156,9 +156,9 @@ public final class CypherQueryFunc extends PropertyFunctionEval {
             if (LOGGER.isDebugEnabled()) {
                 LOGGER.debug("Executing Cypher via magic property: {}",
                     cypherQuery);
+                LOGGER.debug("Magic property executing Cypher query: {}",
+                    truncateForLog(cypherQuery));
             }
-            LOGGER.info("Magic property executing Cypher query: {}",
-                truncateForLog(cypherQuery));
 
             // Execute the Cypher query on FalkorDB
             ResultSet resultSet = falkorGraph.getUnderlyingGraph()
@@ -171,7 +171,10 @@ public final class CypherQueryFunc extends PropertyFunctionEval {
             span.setAttribute(ATTR_RESULT_COUNT, (long) bindings.size());
             span.setStatus(StatusCode.OK);
 
-            LOGGER.info("Magic property returned {} results", bindings.size());
+            if (LOGGER.isDebugEnabled()) {
+                LOGGER.debug("Magic property returned {} results",
+                    bindings.size());
+            }
 
             return QueryIterPlainWrapper.create(bindings.iterator(), execCxt);
 

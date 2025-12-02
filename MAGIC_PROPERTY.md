@@ -209,3 +209,143 @@ This error occurs when trying to use the magic property with a non-FalkorDB grap
 1. Check that RETURN clause column names match SPARQL variable names
 2. Verify the number of variables matches the number of columns
 3. Look for null values in the Cypher results
+
+## Performance Demonstration with Social Network Dataset
+
+The repository includes a social network dataset (`data/social_network.ttl`) with 100 people and approximately 800 "knows" relationships. This dataset is designed to demonstrate the performance benefits of the magic property for graph traversal queries.
+
+### Loading the Dataset
+
+1. Start FalkorDB and Fuseki:
+   ```bash
+   docker run -p 6379:6379 -d --name falkordb falkordb/falkordb:latest
+   java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-*.jar
+   ```
+
+2. Load the social network data via Fuseki's SPARQL endpoint:
+   ```bash
+   curl -X POST 'http://localhost:3330/falkor/data' \
+     -H 'Content-Type: text/turtle' \
+     --data-binary @data/social_network.ttl
+   ```
+
+### Performance Comparison: Friends of Friends Query
+
+#### Standard SPARQL (N+1 queries)
+
+This query finds friends of friends for person1:
+
+```sparql
+PREFIX social: <http://example.org/social#>
+
+SELECT ?fof WHERE {
+  social:person1 social:knows ?friend .
+  ?friend social:knows ?fof .
+}
+```
+
+**How it executes internally:**
+1. First query: Find all friends of person1 → Returns ~15 people
+2. For each friend: Find their friends → 15 more queries
+3. Total: 16 database round trips
+
+#### Magic Property (Single query)
+
+The same query using the magic property:
+
+```sparql
+PREFIX falkor: <http://falkordb.com/jena#>
+PREFIX social: <http://example.org/social#>
+
+SELECT ?fof WHERE {
+  (?fof) falkor:cypher '''
+    MATCH (:Resource {uri: "http://example.org/social#person1"})
+          -[:`http://example.org/social#knows`]->(:Resource)
+          -[:`http://example.org/social#knows`]->(fof:Resource)
+    RETURN DISTINCT fof.uri AS fof
+  '''
+}
+```
+
+**How it executes:**
+1. Single Cypher query with native graph traversal
+2. Total: 1 database round trip
+
+### More Complex Examples
+
+#### 3-Hop Path Query: Friends of Friends of Friends
+
+```sparql
+PREFIX falkor: <http://falkordb.com/jena#>
+
+SELECT ?person WHERE {
+  (?person) falkor:cypher '''
+    MATCH (:Resource {uri: "http://example.org/social#person1"})
+          -[:`http://example.org/social#knows`*1..3]->(p:Resource)
+    RETURN DISTINCT p.uri AS person
+  '''
+}
+```
+
+This query would require exponentially more round trips with standard SPARQL but executes as a single optimized Cypher query.
+
+#### Counting Connections
+
+```sparql
+PREFIX falkor: <http://falkordb.com/jena#>
+
+SELECT ?person ?friendCount WHERE {
+  (?person ?friendCount) falkor:cypher '''
+    MATCH (p:Resource)-[r:`http://example.org/social#knows`]->(:Resource)
+    RETURN p.uri AS person, count(r) AS friendCount
+    ORDER BY friendCount DESC
+    LIMIT 10
+  '''
+}
+```
+
+This finds the 10 most connected people in the network.
+
+#### Shortest Path Between Two People
+
+```sparql
+PREFIX falkor: <http://falkordb.com/jena#>
+
+SELECT ?pathLength WHERE {
+  (?pathLength) falkor:cypher '''
+    MATCH path = shortestPath(
+      (:Resource {uri: "http://example.org/social#person1"})
+      -[:`http://example.org/social#knows`*]->
+      (:Resource {uri: "http://example.org/social#person100"})
+    )
+    RETURN length(path) AS pathLength
+  '''
+}
+```
+
+### Viewing Performance in Jaeger
+
+With OpenTelemetry tracing enabled, you can visualize the performance difference in Jaeger:
+
+1. Start Jaeger: `docker-compose -f docker-compose-tracing.yaml up -d`
+2. Execute both query variants
+3. Open Jaeger UI at `http://localhost:16686`
+4. Compare trace timelines:
+   - Standard SPARQL shows multiple spans for each triple lookup
+   - Magic property shows a single `CypherQueryFunc.execute` span
+
+The trace attributes include:
+- `falkordb.cypher.query` - The executed Cypher query
+- `falkordb.cypher.result_count` - Number of results
+- `falkordb.cypher.var_count` - Number of bound variables
+
+### Expected Performance Gains
+
+| Query Type | Standard SPARQL | Magic Property | Improvement |
+|------------|----------------|----------------|-------------|
+| Friends of Friends | ~16 round trips | 1 round trip | 16x fewer calls |
+| 3-hop traversal | ~150+ round trips | 1 round trip | 150x+ fewer calls |
+| Aggregations | N/A (requires post-processing) | 1 query | Native aggregation |
+| Path queries | N/A (not expressible) | 1 query | Enables new capabilities |
+
+The actual time savings depend on network latency and dataset size, but the reduction in round trips provides consistent performance improvements.

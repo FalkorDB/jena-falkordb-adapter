@@ -107,6 +107,13 @@
                                         <exclude>NOTICE.txt</exclude>
                                     </excludes>
                                 </filter>
+                                <!-- Exclude duplicate okio kotlin_module from okio-jvm -->
+                                <filter>
+                                    <artifact>com.squareup.okio:okio-jvm</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/okio.kotlin_module</exclude>
+                                    </excludes>
+                                </filter>
                             </filters>
                         </configuration>
                     </execution>

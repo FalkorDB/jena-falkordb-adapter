@@ -1,0 +1,53 @@
+# Docker Compose configuration for running Jena-FalkorDB with Jaeger tracing
+#
+# This sets up:
+# - FalkorDB: The graph database backend
+# - Jaeger: Distributed tracing backend for viewing traces
+#
+# Usage:
+#   docker-compose -f docker-compose-tracing.yaml up -d
+#
+# Then access:
+#   - Jaeger UI: http://localhost:16686
+#   - FalkorDB: localhost:6379
+
+services:
+  # FalkorDB graph database
+  falkordb:
+    image: falkordb/falkordb:latest
+    container_name: falkordb
+    ports:
+      - "6379:6379"
+    volumes:
+      - falkordb-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Jaeger all-in-one (for development/testing)
+  # Includes collector, query, and UI
+  jaeger:
+    # FIXED: The correct image is 'jaegertracing/all-in-one'
+    image: jaegertracing/all-in-one:latest
+    container_name: jaeger
+    ports:
+      # OTLP gRPC receiver (OpenTelemetry traces go here)
+      - "4317:4317"
+      # OTLP HTTP receiver
+      - "4318:4318"
+      # Jaeger UI
+      - "16686:16686"
+      # Health check
+      - "14269:14269"
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:14269/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  falkordb-data:

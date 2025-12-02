@@ -5,11 +5,20 @@ import com.falkordb.FalkorDB;
 import com.falkordb.Graph;
 import com.falkordb.Record;
 import com.falkordb.ResultSet;
+import com.falkordb.jena.tracing.TracedGraph;
+import com.falkordb.jena.tracing.TracingUtil;
+import io.opentelemetry.api.common.AttributeKey;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.api.trace.StatusCode;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Scope;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.apache.jena.graph.Node;
+import org.apache.jena.graph.TransactionHandler;
 import org.apache.jena.graph.Triple;
 import org.apache.jena.graph.impl.GraphBase;
 import org.apache.jena.graph.NodeFactory;
@@ -22,9 +31,16 @@ import org.slf4j.LoggerFactory;
 /**
  * Jena Graph implementation backed by a FalkorDB graph.
  *
- * This class implements the minimal GraphBase hooks to translate Jena
+ * <p>This class implements the minimal GraphBase hooks to translate Jena
  * Triple operations into FalkorDB (Cypher-like) queries using the JFalkorDB
- * API.
+ * API.</p>
+ *
+ * <p>Key features:</p>
+ * <ul>
+ *   <li>Transaction support via {@link FalkorDBTransactionHandler}</li>
+ *   <li>Batch operations using Cypher UNWIND for efficiency</li>
+ *   <li>OpenTelemetry tracing support</li>
+ * </ul>
  */
 public final class FalkorDBGraph extends GraphBase {
     /** Logger instance. */
@@ -32,10 +48,42 @@ public final class FalkorDBGraph extends GraphBase {
         FalkorDBGraph.class);
     /** FalkorDB driver (JFalkorDB). */
     private final Driver driver;
-    /** Underlying FalkorDB graph instance. */
-    private final Graph graph;
+    /** Underlying FalkorDB graph instance (with tracing). */
+    private final TracedGraph graph;
     /** Name of the FalkorDB graph in use. */
     private final String graphName;
+    /** Tracer for FalkorDBGraph operations. */
+    private final Tracer tracer;
+    /** Transaction handler for batch operations. */
+    private final FalkorDBTransactionHandler transactionHandler;
+
+    /** Attribute key for operation type. */
+    private static final AttributeKey<String> ATTR_OPERATION =
+        AttributeKey.stringKey("falkordb.operation");
+
+    /** Attribute key for graph name. */
+    private static final AttributeKey<String> ATTR_GRAPH_NAME =
+        AttributeKey.stringKey("falkordb.graph_name");
+
+    /** Attribute key for triple subject. */
+    private static final AttributeKey<String> ATTR_TRIPLE_SUBJECT =
+        AttributeKey.stringKey("rdf.triple.subject");
+
+    /** Attribute key for triple predicate. */
+    private static final AttributeKey<String> ATTR_TRIPLE_PREDICATE =
+        AttributeKey.stringKey("rdf.triple.predicate");
+
+    /** Attribute key for triple object. */
+    private static final AttributeKey<String> ATTR_TRIPLE_OBJECT =
+        AttributeKey.stringKey("rdf.triple.object");
+
+    /** Attribute key for pattern. */
+    private static final AttributeKey<String> ATTR_PATTERN =
+        AttributeKey.stringKey("rdf.pattern");
+
+    /** Attribute key for result count. */
+    private static final AttributeKey<Long> ATTR_RESULT_COUNT =
+        AttributeKey.longKey("rdf.result_count");
 
     /**
      * Create a FalkorDB-backed graph for the given graph name. Uses the
@@ -69,8 +117,15 @@ public final class FalkorDBGraph extends GraphBase {
      */
     public FalkorDBGraph(final Driver suppliedDriver, final String name) {
         this.driver = suppliedDriver;
-        this.graph = this.driver.graph(name);
+        this.graph = new TracedGraph(this.driver.graph(name), name);
         this.graphName = name;
+        this.tracer = TracingUtil.getTracer(TracingUtil.SCOPE_FALKORDB_GRAPH);
+        this.transactionHandler = new FalkorDBTransactionHandler(
+            this.graph,
+            this.graphName,
+            this::performAddDirect,
+            this::performDeleteDirect
+        );
         ensureIndexes();
     }
 
@@ -102,6 +157,31 @@ public final class FalkorDBGraph extends GraphBase {
         return graphName;
     }
 
+    /**
+     * Returns the underlying FalkorDB graph instance.
+     * Use this method if you need direct access to the graph
+     * without tracing.
+     *
+     * @return the underlying FalkorDB Graph instance
+     */
+    public Graph getUnderlyingGraph() {
+        return graph.getDelegate();
+    }
+
+    /**
+     * Returns the transaction handler for this graph.
+     *
+     * <p>The transaction handler supports efficient batch operations by
+     * buffering triples during a transaction and flushing them in bulk
+     * using Cypher's UNWIND.</p>
+     *
+     * @return the FalkorDB transaction handler
+     */
+    @Override
+    public TransactionHandler getTransactionHandler() {
+        return transactionHandler;
+    }
+
     /** Clear all nodes and relationships from the graph. */
     @Override
     public void clear() {
@@ -112,13 +192,54 @@ public final class FalkorDBGraph extends GraphBase {
     /**
      * Add a triple to the backing FalkorDB graph.
      *
-     * This method translates a Jena Triple to a FalkorDB/Cypher create
-     * query. When the object is a literal, it is stored as a property on the
-     * subject node. When the object is a resource, it creates a relationship
-     * between nodes.
+     * <p>This method delegates to the transaction handler to enable batch
+     * operations. When in a transaction, triples are buffered and flushed
+     * in bulk on commit. When not in a transaction, triples are added
+     * immediately.</p>
      */
     @Override
     public void performAdd(final Triple triple) {
+        Span span = tracer.spanBuilder("FalkorDBGraph.performAdd")
+            .setSpanKind(SpanKind.INTERNAL)
+            .setAttribute(ATTR_OPERATION, "add")
+            .setAttribute(ATTR_GRAPH_NAME, graphName)
+            .setAttribute(ATTR_TRIPLE_SUBJECT, nodeToString(triple.getSubject()))
+            .setAttribute(ATTR_TRIPLE_PREDICATE, nodeToString(triple.getPredicate()))
+            .setAttribute(ATTR_TRIPLE_OBJECT, nodeToString(triple.getObject()))
+            .startSpan();
+
+        try (Scope scope = span.makeCurrent()) {
+            // Delegate to transaction handler for buffering or immediate add
+            transactionHandler.bufferAdd(triple);
+            span.setStatus(StatusCode.OK);
+        } catch (Exception e) {
+            span.setStatus(StatusCode.ERROR, e.getMessage());
+            span.recordException(e);
+            throw e;
+        } finally {
+            span.end();
+        }
+    }
+
+    //@todo barak batch add triples for better performance
+    /**
+     * Direct add implementation, bypassing transaction buffering.
+     * Used by the transaction handler for immediate non-transactional adds.
+     *
+     * @param triple the triple to add directly
+     */
+    void performAddDirect(final Triple triple) {
+        performAddInternal(triple);
+    }
+
+    /**
+     * Internal implementation of performAdd without tracing.
+     * Translates RDF triple to Cypher CREATE/MERGE.
+     * When the object is a literal, it is stored as a property on the
+     * subject node. When the object is a resource, it creates a relationship
+     * between nodes.
+     */
+    private void performAddInternal(final Triple triple) {
         // Translate RDF triple to Cypher CREATE/MERGE
         var subject = nodeToString(triple.getSubject());
         var predicate = nodeToString(triple.getPredicate());
@@ -134,17 +255,22 @@ public final class FalkorDBGraph extends GraphBase {
             params.put("subjectUri", subject);
             params.put("objectValue", objectValue);
 
+            // Sanitize predicate to prevent Cypher injection
+            String sanitizedPredicate = sanitizeCypherIdentifier(predicate);
             cypher = """
                 MERGE (s:Resource {uri: $subjectUri}) \
-                SET s.`%s` = $objectValue""".formatted(predicate);
+                SET s.`%s` = $objectValue""".formatted(sanitizedPredicate);
         } else if (predicate.equals(RDF.type.getURI())) {
             // Special handling for rdf:type - create node with type as label
             var object = nodeToString(triple.getObject());
 
             params.put("subjectUri", subject);
 
+            // Sanitize type to prevent Cypher injection
+            String sanitizedType = sanitizeCypherIdentifier(object);
             cypher = """
-                MERGE (s:Resource:`%s` {uri: $subjectUri})""".formatted(object);
+                MERGE (s:Resource:`%s` {uri: $subjectUri})""".formatted(
+                    sanitizedType);
         } else {
             // Create relationship for resource objects
             var object = nodeToString(triple.getObject());
@@ -152,18 +278,63 @@ public final class FalkorDBGraph extends GraphBase {
             params.put("subjectUri", subject);
             params.put("objectUri", object);
 
+            // Sanitize predicate to prevent Cypher injection
+            String sanitizedPredicate = sanitizeCypherIdentifier(predicate);
             cypher = """
                 MERGE (s:Resource {uri: $subjectUri}) \
                 MERGE (o:Resource {uri: $objectUri}) \
-                MERGE (s)-[r:`%s`]->(o)""".formatted(predicate);
+                MERGE (s)-[r:`%s`]->(o)""".formatted(sanitizedPredicate);
         }
 
         graph.query(cypher, params);
     }
 
-    /** Delete a triple from the backing FalkorDB graph. */
+    /**
+     * Delete a triple from the backing FalkorDB graph.
+     *
+     * <p>This method delegates to the transaction handler to enable batch
+     * operations. When in a transaction, deletes are buffered and flushed
+     * in bulk on commit. When not in a transaction, deletes are executed
+     * immediately.</p>
+     */
     @Override
     public void performDelete(final Triple triple) {
+        Span span = tracer.spanBuilder("FalkorDBGraph.performDelete")
+            .setSpanKind(SpanKind.INTERNAL)
+            .setAttribute(ATTR_OPERATION, "delete")
+            .setAttribute(ATTR_GRAPH_NAME, graphName)
+            .setAttribute(ATTR_TRIPLE_SUBJECT, nodeToString(triple.getSubject()))
+            .setAttribute(ATTR_TRIPLE_PREDICATE, nodeToString(triple.getPredicate()))
+            .setAttribute(ATTR_TRIPLE_OBJECT, nodeToString(triple.getObject()))
+            .startSpan();
+
+        try (Scope scope = span.makeCurrent()) {
+            // Delegate to transaction handler for buffering or immediate delete
+            transactionHandler.bufferDelete(triple);
+            span.setStatus(StatusCode.OK);
+        } catch (Exception e) {
+            span.setStatus(StatusCode.ERROR, e.getMessage());
+            span.recordException(e);
+            throw e;
+        } finally {
+            span.end();
+        }
+    }
+
+    /**
+     * Direct delete implementation, bypassing transaction buffering.
+     * Used by the transaction handler for immediate non-transactional deletes.
+     *
+     * @param triple the triple to delete directly
+     */
+    void performDeleteDirect(final Triple triple) {
+        performDeleteInternal(triple);
+    }
+
+    /**
+     * Internal implementation of performDelete without tracing.
+     */
+    private void performDeleteInternal(final Triple triple) {
         var subject = nodeToString(triple.getSubject());
         var predicate = nodeToString(triple.getPredicate());
 
@@ -175,26 +346,34 @@ public final class FalkorDBGraph extends GraphBase {
             // Use backticks to allow URIs as property names directly
             params.put("subjectUri", subject);
 
+            // Sanitize predicate to prevent Cypher injection
+            String sanitizedPredicate = sanitizeCypherIdentifier(predicate);
             cypher = """
                 MATCH (s:Resource {uri: $subjectUri}) \
-                REMOVE s.`%s`""".formatted(predicate);
+                REMOVE s.`%s`""".formatted(sanitizedPredicate);
         } else if (predicate.equals(RDF.type.getURI())) {
             // Special handling for rdf:type - remove label from node
             var object = nodeToString(triple.getObject());
 
             params.put("subjectUri", subject);
+
+            // Sanitize type to prevent Cypher injection
+            String sanitizedType = sanitizeCypherIdentifier(object);
             cypher = """
                 MATCH (s:Resource:`%s` {uri: $subjectUri}) \
-                REMOVE s:`%s`""".formatted(object, object);
+                REMOVE s:`%s`""".formatted(sanitizedType, sanitizedType);
         } else {
             var object = nodeToString(triple.getObject());
 
             params.put("subjectUri", subject);
             params.put("objectUri", object);
 
+            // Sanitize predicate to prevent Cypher injection
+            String sanitizedPredicate = sanitizeCypherIdentifier(predicate);
             cypher = """
                 MATCH (s:Resource {uri: $subjectUri})-[r:`%s`]->
-                (o:Resource {uri: $objectUri}) DELETE r""".formatted(predicate);
+                (o:Resource {uri: $objectUri}) DELETE r""".formatted(
+                    sanitizedPredicate);
         }
 
         graph.query(cypher, params);
@@ -203,6 +382,33 @@ public final class FalkorDBGraph extends GraphBase {
     /** Find triples matching the given pattern. */
     @Override
     protected ExtendedIterator<Triple> graphBaseFind(final Triple pattern) {
+        String patternStr = patternToString(pattern);
+        Span span = tracer.spanBuilder("FalkorDBGraph.find")
+            .setSpanKind(SpanKind.INTERNAL)
+            .setAttribute(ATTR_OPERATION, "find")
+            .setAttribute(ATTR_GRAPH_NAME, graphName)
+            .setAttribute(ATTR_PATTERN, patternStr)
+            .startSpan();
+
+        try (Scope scope = span.makeCurrent()) {
+            List<Triple> triples = graphBaseFindInternal(pattern);
+            span.setAttribute(ATTR_RESULT_COUNT, (long) triples.size());
+            span.setStatus(StatusCode.OK);
+            return WrappedIterator.create(triples.iterator());
+        } catch (Exception e) {
+            span.setStatus(StatusCode.ERROR, e.getMessage());
+            span.recordException(e);
+            throw e;
+        } finally {
+            span.end();
+        }
+    }
+
+    //@todo barak, who is calling this find, can we get more context?
+    /**
+     * Internal implementation of graphBaseFind without tracing.
+     */
+    private List<Triple> graphBaseFindInternal(final Triple pattern) {
         var triples = new ArrayList<Triple>();
 
         // Check if this is an rdf:type query
@@ -240,7 +446,20 @@ public final class FalkorDBGraph extends GraphBase {
             triples.addAll(propertyTriples);
         }
 
-        return WrappedIterator.create(triples.iterator());
+        return triples;
+    }
+
+    /**
+     * Convert a triple pattern to a string for tracing.
+     */
+    private String patternToString(final Triple pattern) {
+        return String.format("(%s, %s, %s)",
+            pattern.getSubject().isConcrete()
+                ? nodeToString(pattern.getSubject()) : "?",
+            pattern.getPredicate().isConcrete()
+                ? nodeToString(pattern.getPredicate()) : "?",
+            pattern.getObject().isConcrete()
+                ? nodeToString(pattern.getObject()) : "?");
     }
 
     private String buildCypherMatchRelationships(
@@ -422,6 +641,26 @@ public final class FalkorDBGraph extends GraphBase {
             return "_:" + node.getBlankNodeLabel();
         }
         return node.toString();
+    }
+
+    /**
+     * Sanitize a string for use as a Cypher identifier (label, relationship
+     * type, or property name).
+     *
+     * <p>This method escapes backticks and other special characters to
+     * prevent Cypher injection attacks when the value is used in backtick-
+     * quoted identifiers.</p>
+     *
+     * @param value the value to sanitize
+     * @return the sanitized value safe for use in Cypher identifiers
+     */
+    private String sanitizeCypherIdentifier(final String value) {
+        if (value == null) {
+            return "";
+        }
+        // Escape backticks by doubling them (` -> ``)
+        // Also remove any null characters which could cause issues
+        return value.replace("`", "``").replace("\0", "");
     }
 
     @Override

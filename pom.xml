@@ -55,13 +55,14 @@
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <maven.compiler.source>21</maven.compiler.source>
-        <maven.compiler.target>21</maven.compiler.target>
+        <maven.compiler.release>21</maven.compiler.release>
         <jena.version>5.6.0</jena.version>
         <jfalkordb.version>0.6.0</jfalkordb.version>
         <slf4j.version>2.0.17</slf4j.version>
         <logback.version>1.5.12</logback.version>
         <junit.version>5.10.0</junit.version>
+        <mockito.version>5.11.0</mockito.version>
+        <opentelemetry.version>1.44.1</opentelemetry.version>
     </properties>
 
     <dependencyManagement>
@@ -123,6 +124,51 @@
                 <version>${junit.version}</version>
                 <scope>test</scope>
             </dependency>
+
+            <!-- Mockito for testing -->
+            <dependency>
+                <groupId>org.mockito</groupId>
+                <artifactId>mockito-core</artifactId>
+                <version>${mockito.version}</version>
+                <scope>test</scope>
+            </dependency>
+
+            <!-- OpenTelemetry BOM for consistent versions -->
+            <dependency>
+                <groupId>io.opentelemetry</groupId>
+                <artifactId>opentelemetry-bom</artifactId>
+                <version>${opentelemetry.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- OpenTelemetry API -->
+            <dependency>
+                <groupId>io.opentelemetry</groupId>
+                <artifactId>opentelemetry-api</artifactId>
+                <version>${opentelemetry.version}</version>
+            </dependency>
+
+            <!-- OpenTelemetry SDK -->
+            <dependency>
+                <groupId>io.opentelemetry</groupId>
+                <artifactId>opentelemetry-sdk</artifactId>
+                <version>${opentelemetry.version}</version>
+            </dependency>
+
+            <!-- OpenTelemetry OTLP Exporter -->
+            <dependency>
+                <groupId>io.opentelemetry</groupId>
+                <artifactId>opentelemetry-exporter-otlp</artifactId>
+                <version>${opentelemetry.version}</version>
+            </dependency>
+
+            <!-- OpenTelemetry Semantic Conventions -->
+            <dependency>
+                <groupId>io.opentelemetry.semconv</groupId>
+                <artifactId>opentelemetry-semconv</artifactId>
+                <version>1.28.0-alpha</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 
@@ -134,8 +180,7 @@
                     <artifactId>maven-compiler-plugin</artifactId>
                     <version>3.14.1</version>
                     <configuration>
-                        <source>21</source>
-                        <target>21</target>
+                        <release>21</release>
                     </configuration>
                 </plugin>
 

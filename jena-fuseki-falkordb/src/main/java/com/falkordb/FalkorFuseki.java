@@ -1,6 +1,8 @@
 package com.falkordb;
 
 import com.falkordb.jena.FalkorDBModelFactory;
+import com.falkordb.jena.tracing.TracingUtil;
+import com.falkordb.tracing.FusekiTracingFilter;
 import java.io.File;
 import java.net.URL;
 import org.apache.jena.fuseki.main.FusekiServer;
@@ -180,6 +182,9 @@ public final class FalkorFuseki {
             .port(fusekiPort)
             .parseConfigFile(configFile.getAbsolutePath());
 
+        // Configure tracing
+        configureTracing(serverBuilder);
+
         // Try to set up static files
         String staticBase = getStaticFileBase();
         if (staticBase != null) {
@@ -233,6 +238,9 @@ public final class FalkorFuseki {
         FusekiServer.Builder serverBuilder = FusekiServer.create()
                 .port(fusekiPort)
                 .add(DEFAULT_DATASET_PATH, ds);
+
+        // Configure tracing
+        configureTracing(serverBuilder);
 
         // Try to set up static files from classpath or filesystem
         String staticBase = getStaticFileBase();
@@ -348,5 +356,27 @@ public final class FalkorFuseki {
             }
         }
         return defaultValue;
+    }
+
+    /**
+     * Configure OpenTelemetry tracing for the Fuseki server.
+     *
+     * <p>Initializes OpenTelemetry and adds the tracing filter to
+     * the server builder if tracing is enabled.</p>
+     *
+     * @param serverBuilder the FusekiServer.Builder to configure
+     */
+    private static void configureTracing(
+            final FusekiServer.Builder serverBuilder) {
+        // Initialize OpenTelemetry
+        TracingUtil.getOpenTelemetry();
+
+        // Add tracing filter if tracing is enabled
+        if (TracingUtil.isTracingEnabled()) {
+            serverBuilder.addFilter("/*", new FusekiTracingFilter());
+            if (LOGGER.isInfoEnabled()) {
+                LOGGER.info("OpenTelemetry tracing enabled");
+            }
+        }
     }
 }

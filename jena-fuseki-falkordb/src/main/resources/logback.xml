@@ -3,7 +3,8 @@
     <!-- Console appender configuration -->
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
-            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+<!--            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>-->
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %M:%L - %msg%n</pattern>
         </encoder>
     </appender>
 
@@ -20,6 +21,7 @@
 
     <!-- Logger for the FalkorDB adapter -->
     <logger name="com.falkordb" level="INFO"/>
+    <logger name="com.falkordb.jena.FalkorDBTransactionHandler" level="DEBUG"/>
 
     <!-- Root logger configuration -->
     <root level="INFO">

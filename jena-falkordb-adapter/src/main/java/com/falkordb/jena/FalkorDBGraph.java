@@ -190,6 +190,7 @@ public final class FalkorDBGraph extends GraphBase {
         }
     }
 
+    //@todo barak batch add triples for better performance
     /**
      * Internal implementation of performAdd without tracing.
      */
@@ -325,6 +326,7 @@ public final class FalkorDBGraph extends GraphBase {
         }
     }
 
+    //@todo barak, who is calling this find, can we get more context?
     /**
      * Internal implementation of graphBaseFind without tracing.
      */

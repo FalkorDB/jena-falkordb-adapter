@@ -387,10 +387,12 @@ public final class FalkorDBTransactionHandler extends TransactionHandlerBase {
                 params.put("batch", rows);
 
                 // Use UNWIND for batch insert
+                // Sanitize predicate to prevent Cypher injection
+                String sanitizedPredicate = sanitizeCypherIdentifier(predicate);
                 String cypher = """
                     UNWIND $batch AS row
                     MERGE (s:Resource {uri: row.s})
-                    SET s.`%s` = row.v""".formatted(predicate);
+                    SET s.`%s` = row.v""".formatted(sanitizedPredicate);
 
                 graph.query(cypher, params);
             }
@@ -446,10 +448,12 @@ public final class FalkorDBTransactionHandler extends TransactionHandlerBase {
                 params.put("subjects", subjects);
 
                 // Use UNWIND with dynamic label
+                // Sanitize type to prevent Cypher injection
+                String sanitizedType = sanitizeCypherIdentifier(type);
                 String cypher = """
                     UNWIND $subjects AS uri
                     MERGE (s:Resource {uri: uri})
-                    SET s:`%s`""".formatted(type);
+                    SET s:`%s`""".formatted(sanitizedType);
 
                 graph.query(cypher, params);
             }
@@ -512,11 +516,13 @@ public final class FalkorDBTransactionHandler extends TransactionHandlerBase {
                 params.put("batch", rows);
 
                 // Use UNWIND for batch relationship creation
+                // Sanitize predicate to prevent Cypher injection
+                String sanitizedPredicate = sanitizeCypherIdentifier(predicate);
                 String cypher = """
                     UNWIND $batch AS row
                     MERGE (s:Resource {uri: row.s})
                     MERGE (o:Resource {uri: row.o})
-                    MERGE (s)-[r:`%s`]->(o)""".formatted(predicate);
+                    MERGE (s)-[r:`%s`]->(o)""".formatted(sanitizedPredicate);
 
                 graph.query(cypher, params);
             }
@@ -628,10 +634,12 @@ public final class FalkorDBTransactionHandler extends TransactionHandlerBase {
                 params.put("subjects", subjects);
 
                 // Use UNWIND for batch property removal
+                // Sanitize predicate to prevent Cypher injection
+                String sanitizedPredicate = sanitizeCypherIdentifier(predicate);
                 String cypher = """
                     UNWIND $subjects AS uri
                     MATCH (s:Resource {uri: uri})
-                    REMOVE s.`%s`""".formatted(predicate);
+                    REMOVE s.`%s`""".formatted(sanitizedPredicate);
 
                 graph.query(cypher, params);
             }
@@ -688,10 +696,12 @@ public final class FalkorDBTransactionHandler extends TransactionHandlerBase {
                 params.put("subjects", subjects);
 
                 // Use UNWIND for batch label removal
+                // Sanitize type to prevent Cypher injection
+                String sanitizedType = sanitizeCypherIdentifier(type);
                 String cypher = """
                     UNWIND $subjects AS uri
                     MATCH (s:Resource:`%s` {uri: uri})
-                    REMOVE s:`%s`""".formatted(type, type);
+                    REMOVE s:`%s`""".formatted(sanitizedType, sanitizedType);
 
                 graph.query(cypher, params);
             }
@@ -754,11 +764,13 @@ public final class FalkorDBTransactionHandler extends TransactionHandlerBase {
                 params.put("batch", rows);
 
                 // Use UNWIND for batch relationship deletion
+                // Sanitize predicate to prevent Cypher injection
+                String sanitizedPredicate = sanitizeCypherIdentifier(predicate);
                 String cypher = """
                     UNWIND $batch AS row
                     MATCH (s:Resource {uri: row.s})-[r:`%s`]->
                     (o:Resource {uri: row.o})
-                    DELETE r""".formatted(predicate);
+                    DELETE r""".formatted(sanitizedPredicate);
 
                 graph.query(cypher, params);
             }
@@ -771,6 +783,26 @@ public final class FalkorDBTransactionHandler extends TransactionHandlerBase {
         } finally {
             span.end();
         }
+    }
+
+    /**
+     * Sanitize a string for use as a Cypher identifier (label, relationship
+     * type, or property name).
+     *
+     * <p>This method escapes backticks and other special characters to
+     * prevent Cypher injection attacks when the value is used in backtick-
+     * quoted identifiers.</p>
+     *
+     * @param value the value to sanitize
+     * @return the sanitized value safe for use in Cypher identifiers
+     */
+    private String sanitizeCypherIdentifier(final String value) {
+        if (value == null) {
+            return "";
+        }
+        // Escape backticks by doubling them (`` -> ````)
+        // Also remove any null characters which could cause issues
+        return value.replace("`", "``").replace("\0", "");
     }
 
     /**

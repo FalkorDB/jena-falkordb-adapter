@@ -233,6 +233,10 @@ public final class FalkorDBGraph extends GraphBase {
 
     /**
      * Internal implementation of performAdd without tracing.
+     * Translates RDF triple to Cypher CREATE/MERGE.
+     * When the object is a literal, it is stored as a property on the
+     * subject node. When the object is a resource, it creates a relationship
+     * between nodes.
      */
     private void performAddInternal(final Triple triple) {
         // Translate RDF triple to Cypher CREATE/MERGE
@@ -250,17 +254,22 @@ public final class FalkorDBGraph extends GraphBase {
             params.put("subjectUri", subject);
             params.put("objectValue", objectValue);
 
+            // Sanitize predicate to prevent Cypher injection
+            String sanitizedPredicate = sanitizeCypherIdentifier(predicate);
             cypher = """
                 MERGE (s:Resource {uri: $subjectUri}) \
-                SET s.`%s` = $objectValue""".formatted(predicate);
+                SET s.`%s` = $objectValue""".formatted(sanitizedPredicate);
         } else if (predicate.equals(RDF.type.getURI())) {
             // Special handling for rdf:type - create node with type as label
             var object = nodeToString(triple.getObject());
 
             params.put("subjectUri", subject);
 
+            // Sanitize type to prevent Cypher injection
+            String sanitizedType = sanitizeCypherIdentifier(object);
             cypher = """
-                MERGE (s:Resource:`%s` {uri: $subjectUri})""".formatted(object);
+                MERGE (s:Resource:`%s` {uri: $subjectUri})""".formatted(
+                    sanitizedType);
         } else {
             // Create relationship for resource objects
             var object = nodeToString(triple.getObject());
@@ -268,10 +277,12 @@ public final class FalkorDBGraph extends GraphBase {
             params.put("subjectUri", subject);
             params.put("objectUri", object);
 
+            // Sanitize predicate to prevent Cypher injection
+            String sanitizedPredicate = sanitizeCypherIdentifier(predicate);
             cypher = """
                 MERGE (s:Resource {uri: $subjectUri}) \
                 MERGE (o:Resource {uri: $objectUri}) \
-                MERGE (s)-[r:`%s`]->(o)""".formatted(predicate);
+                MERGE (s)-[r:`%s`]->(o)""".formatted(sanitizedPredicate);
         }
 
         graph.query(cypher, params);
@@ -334,26 +345,34 @@ public final class FalkorDBGraph extends GraphBase {
             // Use backticks to allow URIs as property names directly
             params.put("subjectUri", subject);
 
+            // Sanitize predicate to prevent Cypher injection
+            String sanitizedPredicate = sanitizeCypherIdentifier(predicate);
             cypher = """
                 MATCH (s:Resource {uri: $subjectUri}) \
-                REMOVE s.`%s`""".formatted(predicate);
+                REMOVE s.`%s`""".formatted(sanitizedPredicate);
         } else if (predicate.equals(RDF.type.getURI())) {
             // Special handling for rdf:type - remove label from node
             var object = nodeToString(triple.getObject());
 
             params.put("subjectUri", subject);
+
+            // Sanitize type to prevent Cypher injection
+            String sanitizedType = sanitizeCypherIdentifier(object);
             cypher = """
                 MATCH (s:Resource:`%s` {uri: $subjectUri}) \
-                REMOVE s:`%s`""".formatted(object, object);
+                REMOVE s:`%s`""".formatted(sanitizedType, sanitizedType);
         } else {
             var object = nodeToString(triple.getObject());
 
             params.put("subjectUri", subject);
             params.put("objectUri", object);
 
+            // Sanitize predicate to prevent Cypher injection
+            String sanitizedPredicate = sanitizeCypherIdentifier(predicate);
             cypher = """
                 MATCH (s:Resource {uri: $subjectUri})-[r:`%s`]->
-                (o:Resource {uri: $objectUri}) DELETE r""".formatted(predicate);
+                (o:Resource {uri: $objectUri}) DELETE r""".formatted(
+                    sanitizedPredicate);
         }
 
         graph.query(cypher, params);
@@ -620,6 +639,26 @@ public final class FalkorDBGraph extends GraphBase {
             return "_:" + node.getBlankNodeLabel();
         }
         return node.toString();
+    }
+
+    /**
+     * Sanitize a string for use as a Cypher identifier (label, relationship
+     * type, or property name).
+     *
+     * <p>This method escapes backticks and other special characters to
+     * prevent Cypher injection attacks when the value is used in backtick-
+     * quoted identifiers.</p>
+     *
+     * @param value the value to sanitize
+     * @return the sanitized value safe for use in Cypher identifiers
+     */
+    private String sanitizeCypherIdentifier(final String value) {
+        if (value == null) {
+            return "";
+        }
+        // Escape backticks by doubling them (` -> ``)
+        // Also remove any null characters which could cause issues
+        return value.replace("`", "``").replace("\0", "");
     }
 
     @Override

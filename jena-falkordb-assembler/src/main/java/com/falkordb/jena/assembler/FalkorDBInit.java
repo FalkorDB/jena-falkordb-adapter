@@ -1,7 +1,9 @@
 package com.falkordb.jena.assembler;
 
+import com.falkordb.jena.pfunction.CypherQueryFunc;
 import org.apache.jena.assembler.Assembler;
 import org.apache.jena.sparql.core.assembler.AssemblerUtils;
+import org.apache.jena.sparql.pfunction.PropertyFunctionRegistry;
 import org.apache.jena.sys.JenaSubsystemLifecycle;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,11 +16,15 @@ import org.slf4j.LoggerFactory;
  * {@link FalkorDBAssembler} with Jena's assembler registry, enabling
  * Fuseki to create FalkorDB-backed models from configuration files.</p>
  *
+ * <p>It also registers the {@link CypherQueryFunc} magic property function
+ * that allows executing native Cypher queries from SPARQL.</p>
+ *
  * <p>The registration is performed when Jena initializes, typically at
  * application startup.</p>
  *
  * @see FalkorDBAssembler
  * @see FalkorDBVocab
+ * @see CypherQueryFunc
  */
 public class FalkorDBInit implements JenaSubsystemLifecycle {
 
@@ -46,7 +52,8 @@ public class FalkorDBInit implements JenaSubsystemLifecycle {
 
     /**
      * Initialize the FalkorDB assembler module.
-     * This method registers the FalkorDB assembler with Jena's registry.
+     * This method registers the FalkorDB assembler with Jena's registry
+     * and the falkor:cypher magic property function.
      */
     @Override
     public void start() {
@@ -66,9 +73,17 @@ public class FalkorDBInit implements JenaSubsystemLifecycle {
             FalkorDBAssembler.INSTANCE
         );
 
+        // Register the falkor:cypher magic property function
+        PropertyFunctionRegistry.get().put(
+            CypherQueryFunc.URI,
+            CypherQueryFunc.class
+        );
+
         if (LOGGER.isInfoEnabled()) {
             LOGGER.info("FalkorDB Jena Assembler registered for type: {}",
                 FalkorDBVocab.FalkorDBModel);
+            LOGGER.info("FalkorDB magic property registered: {}",
+                CypherQueryFunc.URI);
         }
     }
 

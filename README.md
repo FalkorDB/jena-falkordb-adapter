@@ -31,6 +31,7 @@ This is a multi-module Maven project consisting of:
 - ✅ **rdf:type support with native graph labels**
 - ✅ **Automatic URI indexing** for optimal query performance
 - ✅ **Custom driver support** for advanced configuration
+- ✅ **Magic property (falkor:cypher)** for native Cypher query pushdown
 - ✅ **Fuseki SPARQL server** with FalkorDB backend
 - ✅ **Inference support** with rule-based reasoning (RDFS/OWL rules)
 - ✅ Connection pooling for better performance
@@ -775,6 +776,8 @@ This project is provided as-is for educational and development purposes.
 - [FalkorDB Documentation](https://docs.falkordb.com/)
 - [SPARQL 1.1 Query Language](https://www.w3.org/TR/sparql11-query/)
 - [Cypher Query Language](https://neo4j.com/docs/cypher-manual/current/)
+- [Magic Property Documentation](MAGIC_PROPERTY.md) - Native Cypher query pushdown
+- [OpenTelemetry Tracing](TRACING.md) - Observability and tracing
 
 ## Support
 

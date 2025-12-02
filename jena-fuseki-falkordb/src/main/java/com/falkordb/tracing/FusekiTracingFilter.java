@@ -34,6 +34,13 @@ public final class FusekiTracingFilter implements Filter {
     /** Tracer for Fuseki request tracing. */
     private Tracer tracer;
 
+    /**
+     * Creates a new FusekiTracingFilter.
+     */
+    public FusekiTracingFilter() {
+        // Default constructor - tracer is initialized in init()
+    }
+
     /** Attribute key for HTTP method. */
     private static final AttributeKey<String> ATTR_HTTP_METHOD =
         AttributeKey.stringKey("http.method");

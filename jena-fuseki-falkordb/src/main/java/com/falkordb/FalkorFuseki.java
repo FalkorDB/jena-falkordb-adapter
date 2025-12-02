@@ -178,20 +178,12 @@ public final class FalkorFuseki {
 
         int fusekiPort = getEnvOrDefaultInt("FUSEKI_PORT", DEFAULT_FUSEKI_PORT);
 
-        // Initialize OpenTelemetry tracing
-        TracingUtil.getOpenTelemetry();
-
         FusekiServer.Builder serverBuilder = FusekiServer.create()
             .port(fusekiPort)
             .parseConfigFile(configFile.getAbsolutePath());
 
-        // Add tracing filter if tracing is enabled
-        if (TracingUtil.isTracingEnabled()) {
-            serverBuilder.addFilter("/*", new FusekiTracingFilter());
-            if (LOGGER.isInfoEnabled()) {
-                LOGGER.info("OpenTelemetry tracing enabled");
-            }
-        }
+        // Configure tracing
+        configureTracing(serverBuilder);
 
         // Try to set up static files
         String staticBase = getStaticFileBase();
@@ -228,9 +220,6 @@ public final class FalkorFuseki {
             LOGGER.info("Connecting to FalkorDB at {}:{}...", host, port);
         }
 
-        // Initialize OpenTelemetry tracing
-        TracingUtil.getOpenTelemetry();
-
         // 2. Create the FalkorDB-backed Jena Model
         Model falkorGraph = FalkorDBModelFactory.builder()
                 .host(host)
@@ -250,13 +239,8 @@ public final class FalkorFuseki {
                 .port(fusekiPort)
                 .add(DEFAULT_DATASET_PATH, ds);
 
-        // Add tracing filter if tracing is enabled
-        if (TracingUtil.isTracingEnabled()) {
-            serverBuilder.addFilter("/*", new FusekiTracingFilter());
-            if (LOGGER.isInfoEnabled()) {
-                LOGGER.info("OpenTelemetry tracing enabled");
-            }
-        }
+        // Configure tracing
+        configureTracing(serverBuilder);
 
         // Try to set up static files from classpath or filesystem
         String staticBase = getStaticFileBase();
@@ -372,5 +356,27 @@ public final class FalkorFuseki {
             }
         }
         return defaultValue;
+    }
+
+    /**
+     * Configure OpenTelemetry tracing for the Fuseki server.
+     *
+     * <p>Initializes OpenTelemetry and adds the tracing filter to
+     * the server builder if tracing is enabled.</p>
+     *
+     * @param serverBuilder the FusekiServer.Builder to configure
+     */
+    private static void configureTracing(
+            final FusekiServer.Builder serverBuilder) {
+        // Initialize OpenTelemetry
+        TracingUtil.getOpenTelemetry();
+
+        // Add tracing filter if tracing is enabled
+        if (TracingUtil.isTracingEnabled()) {
+            serverBuilder.addFilter("/*", new FusekiTracingFilter());
+            if (LOGGER.isInfoEnabled()) {
+                LOGGER.info("OpenTelemetry tracing enabled");
+            }
+        }
     }
 }

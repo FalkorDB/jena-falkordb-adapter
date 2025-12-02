@@ -199,7 +199,20 @@ public final class TracingUtil {
 
     /**
      * Shutdown the tracing system gracefully.
-     * Call this when the application is shutting down.
+     *
+     * <p>This method is provided for manual cleanup when the application
+     * is shutting down. Note that a JVM shutdown hook is already registered
+     * during initialization, so calling this method is only necessary
+     * if you need to flush traces before the JVM exits.</p>
+     *
+     * <p>Use cases for calling this method:</p>
+     * <ul>
+     *   <li>In integration tests to ensure traces are flushed</li>
+     *   <li>When deploying in containers that don't give time for
+     *       shutdown hooks</li>
+     *   <li>When you need to guarantee traces are exported before
+     *       a specific point in time</li>
+     * </ul>
      */
     public static void shutdown() {
         if (openTelemetry instanceof OpenTelemetrySdk sdk) {

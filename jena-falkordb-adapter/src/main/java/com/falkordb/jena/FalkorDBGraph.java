@@ -141,6 +141,17 @@ public final class FalkorDBGraph extends GraphBase {
         return graphName;
     }
 
+    /**
+     * Returns the underlying FalkorDB graph instance.
+     * Use this method if you need direct access to the graph
+     * without tracing.
+     *
+     * @return the underlying FalkorDB Graph instance
+     */
+    public Graph getUnderlyingGraph() {
+        return graph.getDelegate();
+    }
+
     /** Clear all nodes and relationships from the graph. */
     @Override
     public void clear() {

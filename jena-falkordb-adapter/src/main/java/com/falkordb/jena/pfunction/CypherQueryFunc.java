@@ -24,8 +24,9 @@ import org.apache.jena.sparql.engine.QueryIterator;
 import org.apache.jena.sparql.engine.binding.Binding;
 import org.apache.jena.sparql.engine.binding.BindingBuilder;
 import org.apache.jena.sparql.engine.iterator.QueryIterPlainWrapper;
-import org.apache.jena.sparql.pfunction.PFuncListAndSimple;
 import org.apache.jena.sparql.pfunction.PropFuncArg;
+import org.apache.jena.sparql.pfunction.PropFuncArgType;
+import org.apache.jena.sparql.pfunction.PropertyFunctionEval;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -63,7 +64,7 @@ import org.slf4j.LoggerFactory;
  * @see <a href="https://jena.apache.org/documentation/query/extension.html">
  *      Jena ARQ Extensions</a>
  */
-public final class CypherQueryFunc extends PFuncListAndSimple {
+public final class CypherQueryFunc extends PropertyFunctionEval {
 
     /** Logger instance. */
     private static final Logger LOGGER = LoggerFactory.getLogger(
@@ -93,8 +94,10 @@ public final class CypherQueryFunc extends PFuncListAndSimple {
 
     /**
      * Creates a new CypherQueryFunc instance.
+     * Subject is a LIST (list of variables), object is SINGLE (Cypher query).
      */
     public CypherQueryFunc() {
+        super(PropFuncArgType.PF_ARG_LIST, PropFuncArgType.PF_ARG_SINGLE);
         this.tracer = TracingUtil.getTracer(SCOPE_PFUNCTION);
     }
 
@@ -105,23 +108,23 @@ public final class CypherQueryFunc extends PFuncListAndSimple {
      * property is encountered in a SPARQL query.</p>
      *
      * @param binding the current binding (unused in this implementation)
-     * @param subject the subject of the property (list of variables
+     * @param argSubject the subject of the property (list of variables
      *        to bind results to)
      * @param predicate the predicate (this property function)
-     * @param object the object (the Cypher query string as a Node)
+     * @param argObject the object (the Cypher query string)
      * @param execCxt the execution context
      * @return an iterator over result bindings
      */
     @Override
     public QueryIterator execEvaluated(
             final Binding binding,
-            final PropFuncArg subject,
+            final PropFuncArg argSubject,
             final Node predicate,
-            final Node object,
+            final PropFuncArg argObject,
             final ExecutionContext execCxt) {
 
         // Extract the Cypher query from the object argument
-        String cypherQuery = extractCypherQuery(object);
+        String cypherQuery = extractCypherQuery(argObject);
         if (cypherQuery == null) {
             LOGGER.warn("falkor:cypher requires a literal Cypher "
                 + "query string as the object");
@@ -139,7 +142,7 @@ public final class CypherQueryFunc extends PFuncListAndSimple {
         }
 
         // Extract the variable list from the subject
-        List<Var> vars = extractVariables(subject);
+        List<Var> vars = extractVariables(argSubject);
 
         // Execute with tracing
         Span span = tracer.spanBuilder("CypherQueryFunc.execute")
@@ -186,16 +189,27 @@ public final class CypherQueryFunc extends PFuncListAndSimple {
     /**
      * Extract the Cypher query string from the object argument.
      *
-     * @param object the object Node (should be a literal)
+     * @param object the object PropFuncArg (should contain a literal)
      * @return the Cypher query string, or null if invalid
      */
-    private String extractCypherQuery(final Node object) {
+    private String extractCypherQuery(final PropFuncArg object) {
         if (object == null) {
             return null;
         }
 
-        if (object.isLiteral()) {
-            return object.getLiteralLexicalForm();
+        // Handle single node argument
+        Node argNode = object.getArg();
+        if (argNode != null && argNode.isLiteral()) {
+            return argNode.getLiteralLexicalForm();
+        }
+
+        // Handle list argument (take first element)
+        List<Node> argList = object.getArgList();
+        if (argList != null && !argList.isEmpty()) {
+            Node first = argList.get(0);
+            if (first.isLiteral()) {
+                return first.getLiteralLexicalForm();
+            }
         }
 
         return null;
@@ -365,10 +379,10 @@ public final class CypherQueryFunc extends PFuncListAndSimple {
         if (str == null) {
             return null;
         }
-        if (str.length() <= maxLen) {
-            return str.replaceAll("\\s+", " ").trim();
+        String normalized = str.replaceAll("\\s+", " ").trim();
+        if (normalized.length() <= maxLen) {
+            return normalized;
         }
-        return str.replaceAll("\\s+", " ").trim()
-            .substring(0, maxLen) + "...";
+        return normalized.substring(0, maxLen) + "...";
     }
 }

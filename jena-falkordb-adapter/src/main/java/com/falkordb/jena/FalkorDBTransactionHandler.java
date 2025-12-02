@@ -363,36 +363,40 @@ public final class FalkorDBTransactionHandler extends TransactionHandlerBase {
 
         try (Scope scope = span.makeCurrent()) {
             // Group by predicate for efficient property setting
-            Map<String, List<Map<String, Object>>> predicateGroups =
-                new HashMap<>();
+            // Use parallel lists since FalkorDB doesn't handle List<Map> params
+            Map<String, List<String>> predicateSubjects = new HashMap<>();
+            Map<String, List<String>> predicateValues = new HashMap<>();
 
             for (Triple triple : batch) {
                 String predicate = nodeToString(triple.getPredicate());
-                predicateGroups.computeIfAbsent(predicate,
+                predicateSubjects.computeIfAbsent(predicate,
+                    k -> new ArrayList<>());
+                predicateValues.computeIfAbsent(predicate,
                     k -> new ArrayList<>());
 
-                Map<String, Object> row = new HashMap<>();
-                row.put("s", nodeToString(triple.getSubject()));
-                row.put("v", triple.getObject().getLiteralLexicalForm());
-                predicateGroups.get(predicate).add(row);
+                predicateSubjects.get(predicate).add(
+                    nodeToString(triple.getSubject()));
+                predicateValues.get(predicate).add(
+                    triple.getObject().getLiteralLexicalForm());
             }
 
             // Execute batch for each predicate
-            for (Map.Entry<String, List<Map<String, Object>>> entry
-                    : predicateGroups.entrySet()) {
-                String predicate = entry.getKey();
-                List<Map<String, Object>> rows = entry.getValue();
+            for (String predicate : predicateSubjects.keySet()) {
+                List<String> subjects = predicateSubjects.get(predicate);
+                List<String> values = predicateValues.get(predicate);
 
                 Map<String, Object> params = new HashMap<>();
-                params.put("batch", rows);
+                params.put("subjects", subjects);
+                params.put("values", values);
 
-                // Use UNWIND for batch insert
+                // Use UNWIND with range to iterate parallel arrays
                 // Sanitize predicate to prevent Cypher injection
                 String sanitizedPredicate = sanitizeCypherIdentifier(predicate);
                 String cypher = """
-                    UNWIND $batch AS row
-                    MERGE (s:Resource {uri: row.s})
-                    SET s.`%s` = row.v""".formatted(sanitizedPredicate);
+                    UNWIND range(0, size($subjects)-1) AS i
+                    WITH $subjects[i] AS subj, $values[i] AS val
+                    MERGE (s:Resource {uri: subj})
+                    SET s.`%s` = val""".formatted(sanitizedPredicate);
 
                 graph.query(cypher, params);
             }
@@ -492,36 +496,40 @@ public final class FalkorDBTransactionHandler extends TransactionHandlerBase {
 
         try (Scope scope = span.makeCurrent()) {
             // Group by predicate for efficient relationship creation
-            Map<String, List<Map<String, Object>>> predicateGroups =
-                new HashMap<>();
+            // Use parallel lists since FalkorDB doesn't handle List<Map> params
+            Map<String, List<String>> predicateSubjects = new HashMap<>();
+            Map<String, List<String>> predicateObjects = new HashMap<>();
 
             for (Triple triple : batch) {
                 String predicate = nodeToString(triple.getPredicate());
-                predicateGroups.computeIfAbsent(predicate,
+                predicateSubjects.computeIfAbsent(predicate,
+                    k -> new ArrayList<>());
+                predicateObjects.computeIfAbsent(predicate,
                     k -> new ArrayList<>());
 
-                Map<String, Object> row = new HashMap<>();
-                row.put("s", nodeToString(triple.getSubject()));
-                row.put("o", nodeToString(triple.getObject()));
-                predicateGroups.get(predicate).add(row);
+                predicateSubjects.get(predicate).add(
+                    nodeToString(triple.getSubject()));
+                predicateObjects.get(predicate).add(
+                    nodeToString(triple.getObject()));
             }
 
             // Execute batch for each predicate
-            for (Map.Entry<String, List<Map<String, Object>>> entry
-                    : predicateGroups.entrySet()) {
-                String predicate = entry.getKey();
-                List<Map<String, Object>> rows = entry.getValue();
+            for (String predicate : predicateSubjects.keySet()) {
+                List<String> subjects = predicateSubjects.get(predicate);
+                List<String> objects = predicateObjects.get(predicate);
 
                 Map<String, Object> params = new HashMap<>();
-                params.put("batch", rows);
+                params.put("subjects", subjects);
+                params.put("objects", objects);
 
-                // Use UNWIND for batch relationship creation
+                // Use UNWIND with range to iterate parallel arrays
                 // Sanitize predicate to prevent Cypher injection
                 String sanitizedPredicate = sanitizeCypherIdentifier(predicate);
                 String cypher = """
-                    UNWIND $batch AS row
-                    MERGE (s:Resource {uri: row.s})
-                    MERGE (o:Resource {uri: row.o})
+                    UNWIND range(0, size($subjects)-1) AS i
+                    WITH $subjects[i] AS subj, $objects[i] AS obj
+                    MERGE (s:Resource {uri: subj})
+                    MERGE (o:Resource {uri: obj})
                     MERGE (s)-[r:`%s`]->(o)""".formatted(sanitizedPredicate);
 
                 graph.query(cypher, params);
@@ -613,33 +621,44 @@ public final class FalkorDBTransactionHandler extends TransactionHandlerBase {
             .startSpan();
 
         try (Scope scope = span.makeCurrent()) {
-            // Group by predicate
-            Map<String, List<String>> predicateGroups = new HashMap<>();
+            // Group by predicate, tracking subjects and values
+            // Use parallel lists since FalkorDB doesn't handle List<Map> params
+            Map<String, List<String>> predicateSubjects = new HashMap<>();
+            Map<String, List<String>> predicateValues = new HashMap<>();
 
             for (Triple triple : batch) {
                 String predicate = nodeToString(triple.getPredicate());
-                predicateGroups.computeIfAbsent(predicate,
+                predicateSubjects.computeIfAbsent(predicate,
                     k -> new ArrayList<>());
-                predicateGroups.get(predicate).add(
+                predicateValues.computeIfAbsent(predicate,
+                    k -> new ArrayList<>());
+
+                predicateSubjects.get(predicate).add(
                     nodeToString(triple.getSubject()));
+                predicateValues.get(predicate).add(
+                    triple.getObject().getLiteralLexicalForm());
             }
 
             // Execute batch for each predicate
-            for (Map.Entry<String, List<String>> entry
-                    : predicateGroups.entrySet()) {
-                String predicate = entry.getKey();
-                List<String> subjects = entry.getValue();
+            for (String predicate : predicateSubjects.keySet()) {
+                List<String> subjects = predicateSubjects.get(predicate);
+                List<String> values = predicateValues.get(predicate);
 
                 Map<String, Object> params = new HashMap<>();
                 params.put("subjects", subjects);
+                params.put("values", values);
 
-                // Use UNWIND for batch property removal
+                // Use UNWIND with range to iterate parallel arrays
+                // Only remove property if value matches exactly
                 // Sanitize predicate to prevent Cypher injection
                 String sanitizedPredicate = sanitizeCypherIdentifier(predicate);
                 String cypher = """
-                    UNWIND $subjects AS uri
-                    MATCH (s:Resource {uri: uri})
-                    REMOVE s.`%s`""".formatted(sanitizedPredicate);
+                    UNWIND range(0, size($subjects)-1) AS i
+                    WITH $subjects[i] AS subj, $values[i] AS val
+                    MATCH (s:Resource {uri: subj})
+                    WHERE s.`%s` = val
+                    REMOVE s.`%s`""".formatted(sanitizedPredicate,
+                        sanitizedPredicate);
 
                 graph.query(cypher, params);
             }
@@ -740,36 +759,40 @@ public final class FalkorDBTransactionHandler extends TransactionHandlerBase {
 
         try (Scope scope = span.makeCurrent()) {
             // Group by predicate
-            Map<String, List<Map<String, Object>>> predicateGroups =
-                new HashMap<>();
+            // Use parallel lists since FalkorDB doesn't handle List<Map> params
+            Map<String, List<String>> predicateSubjects = new HashMap<>();
+            Map<String, List<String>> predicateObjects = new HashMap<>();
 
             for (Triple triple : batch) {
                 String predicate = nodeToString(triple.getPredicate());
-                predicateGroups.computeIfAbsent(predicate,
+                predicateSubjects.computeIfAbsent(predicate,
+                    k -> new ArrayList<>());
+                predicateObjects.computeIfAbsent(predicate,
                     k -> new ArrayList<>());
 
-                Map<String, Object> row = new HashMap<>();
-                row.put("s", nodeToString(triple.getSubject()));
-                row.put("o", nodeToString(triple.getObject()));
-                predicateGroups.get(predicate).add(row);
+                predicateSubjects.get(predicate).add(
+                    nodeToString(triple.getSubject()));
+                predicateObjects.get(predicate).add(
+                    nodeToString(triple.getObject()));
             }
 
             // Execute batch for each predicate
-            for (Map.Entry<String, List<Map<String, Object>>> entry
-                    : predicateGroups.entrySet()) {
-                String predicate = entry.getKey();
-                List<Map<String, Object>> rows = entry.getValue();
+            for (String predicate : predicateSubjects.keySet()) {
+                List<String> subjects = predicateSubjects.get(predicate);
+                List<String> objects = predicateObjects.get(predicate);
 
                 Map<String, Object> params = new HashMap<>();
-                params.put("batch", rows);
+                params.put("subjects", subjects);
+                params.put("objects", objects);
 
-                // Use UNWIND for batch relationship deletion
+                // Use UNWIND with range to iterate parallel arrays
                 // Sanitize predicate to prevent Cypher injection
                 String sanitizedPredicate = sanitizeCypherIdentifier(predicate);
                 String cypher = """
-                    UNWIND $batch AS row
-                    MATCH (s:Resource {uri: row.s})-[r:`%s`]->
-                    (o:Resource {uri: row.o})
+                    UNWIND range(0, size($subjects)-1) AS i
+                    WITH $subjects[i] AS subj, $objects[i] AS obj
+                    MATCH (s:Resource {uri: subj})-[r:`%s`]->
+                    (o:Resource {uri: obj})
                     DELETE r""".formatted(sanitizedPredicate);
 
                 graph.query(cypher, params);

@@ -62,6 +62,7 @@
         <slf4j.version>2.0.17</slf4j.version>
         <logback.version>1.5.12</logback.version>
         <junit.version>5.10.0</junit.version>
+        <opentelemetry.version>1.44.1</opentelemetry.version>
     </properties>
 
     <dependencyManagement>
@@ -122,6 +123,43 @@
                 <artifactId>junit-jupiter-engine</artifactId>
                 <version>${junit.version}</version>
                 <scope>test</scope>
+            </dependency>
+
+            <!-- OpenTelemetry BOM for consistent versions -->
+            <dependency>
+                <groupId>io.opentelemetry</groupId>
+                <artifactId>opentelemetry-bom</artifactId>
+                <version>${opentelemetry.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- OpenTelemetry API -->
+            <dependency>
+                <groupId>io.opentelemetry</groupId>
+                <artifactId>opentelemetry-api</artifactId>
+                <version>${opentelemetry.version}</version>
+            </dependency>
+
+            <!-- OpenTelemetry SDK -->
+            <dependency>
+                <groupId>io.opentelemetry</groupId>
+                <artifactId>opentelemetry-sdk</artifactId>
+                <version>${opentelemetry.version}</version>
+            </dependency>
+
+            <!-- OpenTelemetry OTLP Exporter -->
+            <dependency>
+                <groupId>io.opentelemetry</groupId>
+                <artifactId>opentelemetry-exporter-otlp</artifactId>
+                <version>${opentelemetry.version}</version>
+            </dependency>
+
+            <!-- OpenTelemetry Semantic Conventions -->
+            <dependency>
+                <groupId>io.opentelemetry.semconv</groupId>
+                <artifactId>opentelemetry-semconv</artifactId>
+                <version>1.28.0-alpha</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

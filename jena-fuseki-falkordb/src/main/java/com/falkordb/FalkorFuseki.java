@@ -1,6 +1,8 @@
 package com.falkordb;
 
 import com.falkordb.jena.FalkorDBModelFactory;
+import com.falkordb.jena.tracing.TracingUtil;
+import com.falkordb.tracing.FusekiTracingFilter;
 import java.io.File;
 import java.net.URL;
 import org.apache.jena.fuseki.main.FusekiServer;
@@ -176,9 +178,20 @@ public final class FalkorFuseki {
 
         int fusekiPort = getEnvOrDefaultInt("FUSEKI_PORT", DEFAULT_FUSEKI_PORT);
 
+        // Initialize OpenTelemetry tracing
+        TracingUtil.getOpenTelemetry();
+
         FusekiServer.Builder serverBuilder = FusekiServer.create()
             .port(fusekiPort)
             .parseConfigFile(configFile.getAbsolutePath());
+
+        // Add tracing filter if tracing is enabled
+        if (TracingUtil.isTracingEnabled()) {
+            serverBuilder.addFilter("/*", new FusekiTracingFilter());
+            if (LOGGER.isInfoEnabled()) {
+                LOGGER.info("OpenTelemetry tracing enabled");
+            }
+        }
 
         // Try to set up static files
         String staticBase = getStaticFileBase();
@@ -215,6 +228,9 @@ public final class FalkorFuseki {
             LOGGER.info("Connecting to FalkorDB at {}:{}...", host, port);
         }
 
+        // Initialize OpenTelemetry tracing
+        TracingUtil.getOpenTelemetry();
+
         // 2. Create the FalkorDB-backed Jena Model
         Model falkorGraph = FalkorDBModelFactory.builder()
                 .host(host)
@@ -233,6 +249,14 @@ public final class FalkorFuseki {
         FusekiServer.Builder serverBuilder = FusekiServer.create()
                 .port(fusekiPort)
                 .add(DEFAULT_DATASET_PATH, ds);
+
+        // Add tracing filter if tracing is enabled
+        if (TracingUtil.isTracingEnabled()) {
+            serverBuilder.addFilter("/*", new FusekiTracingFilter());
+            if (LOGGER.isInfoEnabled()) {
+                LOGGER.info("OpenTelemetry tracing enabled");
+            }
+        }
 
         // Try to set up static files from classpath or filesystem
         String staticBase = getStaticFileBase();

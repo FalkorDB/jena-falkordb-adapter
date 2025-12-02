@@ -5,6 +5,14 @@ import com.falkordb.FalkorDB;
 import com.falkordb.Graph;
 import com.falkordb.Record;
 import com.falkordb.ResultSet;
+import com.falkordb.jena.tracing.TracedGraph;
+import com.falkordb.jena.tracing.TracingUtil;
+import io.opentelemetry.api.common.AttributeKey;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.api.trace.StatusCode;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Scope;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -32,10 +40,40 @@ public final class FalkorDBGraph extends GraphBase {
         FalkorDBGraph.class);
     /** FalkorDB driver (JFalkorDB). */
     private final Driver driver;
-    /** Underlying FalkorDB graph instance. */
-    private final Graph graph;
+    /** Underlying FalkorDB graph instance (with tracing). */
+    private final TracedGraph graph;
     /** Name of the FalkorDB graph in use. */
     private final String graphName;
+    /** Tracer for FalkorDBGraph operations. */
+    private final Tracer tracer;
+
+    /** Attribute key for operation type. */
+    private static final AttributeKey<String> ATTR_OPERATION =
+        AttributeKey.stringKey("falkordb.operation");
+
+    /** Attribute key for graph name. */
+    private static final AttributeKey<String> ATTR_GRAPH_NAME =
+        AttributeKey.stringKey("falkordb.graph_name");
+
+    /** Attribute key for triple subject. */
+    private static final AttributeKey<String> ATTR_TRIPLE_SUBJECT =
+        AttributeKey.stringKey("rdf.triple.subject");
+
+    /** Attribute key for triple predicate. */
+    private static final AttributeKey<String> ATTR_TRIPLE_PREDICATE =
+        AttributeKey.stringKey("rdf.triple.predicate");
+
+    /** Attribute key for triple object. */
+    private static final AttributeKey<String> ATTR_TRIPLE_OBJECT =
+        AttributeKey.stringKey("rdf.triple.object");
+
+    /** Attribute key for pattern. */
+    private static final AttributeKey<String> ATTR_PATTERN =
+        AttributeKey.stringKey("rdf.pattern");
+
+    /** Attribute key for result count. */
+    private static final AttributeKey<Long> ATTR_RESULT_COUNT =
+        AttributeKey.longKey("rdf.result_count");
 
     /**
      * Create a FalkorDB-backed graph for the given graph name. Uses the
@@ -69,8 +107,9 @@ public final class FalkorDBGraph extends GraphBase {
      */
     public FalkorDBGraph(final Driver suppliedDriver, final String name) {
         this.driver = suppliedDriver;
-        this.graph = this.driver.graph(name);
+        this.graph = new TracedGraph(this.driver.graph(name), name);
         this.graphName = name;
+        this.tracer = TracingUtil.getTracer(TracingUtil.SCOPE_FALKORDB_GRAPH);
         ensureIndexes();
     }
 
@@ -119,6 +158,31 @@ public final class FalkorDBGraph extends GraphBase {
      */
     @Override
     public void performAdd(final Triple triple) {
+        Span span = tracer.spanBuilder("FalkorDBGraph.performAdd")
+            .setSpanKind(SpanKind.INTERNAL)
+            .setAttribute(ATTR_OPERATION, "add")
+            .setAttribute(ATTR_GRAPH_NAME, graphName)
+            .setAttribute(ATTR_TRIPLE_SUBJECT, nodeToString(triple.getSubject()))
+            .setAttribute(ATTR_TRIPLE_PREDICATE, nodeToString(triple.getPredicate()))
+            .setAttribute(ATTR_TRIPLE_OBJECT, nodeToString(triple.getObject()))
+            .startSpan();
+
+        try (Scope scope = span.makeCurrent()) {
+            performAddInternal(triple);
+            span.setStatus(StatusCode.OK);
+        } catch (Exception e) {
+            span.setStatus(StatusCode.ERROR, e.getMessage());
+            span.recordException(e);
+            throw e;
+        } finally {
+            span.end();
+        }
+    }
+
+    /**
+     * Internal implementation of performAdd without tracing.
+     */
+    private void performAddInternal(final Triple triple) {
         // Translate RDF triple to Cypher CREATE/MERGE
         var subject = nodeToString(triple.getSubject());
         var predicate = nodeToString(triple.getPredicate());
@@ -164,6 +228,31 @@ public final class FalkorDBGraph extends GraphBase {
     /** Delete a triple from the backing FalkorDB graph. */
     @Override
     public void performDelete(final Triple triple) {
+        Span span = tracer.spanBuilder("FalkorDBGraph.performDelete")
+            .setSpanKind(SpanKind.INTERNAL)
+            .setAttribute(ATTR_OPERATION, "delete")
+            .setAttribute(ATTR_GRAPH_NAME, graphName)
+            .setAttribute(ATTR_TRIPLE_SUBJECT, nodeToString(triple.getSubject()))
+            .setAttribute(ATTR_TRIPLE_PREDICATE, nodeToString(triple.getPredicate()))
+            .setAttribute(ATTR_TRIPLE_OBJECT, nodeToString(triple.getObject()))
+            .startSpan();
+
+        try (Scope scope = span.makeCurrent()) {
+            performDeleteInternal(triple);
+            span.setStatus(StatusCode.OK);
+        } catch (Exception e) {
+            span.setStatus(StatusCode.ERROR, e.getMessage());
+            span.recordException(e);
+            throw e;
+        } finally {
+            span.end();
+        }
+    }
+
+    /**
+     * Internal implementation of performDelete without tracing.
+     */
+    private void performDeleteInternal(final Triple triple) {
         var subject = nodeToString(triple.getSubject());
         var predicate = nodeToString(triple.getPredicate());
 
@@ -203,6 +292,32 @@ public final class FalkorDBGraph extends GraphBase {
     /** Find triples matching the given pattern. */
     @Override
     protected ExtendedIterator<Triple> graphBaseFind(final Triple pattern) {
+        String patternStr = patternToString(pattern);
+        Span span = tracer.spanBuilder("FalkorDBGraph.find")
+            .setSpanKind(SpanKind.INTERNAL)
+            .setAttribute(ATTR_OPERATION, "find")
+            .setAttribute(ATTR_GRAPH_NAME, graphName)
+            .setAttribute(ATTR_PATTERN, patternStr)
+            .startSpan();
+
+        try (Scope scope = span.makeCurrent()) {
+            List<Triple> triples = graphBaseFindInternal(pattern);
+            span.setAttribute(ATTR_RESULT_COUNT, (long) triples.size());
+            span.setStatus(StatusCode.OK);
+            return WrappedIterator.create(triples.iterator());
+        } catch (Exception e) {
+            span.setStatus(StatusCode.ERROR, e.getMessage());
+            span.recordException(e);
+            throw e;
+        } finally {
+            span.end();
+        }
+    }
+
+    /**
+     * Internal implementation of graphBaseFind without tracing.
+     */
+    private List<Triple> graphBaseFindInternal(final Triple pattern) {
         var triples = new ArrayList<Triple>();
 
         // Check if this is an rdf:type query
@@ -240,7 +355,20 @@ public final class FalkorDBGraph extends GraphBase {
             triples.addAll(propertyTriples);
         }
 
-        return WrappedIterator.create(triples.iterator());
+        return triples;
+    }
+
+    /**
+     * Convert a triple pattern to a string for tracing.
+     */
+    private String patternToString(final Triple pattern) {
+        return String.format("(%s, %s, %s)",
+            pattern.getSubject().isConcrete()
+                ? nodeToString(pattern.getSubject()) : "?",
+            pattern.getPredicate().isConcrete()
+                ? nodeToString(pattern.getPredicate()) : "?",
+            pattern.getObject().isConcrete()
+                ? nodeToString(pattern.getObject()) : "?");
     }
 
     private String buildCypherMatchRelationships(

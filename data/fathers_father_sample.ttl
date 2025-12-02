@@ -1,0 +1,45 @@
+@prefix ff: <http://www.semanticweb.org/ontologies/2023/1/fathers_father#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix xml: <http://www.w3.org/XML/1998/namespace> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@base <http://www.semanticweb.org/ontologies/2023/1/fathers_father#> .
+
+# Ontology
+<http://www.semanticweb.org/ontologies/2023/1/fathers_father> rdf:type owl:Ontology .
+
+#################################################################
+#    Object Properties
+#################################################################
+
+ff:father_of rdf:type owl:ObjectProperty ;
+             rdfs:domain ff:Male ;
+             rdfs:range ff:Male .
+
+ff:grandfather_of rdf:type owl:ObjectProperty ;
+                  rdfs:domain ff:Male ;
+                  rdfs:range ff:Male .
+
+#################################################################
+#    Classes
+#################################################################
+
+ff:Male rdf:type owl:Class .
+
+#################################################################
+#    Individuals
+#################################################################
+
+# Abraham is the father of Isaac
+ff:Abraham rdf:type ff:Male ;
+           ff:father_of ff:Isaac .
+
+# Isaac is the father of Jacob
+ff:Isaac rdf:type ff:Male ;
+         ff:father_of ff:Jacob .
+
+# Jacob is just a male (leaf node)
+ff:Jacob rdf:type ff:Male .
+
+# The grandfather_of relationship (Abraham -> Jacob) will be inferred by the rule

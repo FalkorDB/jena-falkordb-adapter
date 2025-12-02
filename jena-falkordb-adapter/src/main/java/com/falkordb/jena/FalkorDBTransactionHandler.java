@@ -398,6 +398,9 @@ public final class FalkorDBTransactionHandler extends TransactionHandlerBase {
                     MERGE (s:Resource {uri: subj})
                     SET s.`%s` = val""".formatted(sanitizedPredicate);
 
+                if (LOGGER.isDebugEnabled()) {
+                    LOGGER.debug("Executing Cypher: {}\nWith Params({}): {}", cypher, params.size(), params);
+                }
                 graph.query(cypher, params);
             }
 
@@ -459,6 +462,9 @@ public final class FalkorDBTransactionHandler extends TransactionHandlerBase {
                     MERGE (s:Resource {uri: uri})
                     SET s:`%s`""".formatted(sanitizedType);
 
+                if (LOGGER.isDebugEnabled()) {
+                    LOGGER.debug("Executing Cypher: {}\nWith Params({}): {}", cypher, params.size(), params);
+                }
                 graph.query(cypher, params);
             }
 
@@ -532,6 +538,9 @@ public final class FalkorDBTransactionHandler extends TransactionHandlerBase {
                     MERGE (o:Resource {uri: obj})
                     MERGE (s)-[r:`%s`]->(o)""".formatted(sanitizedPredicate);
 
+                if (LOGGER.isDebugEnabled()) {
+                    LOGGER.debug("Executing Cypher: {}\nWith Params({}): {}", cypher, params.size(), params);
+                }
                 graph.query(cypher, params);
             }
 
@@ -660,6 +669,9 @@ public final class FalkorDBTransactionHandler extends TransactionHandlerBase {
                     REMOVE s.`%s`""".formatted(sanitizedPredicate,
                         sanitizedPredicate);
 
+                if (LOGGER.isDebugEnabled()) {
+                    LOGGER.debug("Executing Cypher: {}\nWith Params({}): {}", cypher, params.size(), params);
+                }
                 graph.query(cypher, params);
             }
 
@@ -722,6 +734,9 @@ public final class FalkorDBTransactionHandler extends TransactionHandlerBase {
                     MATCH (s:Resource:`%s` {uri: uri})
                     REMOVE s:`%s`""".formatted(sanitizedType, sanitizedType);
 
+                if (LOGGER.isDebugEnabled()) {
+                    LOGGER.debug("Executing Cypher: {}\nWith Params({}): {}", cypher, params.size(), params);
+                }
                 graph.query(cypher, params);
             }
 
@@ -795,6 +810,9 @@ public final class FalkorDBTransactionHandler extends TransactionHandlerBase {
                     (o:Resource {uri: obj})
                     DELETE r""".formatted(sanitizedPredicate);
 
+                if (LOGGER.isDebugEnabled()) {
+                    LOGGER.debug("Executing Cypher: {}\nWith Params({}): {}", cypher, params.size(), params);
+                }
                 graph.query(cypher, params);
             }
 

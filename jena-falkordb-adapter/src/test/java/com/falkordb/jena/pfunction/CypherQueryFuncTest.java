@@ -661,4 +661,284 @@ public class CypherQueryFuncTest {
             }
         }
     }
+
+    @Test
+    @DisplayName("Test Cypher query with null values in results")
+    public void testCypherQueryWithNullValues() {
+        // Add test data where one person has name but no age
+        var person1 = model.createResource("http://example.org/person/john");
+        var person2 = model.createResource("http://example.org/person/jane");
+        var nameProp = model.createProperty("http://example.org/name");
+        var ageProp = model.createProperty("http://example.org/age");
+
+        person1.addProperty(nameProp, "John");
+        person1.addProperty(ageProp, model.createTypedLiteral(30));
+        person2.addProperty(nameProp, "Jane");
+        // Note: person2 has no age property
+
+        Dataset dataset = DatasetFactory.create(model);
+
+        String sparql = """
+            PREFIX falkor: <http://falkordb.com/jena#>
+            SELECT ?name ?age WHERE {
+                (?name ?age) falkor:cypher '''
+                    MATCH (p:Resource)
+                    WHERE p.`http://example.org/name` IS NOT NULL
+                    RETURN p.`http://example.org/name` AS name,
+                           p.`http://example.org/age` AS age
+                    ORDER BY name
+                '''
+            }
+            """;
+
+        Query query = QueryFactory.create(sparql);
+        try (QueryExecution qexec = QueryExecutionFactory.create(query, dataset)) {
+            ResultSet results = qexec.execSelect();
+            assertTrue(results.hasNext(), "Should have results");
+
+            // Just verify we can iterate through results without errors
+            int count = 0;
+            while (results.hasNext()) {
+                results.next();
+                count++;
+            }
+            assertTrue(count >= 1, "Should have at least one result");
+        }
+    }
+
+    @Test
+    @DisplayName("Test Cypher query with very long query string")
+    public void testCypherQueryWithLongQueryString() {
+        // Add test data
+        var person = model.createResource("http://example.org/person/john");
+        var nameProp = model.createProperty("http://example.org/name");
+        person.addProperty(nameProp, "John");
+
+        Dataset dataset = DatasetFactory.create(model);
+
+        // Create a very long query with lots of whitespace (over 200 chars)
+        String longQuery = """
+            PREFIX falkor: <http://falkordb.com/jena#>
+            SELECT ?name WHERE {
+                (?name) falkor:cypher '''
+                    MATCH          (p:Resource)
+                    WHERE          p.`http://example.org/name` IS NOT NULL
+                    AND            p.`http://example.org/name` IS NOT NULL
+                    AND            p.`http://example.org/name` IS NOT NULL
+                    AND            p.`http://example.org/name` IS NOT NULL
+                    RETURN         p.`http://example.org/name` AS name
+                '''
+            }
+            """;
+
+        Query query = QueryFactory.create(longQuery);
+        try (QueryExecution qexec = QueryExecutionFactory.create(query, dataset)) {
+            ResultSet results = qexec.execSelect();
+            assertTrue(results.hasNext(), "Should have results");
+        }
+    }
+
+    @Test
+    @DisplayName("Test Cypher query returning Long value type")
+    public void testCypherQueryWithLongValue() {
+        // Add test data with a large number
+        var item = model.createResource("http://example.org/item/big");
+        var count = model.createProperty("http://example.org/bigCount");
+        // Use a value that would be a Long in Java
+        item.addProperty(count, model.createTypedLiteral(9999999999L));
+
+        Dataset dataset = DatasetFactory.create(model);
+
+        String sparql = """
+            PREFIX falkor: <http://falkordb.com/jena#>
+            SELECT ?count WHERE {
+                (?count) falkor:cypher '''
+                    MATCH (p:Resource)
+                    WHERE p.`http://example.org/bigCount` IS NOT NULL
+                    RETURN p.`http://example.org/bigCount` AS count
+                '''
+            }
+            """;
+
+        Query query = QueryFactory.create(sparql);
+        try (QueryExecution qexec = QueryExecutionFactory.create(query, dataset)) {
+            ResultSet results = qexec.execSelect();
+            assertTrue(results.hasNext(), "Should have at least one result");
+
+            QuerySolution solution = results.nextSolution();
+            assertNotNull(solution.get("count"), "count variable should be bound");
+        }
+    }
+
+    @Test
+    @DisplayName("Test Cypher query with https URI")
+    public void testCypherQueryWithHttpsURI() {
+        // Add test data with an https URL
+        var resource = model.createResource("http://example.org/resource/1");
+        var link = model.createProperty("http://example.org/link");
+        resource.addProperty(link, "https://secure.example.com/page");
+
+        Dataset dataset = DatasetFactory.create(model);
+
+        String sparql = """
+            PREFIX falkor: <http://falkordb.com/jena#>
+            SELECT ?link WHERE {
+                (?link) falkor:cypher '''
+                    MATCH (p:Resource)
+                    WHERE p.`http://example.org/link` IS NOT NULL
+                    RETURN p.`http://example.org/link` AS link
+                '''
+            }
+            """;
+
+        Query query = QueryFactory.create(sparql);
+        try (QueryExecution qexec = QueryExecutionFactory.create(query, dataset)) {
+            ResultSet results = qexec.execSelect();
+            assertTrue(results.hasNext(), "Should have at least one result");
+
+            QuerySolution solution = results.nextSolution();
+            assertNotNull(solution.get("link"), "link variable should be bound");
+            // The https URL should be converted to a URI resource
+            assertTrue(solution.get("link").isURIResource(),
+                "https URL should be converted to URI resource");
+        }
+    }
+
+    @Test
+    @DisplayName("Test Cypher query with empty variable list")
+    public void testCypherQueryWithEmptyVariableList() {
+        // Add test data
+        var person = model.createResource("http://example.org/person/john");
+        var nameProp = model.createProperty("http://example.org/name");
+        person.addProperty(nameProp, "John");
+
+        Dataset dataset = DatasetFactory.create(model);
+
+        // Query with empty variable list - should still execute
+        String sparql = """
+            PREFIX falkor: <http://falkordb.com/jena#>
+            SELECT * WHERE {
+                () falkor:cypher '''
+                    MATCH (p:Resource)
+                    WHERE p.`http://example.org/name` IS NOT NULL
+                    RETURN p.`http://example.org/name` AS name
+                '''
+            }
+            """;
+
+        Query query = QueryFactory.create(sparql);
+        try (QueryExecution qexec = QueryExecutionFactory.create(query, dataset)) {
+            ResultSet results = qexec.execSelect();
+            // Should complete without error
+            while (results.hasNext()) {
+                results.next();
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("Test Cypher query with node without uri property")
+    public void testCypherQueryWithNodeWithoutUri() {
+        // Add test data
+        var person = model.createResource("http://example.org/person/john");
+        var nameProp = model.createProperty("http://example.org/name");
+        person.addProperty(nameProp, "John");
+
+        Dataset dataset = DatasetFactory.create(model);
+
+        // Query that returns the entire node (not just uri property)
+        String sparql = """
+            PREFIX falkor: <http://falkordb.com/jena#>
+            SELECT ?node WHERE {
+                (?node) falkor:cypher '''
+                    MATCH (p:Resource)
+                    WHERE p.`http://example.org/name` IS NOT NULL
+                    RETURN p AS node
+                    LIMIT 1
+                '''
+            }
+            """;
+
+        Query query = QueryFactory.create(sparql);
+        try (QueryExecution qexec = QueryExecutionFactory.create(query, dataset)) {
+            ResultSet results = qexec.execSelect();
+            assertTrue(results.hasNext(), "Should have at least one result");
+
+            QuerySolution solution = results.nextSolution();
+            assertNotNull(solution.get("node"), "node variable should be bound");
+        }
+    }
+
+    @Test
+    @DisplayName("Test Cypher query returning default value type")
+    public void testCypherQueryWithDefaultValueType() {
+        // Add test data
+        var resource = model.createResource("http://example.org/resource/1");
+        var data = model.createProperty("http://example.org/data");
+        // Add a string that doesn't look like a URI
+        resource.addProperty(data, "some plain text value");
+
+        Dataset dataset = DatasetFactory.create(model);
+
+        String sparql = """
+            PREFIX falkor: <http://falkordb.com/jena#>
+            SELECT ?data WHERE {
+                (?data) falkor:cypher '''
+                    MATCH (p:Resource)
+                    WHERE p.`http://example.org/data` IS NOT NULL
+                    RETURN p.`http://example.org/data` AS data
+                '''
+            }
+            """;
+
+        Query query = QueryFactory.create(sparql);
+        try (QueryExecution qexec = QueryExecutionFactory.create(query, dataset)) {
+            ResultSet results = qexec.execSelect();
+            assertTrue(results.hasNext(), "Should have at least one result");
+
+            QuerySolution solution = results.nextSolution();
+            assertNotNull(solution.get("data"), "data variable should be bound");
+            assertEquals("some plain text value",
+                solution.getLiteral("data").getString());
+        }
+    }
+
+    @Test
+    @DisplayName("Test Cypher query with more variables than columns")
+    public void testCypherQueryWithMoreVariablesThanColumns() {
+        // Add test data
+        var person = model.createResource("http://example.org/person/john");
+        var nameProp = model.createProperty("http://example.org/name");
+        person.addProperty(nameProp, "John");
+
+        Dataset dataset = DatasetFactory.create(model);
+
+        // Query with more variables than returned columns
+        String sparql = """
+            PREFIX falkor: <http://falkordb.com/jena#>
+            SELECT ?name ?extra1 ?extra2 WHERE {
+                (?name ?extra1 ?extra2) falkor:cypher '''
+                    MATCH (p:Resource)
+                    WHERE p.`http://example.org/name` IS NOT NULL
+                    RETURN p.`http://example.org/name` AS name
+                '''
+            }
+            """;
+
+        Query query = QueryFactory.create(sparql);
+        try (QueryExecution qexec = QueryExecutionFactory.create(query, dataset)) {
+            ResultSet results = qexec.execSelect();
+            assertTrue(results.hasNext(), "Should have at least one result");
+
+            QuerySolution solution = results.nextSolution();
+            assertNotNull(solution.get("name"), "name variable should be bound");
+        }
+    }
+
+    @Test
+    @DisplayName("Test constructor creates valid instance")
+    public void testConstructor() {
+        CypherQueryFunc func = new CypherQueryFunc();
+        assertNotNull(func, "Constructor should create a valid instance");
+    }
 }

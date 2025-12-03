@@ -204,6 +204,65 @@ WHERE {
 └─────────────────────────────────────────────────────────────┘
 ```
 
+## Using the Magic Property (falkor:cypher)
+
+The FalkorDB adapter provides a "magic property" that allows you to execute native Cypher queries directly from SPARQL.
+This bypasses the slower triple-by-triple matching engine and can significantly improve performance for complex graph traversals.
+
+### Magic Property Syntax
+
+```sparql
+PREFIX falkor: <http://falkordb.com/jena#>
+
+SELECT ?var1 ?var2 WHERE {
+  (?var1 ?var2) falkor:cypher '''
+    MATCH (n:Resource)-[:relationshipType]->(m:Resource)
+    RETURN n.property AS var1, m.property AS var2
+  '''
+}
+```
+
+### Magic Property Tracing
+
+When using the magic property, a new span is created with the following attributes:
+
+| Attribute | Description |
+|-----------|-------------|
+| `falkordb.cypher.query` | The Cypher query being executed |
+| `falkordb.cypher.result_count` | Number of results returned |
+| `falkordb.cypher.var_count` | Number of SPARQL variables to bind |
+
+### Example: Friends of Friends Query
+
+Without magic property (slow, many round trips):
+```sparql
+SELECT ?friend WHERE {
+  <http://example.org/alice> <http://example.org/knows> ?x .
+  ?x <http://example.org/knows> ?friend .
+}
+```
+
+With magic property (fast, single Cypher query):
+```sparql
+PREFIX falkor: <http://falkordb.com/jena#>
+
+SELECT ?friend WHERE {
+  (?friend) falkor:cypher '''
+    MATCH (:Resource {uri: "http://example.org/alice"})
+          -[:`http://example.org/knows`]->(:Resource)
+          -[:`http://example.org/knows`]->(f:Resource)
+    RETURN f.uri AS friend
+  '''
+}
+```
+
+### Viewing Magic Property Traces in Jaeger
+
+1. Open Jaeger UI at `http://localhost:16686`
+2. Select "jena-falkordb" from the Service dropdown
+3. Look for spans named `CypherQueryFunc.execute`
+4. Expand the span to see the Cypher query and result count
+
 ## Disabling Tracing
 
 To disable tracing, set the environment variable:

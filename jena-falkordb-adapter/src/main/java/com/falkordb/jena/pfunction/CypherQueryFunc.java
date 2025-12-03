@@ -161,7 +161,7 @@ public final class CypherQueryFunc extends PropertyFunctionEval {
             }
 
             // Execute the Cypher query on FalkorDB
-            ResultSet resultSet = falkorGraph.getUnderlyingGraph()
+            ResultSet resultSet = falkorGraph.getTracedGraph()
                 .query(cypherQuery);
 
             // Convert results to bindings

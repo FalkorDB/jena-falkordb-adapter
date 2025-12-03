@@ -684,7 +684,7 @@ public final class FalkorDBGraph extends GraphBase {
 
         var subject = nodeToString(triple.getSubject());
         var predicate = nodeToString(triple.getPredicate());
-        var params = new HashMap<String, Object>(2);
+        var params = new HashMap<String, Object>();
         String cypher;
 
         if (triple.getObject().isLiteral()) {
@@ -715,8 +715,7 @@ public final class FalkorDBGraph extends GraphBase {
 
             String sanitizedPredicate = sanitizeCypherIdentifier(predicate);
             cypher = """
-                MATCH (s:Resource {uri: $subjectUri})-[:`%s`]->\
-                (o:Resource {uri: $objectUri})
+                MATCH (s:Resource {uri: $subjectUri})-[:`%s`]->(o:Resource {uri: $objectUri})
                 RETURN 1 LIMIT 1""".formatted(sanitizedPredicate);
         }
 
@@ -779,7 +778,8 @@ public final class FalkorDBGraph extends GraphBase {
             }
         }
 
-        return (int) count;
+        // Saturate to Integer.MAX_VALUE to avoid overflow
+        return (int) Math.min(count, Integer.MAX_VALUE);
     }
 
     /**

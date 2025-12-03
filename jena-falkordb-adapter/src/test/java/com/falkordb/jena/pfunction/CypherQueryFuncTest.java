@@ -10,7 +10,9 @@ import org.apache.jena.query.QueryExecutionFactory;
 import org.apache.jena.query.QueryFactory;
 import org.apache.jena.query.QuerySolution;
 import org.apache.jena.query.ResultSet;
+import org.apache.jena.rdf.model.InfModel;
 import org.apache.jena.rdf.model.Model;
+import org.apache.jena.rdf.model.ModelFactory;
 import org.apache.jena.sparql.pfunction.PropertyFunctionRegistry;
 import org.apache.jena.vocabulary.RDF;
 import org.junit.jupiter.api.AfterEach;
@@ -1031,8 +1033,7 @@ public class CypherQueryFuncTest {
 
         // Create an inference model wrapping the FalkorDB model
         // This simulates what happens when RDFS/OWL reasoning is enabled
-        org.apache.jena.rdf.model.InfModel infModel = 
-            org.apache.jena.rdf.model.ModelFactory.createRDFSModel(model);
+        InfModel infModel = ModelFactory.createRDFSModel(model);
 
         // Create dataset from the inference model
         Dataset infDataset = DatasetFactory.create(infModel);

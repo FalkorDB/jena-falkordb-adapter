@@ -13,6 +13,18 @@ SELECT ?friend WHERE {
 }
 ```
 
+**Via curl:**
+
+```bash
+curl -X POST http://localhost:3330/falkor/query \
+  -H "Accept: application/sparql-results+json" \
+  --data-urlencode 'query=
+SELECT ?friend WHERE {
+  <http://example.org/alice> <http://example.org/knows> ?x .
+  ?x <http://example.org/knows> ?friend .
+}'
+```
+
 Gets executed as:
 1. `find(Alice, knows, ?x)` → Returns N triples
 2. For each result `?x`, `find(?x, knows, ?friend)` → N more queries
@@ -44,6 +56,20 @@ SELECT ?var1 ?var2 ... WHERE {
 }
 ```
 
+**Via curl:**
+
+```bash
+curl -X POST http://localhost:3330/falkor/query \
+  -H "Accept: application/sparql-results+json" \
+  --data-urlencode 'query=
+PREFIX falkor: <http://falkordb.com/jena#>
+SELECT ?var1 ?var2 ... WHERE {
+  (?var1 ?var2 ...) falkor:cypher """
+    <CYPHER QUERY>
+  """
+}'
+```
+
 ### Components:
 
 1. **PREFIX**: Define the FalkorDB namespace
@@ -72,6 +98,23 @@ SELECT ?personName ?personAge WHERE {
 }
 ```
 
+**Via curl:**
+
+```bash
+curl -X POST http://localhost:3330/falkor/query \
+  -H "Accept: application/sparql-results+json" \
+  --data-urlencode 'query=
+PREFIX falkor: <http://falkordb.com/jena#>
+SELECT ?personName ?personAge WHERE {
+  (?personName ?personAge) falkor:cypher """
+    MATCH (p:Resource)
+    WHERE p.`http://example.org/name` IS NOT NULL
+    RETURN p.`http://example.org/name` AS personName,
+           p.`http://example.org/age` AS personAge
+  """
+}'
+```
+
 ### 2. Position Matching (Fallback)
 
 If names don't match, variables are bound by position in the order they appear:
@@ -85,6 +128,21 @@ SELECT ?name ?age WHERE {
     RETURN p.`http://example.org/name`, p.`http://example.org/age`
   '''
 }
+```
+
+**Via curl:**
+
+```bash
+curl -X POST http://localhost:3330/falkor/query \
+  -H "Accept: application/sparql-results+json" \
+  --data-urlencode 'query=
+PREFIX falkor: <http://falkordb.com/jena#>
+SELECT ?name ?age WHERE {
+  (?name ?age) falkor:cypher """
+    MATCH (p:Resource)
+    RETURN p.`http://example.org/name`, p.`http://example.org/age`
+  """
+}'
 ```
 
 In this case:
@@ -107,6 +165,22 @@ SELECT ?name WHERE {
 }
 ```
 
+**Via curl:**
+
+```bash
+curl -X POST http://localhost:3330/falkor/query \
+  -H "Accept: application/sparql-results+json" \
+  --data-urlencode 'query=
+PREFIX falkor: <http://falkordb.com/jena#>
+SELECT ?name WHERE {
+  (?name) falkor:cypher """
+    MATCH (p:Resource)
+    WHERE p.`http://example.org/name` IS NOT NULL
+    RETURN p.`http://example.org/name` AS name
+  """
+}'
+```
+
 ### Example 2: Friends of Friends
 
 ```sparql
@@ -120,6 +194,23 @@ SELECT ?friend WHERE {
     RETURN f.uri AS friend
   '''
 }
+```
+
+**Via curl:**
+
+```bash
+curl -X POST http://localhost:3330/falkor/query \
+  -H "Accept: application/sparql-results+json" \
+  --data-urlencode 'query=
+PREFIX falkor: <http://falkordb.com/jena#>
+SELECT ?friend WHERE {
+  (?friend) falkor:cypher """
+    MATCH (:Resource {uri: \"http://example.org/alice\"})
+          -[:`http://example.org/knows`]->(:Resource)
+          -[:`http://example.org/knows`]->(f:Resource)
+    RETURN f.uri AS friend
+  """
+}'
 ```
 
 ### Example 3: Aggregation
@@ -139,6 +230,25 @@ SELECT ?type ?count WHERE {
 }
 ```
 
+**Via curl:**
+
+```bash
+curl -X POST http://localhost:3330/falkor/query \
+  -H "Accept: application/sparql-results+json" \
+  --data-urlencode 'query=
+PREFIX falkor: <http://falkordb.com/jena#>
+SELECT ?type ?count WHERE {
+  (?type ?count) falkor:cypher """
+    MATCH (n:Resource)
+    WITH labels(n) AS nodeLabels
+    UNWIND nodeLabels AS label
+    WHERE label <> \"Resource\"
+    RETURN label AS type, count(*) AS count
+    ORDER BY count DESC
+  """
+}'
+```
+
 ### Example 4: Path Patterns
 
 ```sparql
@@ -151,6 +261,22 @@ SELECT ?start ?end ?pathLength WHERE {
     RETURN s.uri AS start, e.uri AS end, length(path) AS pathLength
   '''
 }
+```
+
+**Via curl:**
+
+```bash
+curl -X POST http://localhost:3330/falkor/query \
+  -H "Accept: application/sparql-results+json" \
+  --data-urlencode 'query=
+PREFIX falkor: <http://falkordb.com/jena#>
+SELECT ?start ?end ?pathLength WHERE {
+  (?start ?end ?pathLength) falkor:cypher """
+    MATCH path = (s:Resource)-[*1..3]->(e:Resource)
+    WHERE s.uri = \"http://example.org/node1\"
+    RETURN s.uri AS start, e.uri AS end, length(path) AS pathLength
+  """
+}'
 ```
 
 ## Data Type Mapping
@@ -244,6 +370,19 @@ SELECT ?fof WHERE {
 }
 ```
 
+**Via curl:**
+
+```bash
+curl -X POST http://localhost:3330/falkor/query \
+  -H "Accept: application/sparql-results+json" \
+  --data-urlencode 'query=
+PREFIX social: <http://example.org/social#>
+SELECT ?fof WHERE {
+  social:person1 social:knows ?friend .
+  ?friend social:knows ?fof .
+}'
+```
+
 **How it executes internally:**
 1. First query: Find all friends of person1 → Returns ~15 people
 2. For each friend: Find their friends → 15 more queries
@@ -267,6 +406,24 @@ SELECT ?fof WHERE {
 }
 ```
 
+**Via curl:**
+
+```bash
+curl -X POST http://localhost:3330/falkor/query \
+  -H "Accept: application/sparql-results+json" \
+  --data-urlencode 'query=
+PREFIX falkor: <http://falkordb.com/jena#>
+PREFIX social: <http://example.org/social#>
+SELECT ?fof WHERE {
+  (?fof) falkor:cypher """
+    MATCH (:Resource {uri: \"http://example.org/social#person1\"})
+          -[:`http://example.org/social#knows`]->(:Resource)
+          -[:`http://example.org/social#knows`]->(fof:Resource)
+    RETURN DISTINCT fof.uri AS fof
+  """
+}'
+```
+
 **How it executes:**
 1. Single Cypher query with native graph traversal
 2. Total: 1 database round trip
@@ -287,6 +444,22 @@ SELECT ?person WHERE {
 }
 ```
 
+**Via curl:**
+
+```bash
+curl -X POST http://localhost:3330/falkor/query \
+  -H "Accept: application/sparql-results+json" \
+  --data-urlencode 'query=
+PREFIX falkor: <http://falkordb.com/jena#>
+SELECT ?person WHERE {
+  (?person) falkor:cypher """
+    MATCH (:Resource {uri: \"http://example.org/social#person1\"})
+          -[:`http://example.org/social#knows`*1..3]->(p:Resource)
+    RETURN DISTINCT p.uri AS person
+  """
+}'
+```
+
 This query would require exponentially more round trips with standard SPARQL but executes as a single optimized Cypher query.
 
 #### Counting Connections
@@ -302,6 +475,23 @@ SELECT ?person ?friendCount WHERE {
     LIMIT 10
   '''
 }
+```
+
+**Via curl:**
+
+```bash
+curl -X POST http://localhost:3330/falkor/query \
+  -H "Accept: application/sparql-results+json" \
+  --data-urlencode 'query=
+PREFIX falkor: <http://falkordb.com/jena#>
+SELECT ?person ?friendCount WHERE {
+  (?person ?friendCount) falkor:cypher """
+    MATCH (p:Resource)-[r:`http://example.org/social#knows`]->(:Resource)
+    RETURN p.uri AS person, count(r) AS friendCount
+    ORDER BY friendCount DESC
+    LIMIT 10
+  """
+}'
 ```
 
 This finds the 10 most connected people in the network.
@@ -321,6 +511,25 @@ SELECT ?pathLength WHERE {
     RETURN length(path) AS pathLength
   '''
 }
+```
+
+**Via curl:**
+
+```bash
+curl -X POST http://localhost:3330/falkor/query \
+  -H "Accept: application/sparql-results+json" \
+  --data-urlencode 'query=
+PREFIX falkor: <http://falkordb.com/jena#>
+SELECT ?pathLength WHERE {
+  (?pathLength) falkor:cypher """
+    MATCH path = shortestPath(
+      (:Resource {uri: \"http://example.org/social#person1\"})
+      -[:`http://example.org/social#knows`*]->
+      (:Resource {uri: \"http://example.org/social#person100\"})
+    )
+    RETURN length(path) AS pathLength
+  """
+}'
 ```
 
 ### Viewing Performance in Jaeger

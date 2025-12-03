@@ -676,6 +676,33 @@ public final class FalkorDBGraph extends GraphBase {
      */
     @Override
     protected boolean graphBaseContains(final Triple triple) {
+        Span span = tracer.spanBuilder("FalkorDBGraph.contains")
+            .setSpanKind(SpanKind.INTERNAL)
+            .setAttribute(ATTR_OPERATION, "contains")
+            .setAttribute(ATTR_GRAPH_NAME, graphName)
+            .setAttribute(ATTR_TRIPLE_SUBJECT, nodeToString(triple.getSubject()))
+            .setAttribute(ATTR_TRIPLE_PREDICATE,
+                nodeToString(triple.getPredicate()))
+            .setAttribute(ATTR_TRIPLE_OBJECT, nodeToString(triple.getObject()))
+            .startSpan();
+
+        try (Scope scope = span.makeCurrent()) {
+            boolean result = graphBaseContainsInternal(triple);
+            span.setStatus(StatusCode.OK);
+            return result;
+        } catch (Exception e) {
+            span.setStatus(StatusCode.ERROR, e.getMessage());
+            span.recordException(e);
+            throw e;
+        } finally {
+            span.end();
+        }
+    }
+
+    /**
+     * Internal implementation of graphBaseContains without tracing.
+     */
+    private boolean graphBaseContainsInternal(final Triple triple) {
         // If all parts are concrete, we can do an exact check
         // Otherwise, fall back to the default containsByFind
         if (!triple.isConcrete()) {
@@ -739,6 +766,30 @@ public final class FalkorDBGraph extends GraphBase {
      */
     @Override
     protected int graphBaseSize() {
+        Span span = tracer.spanBuilder("FalkorDBGraph.size")
+            .setSpanKind(SpanKind.INTERNAL)
+            .setAttribute(ATTR_OPERATION, "size")
+            .setAttribute(ATTR_GRAPH_NAME, graphName)
+            .startSpan();
+
+        try (Scope scope = span.makeCurrent()) {
+            int size = graphBaseSizeInternal();
+            span.setAttribute(ATTR_RESULT_COUNT, (long) size);
+            span.setStatus(StatusCode.OK);
+            return size;
+        } catch (Exception e) {
+            span.setStatus(StatusCode.ERROR, e.getMessage());
+            span.recordException(e);
+            throw e;
+        } finally {
+            span.end();
+        }
+    }
+
+    /**
+     * Internal implementation of graphBaseSize without tracing.
+     */
+    private int graphBaseSizeInternal() {
         long count = 0;
 
         // Count literal properties (excluding 'uri' property)
@@ -800,6 +851,29 @@ public final class FalkorDBGraph extends GraphBase {
      */
     @Override
     public boolean isEmpty() {
+        Span span = tracer.spanBuilder("FalkorDBGraph.isEmpty")
+            .setSpanKind(SpanKind.INTERNAL)
+            .setAttribute(ATTR_OPERATION, "isEmpty")
+            .setAttribute(ATTR_GRAPH_NAME, graphName)
+            .startSpan();
+
+        try (Scope scope = span.makeCurrent()) {
+            boolean result = isEmptyInternal();
+            span.setStatus(StatusCode.OK);
+            return result;
+        } catch (Exception e) {
+            span.setStatus(StatusCode.ERROR, e.getMessage());
+            span.recordException(e);
+            throw e;
+        } finally {
+            span.end();
+        }
+    }
+
+    /**
+     * Internal implementation of isEmpty without tracing.
+     */
+    private boolean isEmptyInternal() {
         // Check for any properties (excluding 'uri')
         var propsResult = graph.query("""
             MATCH (s:Resource)

@@ -1,0 +1,18 @@
+@prefix social: <http://example.org/social#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+# Friend-of-friend backward chaining rule for lazy inference
+# This rule infers a "knows_transitively" relationship when a person
+# knows someone who knows another person (2-hop relationship).
+# Backward chaining means inference is computed on-demand (lazily)
+# when queried, rather than being materialized upfront.
+
+[rule_friend_of_friend: 
+    (?x social:knows_transitively ?z)
+    <- 
+    (?x social:knows ?y)  
+    (?y social:knows ?z) 
+]

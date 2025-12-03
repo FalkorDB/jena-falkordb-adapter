@@ -16,6 +16,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.InputStream;
 import java.util.HashSet;
@@ -34,6 +36,8 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 public class MagicPropertyDocExamplesTest {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(
+        MagicPropertyDocExamplesTest.class);
     private static final String TEST_GRAPH = "test_magic_property_doc_examples";
     private Model model;
     private Dataset dataset;
@@ -69,10 +73,6 @@ public class MagicPropertyDocExamplesTest {
      */
     private void loadSocialNetworkData() {
         InputStream inputStream = getClass().getResourceAsStream("/data/social_network.ttl");
-        if (inputStream == null) {
-            // Try loading from the data directory in the project root
-            inputStream = getClass().getClassLoader().getResourceAsStream("data/social_network.ttl");
-        }
         if (inputStream != null) {
             model.read(inputStream, null, "TURTLE");
         } else {
@@ -94,17 +94,18 @@ public class MagicPropertyDocExamplesTest {
         var knows = model.createProperty("http://example.org/social#knows");
         var personType = model.createResource("http://example.org/social#Person");
         var name = model.createProperty("http://example.org/social#name");
+        var rdfType = model.createProperty("http://www.w3.org/1999/02/22-rdf-syntax-ns#type");
 
         // Add types and names
-        person1.addProperty(model.createProperty("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), personType);
+        person1.addProperty(rdfType, personType);
         person1.addProperty(name, "Person 1");
-        person2.addProperty(model.createProperty("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), personType);
+        person2.addProperty(rdfType, personType);
         person2.addProperty(name, "Person 2");
-        person3.addProperty(model.createProperty("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), personType);
+        person3.addProperty(rdfType, personType);
         person3.addProperty(name, "Person 3");
-        person4.addProperty(model.createProperty("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), personType);
+        person4.addProperty(rdfType, personType);
         person4.addProperty(name, "Person 4");
-        person5.addProperty(model.createProperty("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), personType);
+        person5.addProperty(rdfType, personType);
         person5.addProperty(name, "Person 5");
 
         // person1 knows person2, person3
@@ -238,8 +239,10 @@ public class MagicPropertyDocExamplesTest {
         }
 
         // Log results for debugging
-        System.out.println("Standard SPARQL results: " + standardResults);
-        System.out.println("Magic Property results: " + magicPropertyResults);
+        if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug("Standard SPARQL results: {}", standardResults);
+            LOGGER.debug("Magic Property results: {}", magicPropertyResults);
+        }
 
         // Both should have results
         assertFalse(standardResults.isEmpty(),

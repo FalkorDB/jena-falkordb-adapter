@@ -169,6 +169,17 @@ public final class FalkorDBGraph extends GraphBase {
     }
 
     /**
+     * Returns the traced FalkorDB graph instance.
+     * Use this method when you need to execute queries while
+     * maintaining the span hierarchy for tracing.
+     *
+     * @return the TracedGraph wrapper around the underlying Graph
+     */
+    public TracedGraph getTracedGraph() {
+        return graph;
+    }
+
+    /**
      * Returns the transaction handler for this graph.
      *
      * <p>The transaction handler supports efficient batch operations by

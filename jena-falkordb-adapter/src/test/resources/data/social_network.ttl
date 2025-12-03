@@ -1,0 +1,1315 @@
+@prefix social: <http://example.org/social#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+#
+# Social Network Dataset for Testing Magic Property Performance
+# =============================================================
+#
+# This dataset contains 100 people with "knows" relationships forming
+# a social network graph. It is designed to demonstrate the performance
+# benefits of using the falkor:cypher magic property for complex
+# graph traversals like "friends of friends" queries.
+#
+# Network structure:
+# - 100 people (person1 to person100)
+# - Each person knows approximately 10 other people
+# - Creates ~800 "knows" relationships
+# - Enables testing of 2-hop and 3-hop path queries
+#
+
+# ==========================================
+# PEOPLE (100 individuals)
+# ==========================================
+
+social:person1 rdf:type social:Person ;
+    social:name "Person 1" .
+
+social:person2 rdf:type social:Person ;
+    social:name "Person 2" .
+
+social:person3 rdf:type social:Person ;
+    social:name "Person 3" .
+
+social:person4 rdf:type social:Person ;
+    social:name "Person 4" .
+
+social:person5 rdf:type social:Person ;
+    social:name "Person 5" .
+
+social:person6 rdf:type social:Person ;
+    social:name "Person 6" .
+
+social:person7 rdf:type social:Person ;
+    social:name "Person 7" .
+
+social:person8 rdf:type social:Person ;
+    social:name "Person 8" .
+
+social:person9 rdf:type social:Person ;
+    social:name "Person 9" .
+
+social:person10 rdf:type social:Person ;
+    social:name "Person 10" .
+
+social:person11 rdf:type social:Person ;
+    social:name "Person 11" .
+
+social:person12 rdf:type social:Person ;
+    social:name "Person 12" .
+
+social:person13 rdf:type social:Person ;
+    social:name "Person 13" .
+
+social:person14 rdf:type social:Person ;
+    social:name "Person 14" .
+
+social:person15 rdf:type social:Person ;
+    social:name "Person 15" .
+
+social:person16 rdf:type social:Person ;
+    social:name "Person 16" .
+
+social:person17 rdf:type social:Person ;
+    social:name "Person 17" .
+
+social:person18 rdf:type social:Person ;
+    social:name "Person 18" .
+
+social:person19 rdf:type social:Person ;
+    social:name "Person 19" .
+
+social:person20 rdf:type social:Person ;
+    social:name "Person 20" .
+
+social:person21 rdf:type social:Person ;
+    social:name "Person 21" .
+
+social:person22 rdf:type social:Person ;
+    social:name "Person 22" .
+
+social:person23 rdf:type social:Person ;
+    social:name "Person 23" .
+
+social:person24 rdf:type social:Person ;
+    social:name "Person 24" .
+
+social:person25 rdf:type social:Person ;
+    social:name "Person 25" .
+
+social:person26 rdf:type social:Person ;
+    social:name "Person 26" .
+
+social:person27 rdf:type social:Person ;
+    social:name "Person 27" .
+
+social:person28 rdf:type social:Person ;
+    social:name "Person 28" .
+
+social:person29 rdf:type social:Person ;
+    social:name "Person 29" .
+
+social:person30 rdf:type social:Person ;
+    social:name "Person 30" .
+
+social:person31 rdf:type social:Person ;
+    social:name "Person 31" .
+
+social:person32 rdf:type social:Person ;
+    social:name "Person 32" .
+
+social:person33 rdf:type social:Person ;
+    social:name "Person 33" .
+
+social:person34 rdf:type social:Person ;
+    social:name "Person 34" .
+
+social:person35 rdf:type social:Person ;
+    social:name "Person 35" .
+
+social:person36 rdf:type social:Person ;
+    social:name "Person 36" .
+
+social:person37 rdf:type social:Person ;
+    social:name "Person 37" .
+
+social:person38 rdf:type social:Person ;
+    social:name "Person 38" .
+
+social:person39 rdf:type social:Person ;
+    social:name "Person 39" .
+
+social:person40 rdf:type social:Person ;
+    social:name "Person 40" .
+
+social:person41 rdf:type social:Person ;
+    social:name "Person 41" .
+
+social:person42 rdf:type social:Person ;
+    social:name "Person 42" .
+
+social:person43 rdf:type social:Person ;
+    social:name "Person 43" .
+
+social:person44 rdf:type social:Person ;
+    social:name "Person 44" .
+
+social:person45 rdf:type social:Person ;
+    social:name "Person 45" .
+
+social:person46 rdf:type social:Person ;
+    social:name "Person 46" .
+
+social:person47 rdf:type social:Person ;
+    social:name "Person 47" .
+
+social:person48 rdf:type social:Person ;
+    social:name "Person 48" .
+
+social:person49 rdf:type social:Person ;
+    social:name "Person 49" .
+
+social:person50 rdf:type social:Person ;
+    social:name "Person 50" .
+
+social:person51 rdf:type social:Person ;
+    social:name "Person 51" .
+
+social:person52 rdf:type social:Person ;
+    social:name "Person 52" .
+
+social:person53 rdf:type social:Person ;
+    social:name "Person 53" .
+
+social:person54 rdf:type social:Person ;
+    social:name "Person 54" .
+
+social:person55 rdf:type social:Person ;
+    social:name "Person 55" .
+
+social:person56 rdf:type social:Person ;
+    social:name "Person 56" .
+
+social:person57 rdf:type social:Person ;
+    social:name "Person 57" .
+
+social:person58 rdf:type social:Person ;
+    social:name "Person 58" .
+
+social:person59 rdf:type social:Person ;
+    social:name "Person 59" .
+
+social:person60 rdf:type social:Person ;
+    social:name "Person 60" .
+
+social:person61 rdf:type social:Person ;
+    social:name "Person 61" .
+
+social:person62 rdf:type social:Person ;
+    social:name "Person 62" .
+
+social:person63 rdf:type social:Person ;
+    social:name "Person 63" .
+
+social:person64 rdf:type social:Person ;
+    social:name "Person 64" .
+
+social:person65 rdf:type social:Person ;
+    social:name "Person 65" .
+
+social:person66 rdf:type social:Person ;
+    social:name "Person 66" .
+
+social:person67 rdf:type social:Person ;
+    social:name "Person 67" .
+
+social:person68 rdf:type social:Person ;
+    social:name "Person 68" .
+
+social:person69 rdf:type social:Person ;
+    social:name "Person 69" .
+
+social:person70 rdf:type social:Person ;
+    social:name "Person 70" .
+
+social:person71 rdf:type social:Person ;
+    social:name "Person 71" .
+
+social:person72 rdf:type social:Person ;
+    social:name "Person 72" .
+
+social:person73 rdf:type social:Person ;
+    social:name "Person 73" .
+
+social:person74 rdf:type social:Person ;
+    social:name "Person 74" .
+
+social:person75 rdf:type social:Person ;
+    social:name "Person 75" .
+
+social:person76 rdf:type social:Person ;
+    social:name "Person 76" .
+
+social:person77 rdf:type social:Person ;
+    social:name "Person 77" .
+
+social:person78 rdf:type social:Person ;
+    social:name "Person 78" .
+
+social:person79 rdf:type social:Person ;
+    social:name "Person 79" .
+
+social:person80 rdf:type social:Person ;
+    social:name "Person 80" .
+
+social:person81 rdf:type social:Person ;
+    social:name "Person 81" .
+
+social:person82 rdf:type social:Person ;
+    social:name "Person 82" .
+
+social:person83 rdf:type social:Person ;
+    social:name "Person 83" .
+
+social:person84 rdf:type social:Person ;
+    social:name "Person 84" .
+
+social:person85 rdf:type social:Person ;
+    social:name "Person 85" .
+
+social:person86 rdf:type social:Person ;
+    social:name "Person 86" .
+
+social:person87 rdf:type social:Person ;
+    social:name "Person 87" .
+
+social:person88 rdf:type social:Person ;
+    social:name "Person 88" .
+
+social:person89 rdf:type social:Person ;
+    social:name "Person 89" .
+
+social:person90 rdf:type social:Person ;
+    social:name "Person 90" .
+
+social:person91 rdf:type social:Person ;
+    social:name "Person 91" .
+
+social:person92 rdf:type social:Person ;
+    social:name "Person 92" .
+
+social:person93 rdf:type social:Person ;
+    social:name "Person 93" .
+
+social:person94 rdf:type social:Person ;
+    social:name "Person 94" .
+
+social:person95 rdf:type social:Person ;
+    social:name "Person 95" .
+
+social:person96 rdf:type social:Person ;
+    social:name "Person 96" .
+
+social:person97 rdf:type social:Person ;
+    social:name "Person 97" .
+
+social:person98 rdf:type social:Person ;
+    social:name "Person 98" .
+
+social:person99 rdf:type social:Person ;
+    social:name "Person 99" .
+
+social:person100 rdf:type social:Person ;
+    social:name "Person 100" .
+
+# ==========================================
+# KNOWS RELATIONSHIPS (~800 edges)
+# Each person knows approximately 10 others
+# ==========================================
+
+# Person 1's friends (hub node with many connections)
+social:person1 social:knows social:person2 ,
+    social:person3 ,
+    social:person4 ,
+    social:person5 ,
+    social:person6 ,
+    social:person7 ,
+    social:person8 ,
+    social:person9 ,
+    social:person10 ,
+    social:person15 ,
+    social:person20 ,
+    social:person25 ,
+    social:person30 ,
+    social:person35 ,
+    social:person40 .
+
+# Person 2's friends
+social:person2 social:knows social:person1 ,
+    social:person3 ,
+    social:person11 ,
+    social:person12 ,
+    social:person13 ,
+    social:person14 ,
+    social:person21 ,
+    social:person22 ,
+    social:person31 ,
+    social:person41 .
+
+# Person 3's friends
+social:person3 social:knows social:person1 ,
+    social:person2 ,
+    social:person4 ,
+    social:person15 ,
+    social:person16 ,
+    social:person17 ,
+    social:person23 ,
+    social:person33 ,
+    social:person43 ,
+    social:person53 .
+
+# Person 4's friends
+social:person4 social:knows social:person1 ,
+    social:person3 ,
+    social:person5 ,
+    social:person18 ,
+    social:person19 ,
+    social:person24 ,
+    social:person34 ,
+    social:person44 ,
+    social:person54 ,
+    social:person64 .
+
+# Person 5's friends
+social:person5 social:knows social:person1 ,
+    social:person4 ,
+    social:person6 ,
+    social:person25 ,
+    social:person26 ,
+    social:person35 ,
+    social:person45 ,
+    social:person55 ,
+    social:person65 ,
+    social:person75 .
+
+# Person 6's friends
+social:person6 social:knows social:person1 ,
+    social:person5 ,
+    social:person7 ,
+    social:person27 ,
+    social:person28 ,
+    social:person36 ,
+    social:person46 ,
+    social:person56 ,
+    social:person66 ,
+    social:person76 .
+
+# Person 7's friends
+social:person7 social:knows social:person1 ,
+    social:person6 ,
+    social:person8 ,
+    social:person29 ,
+    social:person37 ,
+    social:person47 ,
+    social:person57 ,
+    social:person67 ,
+    social:person77 ,
+    social:person87 .
+
+# Person 8's friends
+social:person8 social:knows social:person1 ,
+    social:person7 ,
+    social:person9 ,
+    social:person38 ,
+    social:person48 ,
+    social:person58 ,
+    social:person68 ,
+    social:person78 ,
+    social:person88 ,
+    social:person98 .
+
+# Person 9's friends
+social:person9 social:knows social:person1 ,
+    social:person8 ,
+    social:person10 ,
+    social:person39 ,
+    social:person49 ,
+    social:person59 ,
+    social:person69 ,
+    social:person79 ,
+    social:person89 ,
+    social:person99 .
+
+# Person 10's friends
+social:person10 social:knows social:person1 ,
+    social:person9 ,
+    social:person11 ,
+    social:person40 ,
+    social:person50 ,
+    social:person60 ,
+    social:person70 ,
+    social:person80 ,
+    social:person90 ,
+    social:person100 .
+
+# Person 11 to 20 friends
+social:person11 social:knows social:person2 ,
+    social:person10 ,
+    social:person12 ,
+    social:person21 ,
+    social:person31 ,
+    social:person41 ,
+    social:person51 ,
+    social:person61 ,
+    social:person71 ,
+    social:person81 .
+
+social:person12 social:knows social:person2 ,
+    social:person11 ,
+    social:person13 ,
+    social:person22 ,
+    social:person32 ,
+    social:person42 ,
+    social:person52 ,
+    social:person62 ,
+    social:person72 ,
+    social:person82 .
+
+social:person13 social:knows social:person2 ,
+    social:person12 ,
+    social:person14 ,
+    social:person23 ,
+    social:person33 ,
+    social:person43 ,
+    social:person53 ,
+    social:person63 ,
+    social:person73 ,
+    social:person83 .
+
+social:person14 social:knows social:person2 ,
+    social:person13 ,
+    social:person15 ,
+    social:person24 ,
+    social:person34 ,
+    social:person44 ,
+    social:person54 ,
+    social:person64 ,
+    social:person74 ,
+    social:person84 .
+
+social:person15 social:knows social:person1 ,
+    social:person3 ,
+    social:person14 ,
+    social:person16 ,
+    social:person25 ,
+    social:person35 ,
+    social:person45 ,
+    social:person55 ,
+    social:person65 ,
+    social:person85 .
+
+social:person16 social:knows social:person3 ,
+    social:person15 ,
+    social:person17 ,
+    social:person26 ,
+    social:person36 ,
+    social:person46 ,
+    social:person56 ,
+    social:person66 ,
+    social:person76 ,
+    social:person86 .
+
+social:person17 social:knows social:person3 ,
+    social:person16 ,
+    social:person18 ,
+    social:person27 ,
+    social:person37 ,
+    social:person47 ,
+    social:person57 ,
+    social:person67 ,
+    social:person77 ,
+    social:person87 .
+
+social:person18 social:knows social:person4 ,
+    social:person17 ,
+    social:person19 ,
+    social:person28 ,
+    social:person38 ,
+    social:person48 ,
+    social:person58 ,
+    social:person68 ,
+    social:person78 ,
+    social:person88 .
+
+social:person19 social:knows social:person4 ,
+    social:person18 ,
+    social:person20 ,
+    social:person29 ,
+    social:person39 ,
+    social:person49 ,
+    social:person59 ,
+    social:person69 ,
+    social:person79 ,
+    social:person89 .
+
+social:person20 social:knows social:person1 ,
+    social:person19 ,
+    social:person21 ,
+    social:person30 ,
+    social:person40 ,
+    social:person50 ,
+    social:person60 ,
+    social:person70 ,
+    social:person80 ,
+    social:person90 .
+
+# Person 21 to 30 friends
+social:person21 social:knows social:person2 ,
+    social:person11 ,
+    social:person20 ,
+    social:person22 ,
+    social:person31 ,
+    social:person41 ,
+    social:person51 ,
+    social:person61 ,
+    social:person91 .
+
+social:person22 social:knows social:person2 ,
+    social:person12 ,
+    social:person21 ,
+    social:person23 ,
+    social:person32 ,
+    social:person42 ,
+    social:person52 ,
+    social:person62 ,
+    social:person92 .
+
+social:person23 social:knows social:person3 ,
+    social:person13 ,
+    social:person22 ,
+    social:person24 ,
+    social:person33 ,
+    social:person43 ,
+    social:person53 ,
+    social:person63 ,
+    social:person93 .
+
+social:person24 social:knows social:person4 ,
+    social:person14 ,
+    social:person23 ,
+    social:person25 ,
+    social:person34 ,
+    social:person44 ,
+    social:person54 ,
+    social:person64 ,
+    social:person94 .
+
+social:person25 social:knows social:person1 ,
+    social:person5 ,
+    social:person15 ,
+    social:person24 ,
+    social:person26 ,
+    social:person35 ,
+    social:person45 ,
+    social:person55 ,
+    social:person95 .
+
+social:person26 social:knows social:person5 ,
+    social:person16 ,
+    social:person25 ,
+    social:person27 ,
+    social:person36 ,
+    social:person46 ,
+    social:person56 ,
+    social:person66 ,
+    social:person96 .
+
+social:person27 social:knows social:person6 ,
+    social:person17 ,
+    social:person26 ,
+    social:person28 ,
+    social:person37 ,
+    social:person47 ,
+    social:person57 ,
+    social:person67 ,
+    social:person97 .
+
+social:person28 social:knows social:person6 ,
+    social:person18 ,
+    social:person27 ,
+    social:person29 ,
+    social:person38 ,
+    social:person48 ,
+    social:person58 ,
+    social:person68 ,
+    social:person98 .
+
+social:person29 social:knows social:person7 ,
+    social:person19 ,
+    social:person28 ,
+    social:person30 ,
+    social:person39 ,
+    social:person49 ,
+    social:person59 ,
+    social:person69 ,
+    social:person99 .
+
+social:person30 social:knows social:person1 ,
+    social:person20 ,
+    social:person29 ,
+    social:person31 ,
+    social:person40 ,
+    social:person50 ,
+    social:person60 ,
+    social:person70 ,
+    social:person100 .
+
+# Person 31 to 40 friends
+social:person31 social:knows social:person2 ,
+    social:person11 ,
+    social:person21 ,
+    social:person30 ,
+    social:person32 ,
+    social:person41 ,
+    social:person51 ,
+    social:person61 ,
+    social:person71 .
+
+social:person32 social:knows social:person12 ,
+    social:person22 ,
+    social:person31 ,
+    social:person33 ,
+    social:person42 ,
+    social:person52 ,
+    social:person62 ,
+    social:person72 ,
+    social:person82 .
+
+social:person33 social:knows social:person3 ,
+    social:person13 ,
+    social:person23 ,
+    social:person32 ,
+    social:person34 ,
+    social:person43 ,
+    social:person53 ,
+    social:person63 ,
+    social:person73 .
+
+social:person34 social:knows social:person4 ,
+    social:person14 ,
+    social:person24 ,
+    social:person33 ,
+    social:person35 ,
+    social:person44 ,
+    social:person54 ,
+    social:person64 ,
+    social:person74 .
+
+social:person35 social:knows social:person1 ,
+    social:person5 ,
+    social:person15 ,
+    social:person25 ,
+    social:person34 ,
+    social:person36 ,
+    social:person45 ,
+    social:person55 ,
+    social:person75 .
+
+social:person36 social:knows social:person6 ,
+    social:person16 ,
+    social:person26 ,
+    social:person35 ,
+    social:person37 ,
+    social:person46 ,
+    social:person56 ,
+    social:person66 ,
+    social:person76 .
+
+social:person37 social:knows social:person7 ,
+    social:person17 ,
+    social:person27 ,
+    social:person36 ,
+    social:person38 ,
+    social:person47 ,
+    social:person57 ,
+    social:person67 ,
+    social:person77 .
+
+social:person38 social:knows social:person8 ,
+    social:person18 ,
+    social:person28 ,
+    social:person37 ,
+    social:person39 ,
+    social:person48 ,
+    social:person58 ,
+    social:person68 ,
+    social:person78 .
+
+social:person39 social:knows social:person9 ,
+    social:person19 ,
+    social:person29 ,
+    social:person38 ,
+    social:person40 ,
+    social:person49 ,
+    social:person59 ,
+    social:person69 ,
+    social:person79 .
+
+social:person40 social:knows social:person1 ,
+    social:person10 ,
+    social:person20 ,
+    social:person30 ,
+    social:person39 ,
+    social:person41 ,
+    social:person50 ,
+    social:person60 ,
+    social:person80 .
+
+# Person 41 to 50 friends
+social:person41 social:knows social:person2 ,
+    social:person11 ,
+    social:person21 ,
+    social:person31 ,
+    social:person40 ,
+    social:person42 ,
+    social:person51 ,
+    social:person61 ,
+    social:person81 .
+
+social:person42 social:knows social:person12 ,
+    social:person22 ,
+    social:person32 ,
+    social:person41 ,
+    social:person43 ,
+    social:person52 ,
+    social:person62 ,
+    social:person72 ,
+    social:person82 .
+
+social:person43 social:knows social:person3 ,
+    social:person13 ,
+    social:person23 ,
+    social:person33 ,
+    social:person42 ,
+    social:person44 ,
+    social:person53 ,
+    social:person63 ,
+    social:person83 .
+
+social:person44 social:knows social:person4 ,
+    social:person14 ,
+    social:person24 ,
+    social:person34 ,
+    social:person43 ,
+    social:person45 ,
+    social:person54 ,
+    social:person64 ,
+    social:person84 .
+
+social:person45 social:knows social:person5 ,
+    social:person15 ,
+    social:person25 ,
+    social:person35 ,
+    social:person44 ,
+    social:person46 ,
+    social:person55 ,
+    social:person65 ,
+    social:person85 .
+
+social:person46 social:knows social:person6 ,
+    social:person16 ,
+    social:person26 ,
+    social:person36 ,
+    social:person45 ,
+    social:person47 ,
+    social:person56 ,
+    social:person66 ,
+    social:person86 .
+
+social:person47 social:knows social:person7 ,
+    social:person17 ,
+    social:person27 ,
+    social:person37 ,
+    social:person46 ,
+    social:person48 ,
+    social:person57 ,
+    social:person67 ,
+    social:person87 .
+
+social:person48 social:knows social:person8 ,
+    social:person18 ,
+    social:person28 ,
+    social:person38 ,
+    social:person47 ,
+    social:person49 ,
+    social:person58 ,
+    social:person68 ,
+    social:person88 .
+
+social:person49 social:knows social:person9 ,
+    social:person19 ,
+    social:person29 ,
+    social:person39 ,
+    social:person48 ,
+    social:person50 ,
+    social:person59 ,
+    social:person69 ,
+    social:person89 .
+
+social:person50 social:knows social:person10 ,
+    social:person20 ,
+    social:person30 ,
+    social:person40 ,
+    social:person49 ,
+    social:person51 ,
+    social:person60 ,
+    social:person70 ,
+    social:person90 .
+
+# Person 51 to 60 friends
+social:person51 social:knows social:person11 ,
+    social:person21 ,
+    social:person31 ,
+    social:person41 ,
+    social:person50 ,
+    social:person52 ,
+    social:person61 ,
+    social:person71 ,
+    social:person91 .
+
+social:person52 social:knows social:person12 ,
+    social:person22 ,
+    social:person32 ,
+    social:person42 ,
+    social:person51 ,
+    social:person53 ,
+    social:person62 ,
+    social:person72 ,
+    social:person92 .
+
+social:person53 social:knows social:person3 ,
+    social:person13 ,
+    social:person23 ,
+    social:person33 ,
+    social:person43 ,
+    social:person52 ,
+    social:person54 ,
+    social:person63 ,
+    social:person93 .
+
+social:person54 social:knows social:person4 ,
+    social:person14 ,
+    social:person24 ,
+    social:person34 ,
+    social:person44 ,
+    social:person53 ,
+    social:person55 ,
+    social:person64 ,
+    social:person94 .
+
+social:person55 social:knows social:person5 ,
+    social:person15 ,
+    social:person25 ,
+    social:person35 ,
+    social:person45 ,
+    social:person54 ,
+    social:person56 ,
+    social:person65 ,
+    social:person95 .
+
+social:person56 social:knows social:person6 ,
+    social:person16 ,
+    social:person26 ,
+    social:person36 ,
+    social:person46 ,
+    social:person55 ,
+    social:person57 ,
+    social:person66 ,
+    social:person96 .
+
+social:person57 social:knows social:person7 ,
+    social:person17 ,
+    social:person27 ,
+    social:person37 ,
+    social:person47 ,
+    social:person56 ,
+    social:person58 ,
+    social:person67 ,
+    social:person97 .
+
+social:person58 social:knows social:person8 ,
+    social:person18 ,
+    social:person28 ,
+    social:person38 ,
+    social:person48 ,
+    social:person57 ,
+    social:person59 ,
+    social:person68 ,
+    social:person98 .
+
+social:person59 social:knows social:person9 ,
+    social:person19 ,
+    social:person29 ,
+    social:person39 ,
+    social:person49 ,
+    social:person58 ,
+    social:person60 ,
+    social:person69 ,
+    social:person99 .
+
+social:person60 social:knows social:person10 ,
+    social:person20 ,
+    social:person30 ,
+    social:person40 ,
+    social:person50 ,
+    social:person59 ,
+    social:person61 ,
+    social:person70 ,
+    social:person100 .
+
+# Person 61 to 70 friends
+social:person61 social:knows social:person11 ,
+    social:person21 ,
+    social:person31 ,
+    social:person41 ,
+    social:person51 ,
+    social:person60 ,
+    social:person62 ,
+    social:person71 ,
+    social:person81 .
+
+social:person62 social:knows social:person12 ,
+    social:person22 ,
+    social:person32 ,
+    social:person42 ,
+    social:person52 ,
+    social:person61 ,
+    social:person63 ,
+    social:person72 ,
+    social:person82 .
+
+social:person63 social:knows social:person13 ,
+    social:person23 ,
+    social:person33 ,
+    social:person43 ,
+    social:person53 ,
+    social:person62 ,
+    social:person64 ,
+    social:person73 ,
+    social:person83 .
+
+social:person64 social:knows social:person4 ,
+    social:person14 ,
+    social:person24 ,
+    social:person34 ,
+    social:person44 ,
+    social:person54 ,
+    social:person63 ,
+    social:person65 ,
+    social:person74 .
+
+social:person65 social:knows social:person5 ,
+    social:person15 ,
+    social:person45 ,
+    social:person55 ,
+    social:person64 ,
+    social:person66 ,
+    social:person75 ,
+    social:person85 ,
+    social:person95 .
+
+social:person66 social:knows social:person6 ,
+    social:person16 ,
+    social:person26 ,
+    social:person36 ,
+    social:person46 ,
+    social:person56 ,
+    social:person65 ,
+    social:person67 ,
+    social:person76 .
+
+social:person67 social:knows social:person7 ,
+    social:person17 ,
+    social:person27 ,
+    social:person37 ,
+    social:person47 ,
+    social:person57 ,
+    social:person66 ,
+    social:person68 ,
+    social:person77 .
+
+social:person68 social:knows social:person8 ,
+    social:person18 ,
+    social:person28 ,
+    social:person38 ,
+    social:person48 ,
+    social:person58 ,
+    social:person67 ,
+    social:person69 ,
+    social:person78 .
+
+social:person69 social:knows social:person9 ,
+    social:person19 ,
+    social:person29 ,
+    social:person39 ,
+    social:person49 ,
+    social:person59 ,
+    social:person68 ,
+    social:person70 ,
+    social:person79 .
+
+social:person70 social:knows social:person10 ,
+    social:person20 ,
+    social:person30 ,
+    social:person50 ,
+    social:person60 ,
+    social:person69 ,
+    social:person71 ,
+    social:person80 ,
+    social:person90 .
+
+# Person 71 to 80 friends
+social:person71 social:knows social:person11 ,
+    social:person31 ,
+    social:person51 ,
+    social:person61 ,
+    social:person70 ,
+    social:person72 ,
+    social:person81 ,
+    social:person91 .
+
+social:person72 social:knows social:person12 ,
+    social:person32 ,
+    social:person42 ,
+    social:person52 ,
+    social:person62 ,
+    social:person71 ,
+    social:person73 ,
+    social:person82 ,
+    social:person92 .
+
+social:person73 social:knows social:person13 ,
+    social:person33 ,
+    social:person63 ,
+    social:person72 ,
+    social:person74 ,
+    social:person83 ,
+    social:person93 .
+
+social:person74 social:knows social:person14 ,
+    social:person34 ,
+    social:person64 ,
+    social:person73 ,
+    social:person75 ,
+    social:person84 ,
+    social:person94 .
+
+social:person75 social:knows social:person5 ,
+    social:person35 ,
+    social:person65 ,
+    social:person74 ,
+    social:person76 ,
+    social:person85 ,
+    social:person95 .
+
+social:person76 social:knows social:person6 ,
+    social:person16 ,
+    social:person36 ,
+    social:person66 ,
+    social:person75 ,
+    social:person77 ,
+    social:person86 ,
+    social:person96 .
+
+social:person77 social:knows social:person7 ,
+    social:person17 ,
+    social:person37 ,
+    social:person67 ,
+    social:person76 ,
+    social:person78 ,
+    social:person87 ,
+    social:person97 .
+
+social:person78 social:knows social:person8 ,
+    social:person18 ,
+    social:person38 ,
+    social:person68 ,
+    social:person77 ,
+    social:person79 ,
+    social:person88 ,
+    social:person98 .
+
+social:person79 social:knows social:person9 ,
+    social:person19 ,
+    social:person39 ,
+    social:person69 ,
+    social:person78 ,
+    social:person80 ,
+    social:person89 ,
+    social:person99 .
+
+social:person80 social:knows social:person10 ,
+    social:person20 ,
+    social:person40 ,
+    social:person70 ,
+    social:person79 ,
+    social:person81 ,
+    social:person90 ,
+    social:person100 .
+
+# Person 81 to 90 friends
+social:person81 social:knows social:person11 ,
+    social:person41 ,
+    social:person61 ,
+    social:person71 ,
+    social:person80 ,
+    social:person82 ,
+    social:person91 .
+
+social:person82 social:knows social:person12 ,
+    social:person32 ,
+    social:person42 ,
+    social:person62 ,
+    social:person72 ,
+    social:person81 ,
+    social:person83 ,
+    social:person92 .
+
+social:person83 social:knows social:person13 ,
+    social:person43 ,
+    social:person63 ,
+    social:person73 ,
+    social:person82 ,
+    social:person84 ,
+    social:person93 .
+
+social:person84 social:knows social:person14 ,
+    social:person44 ,
+    social:person74 ,
+    social:person83 ,
+    social:person85 ,
+    social:person94 .
+
+social:person85 social:knows social:person15 ,
+    social:person45 ,
+    social:person65 ,
+    social:person75 ,
+    social:person84 ,
+    social:person86 ,
+    social:person95 .
+
+social:person86 social:knows social:person16 ,
+    social:person46 ,
+    social:person76 ,
+    social:person85 ,
+    social:person87 ,
+    social:person96 .
+
+social:person87 social:knows social:person7 ,
+    social:person17 ,
+    social:person47 ,
+    social:person77 ,
+    social:person86 ,
+    social:person88 ,
+    social:person97 .
+
+social:person88 social:knows social:person8 ,
+    social:person18 ,
+    social:person48 ,
+    social:person78 ,
+    social:person87 ,
+    social:person89 ,
+    social:person98 .
+
+social:person89 social:knows social:person9 ,
+    social:person19 ,
+    social:person49 ,
+    social:person79 ,
+    social:person88 ,
+    social:person90 ,
+    social:person99 .
+
+social:person90 social:knows social:person10 ,
+    social:person20 ,
+    social:person50 ,
+    social:person70 ,
+    social:person80 ,
+    social:person89 ,
+    social:person91 ,
+    social:person100 .
+
+# Person 91 to 100 friends
+social:person91 social:knows social:person21 ,
+    social:person51 ,
+    social:person71 ,
+    social:person81 ,
+    social:person90 ,
+    social:person92 .
+
+social:person92 social:knows social:person22 ,
+    social:person52 ,
+    social:person72 ,
+    social:person82 ,
+    social:person91 ,
+    social:person93 .
+
+social:person93 social:knows social:person23 ,
+    social:person53 ,
+    social:person73 ,
+    social:person83 ,
+    social:person92 ,
+    social:person94 .
+
+social:person94 social:knows social:person24 ,
+    social:person54 ,
+    social:person74 ,
+    social:person84 ,
+    social:person93 ,
+    social:person95 .
+
+social:person95 social:knows social:person25 ,
+    social:person55 ,
+    social:person65 ,
+    social:person75 ,
+    social:person85 ,
+    social:person94 ,
+    social:person96 .
+
+social:person96 social:knows social:person26 ,
+    social:person56 ,
+    social:person76 ,
+    social:person86 ,
+    social:person95 ,
+    social:person97 .
+
+social:person97 social:knows social:person27 ,
+    social:person57 ,
+    social:person77 ,
+    social:person87 ,
+    social:person96 ,
+    social:person98 .
+
+social:person98 social:knows social:person8 ,
+    social:person28 ,
+    social:person58 ,
+    social:person78 ,
+    social:person88 ,
+    social:person97 ,
+    social:person99 .
+
+social:person99 social:knows social:person9 ,
+    social:person29 ,
+    social:person59 ,
+    social:person79 ,
+    social:person89 ,
+    social:person98 ,
+    social:person100 .
+
+social:person100 social:knows social:person10 ,
+    social:person30 ,
+    social:person60 ,
+    social:person70 ,
+    social:person80 ,
+    social:person90 ,
+    social:person99 .

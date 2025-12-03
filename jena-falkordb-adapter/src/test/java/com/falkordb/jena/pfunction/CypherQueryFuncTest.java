@@ -10,7 +10,9 @@ import org.apache.jena.query.QueryExecutionFactory;
 import org.apache.jena.query.QueryFactory;
 import org.apache.jena.query.QuerySolution;
 import org.apache.jena.query.ResultSet;
+import org.apache.jena.rdf.model.InfModel;
 import org.apache.jena.rdf.model.Model;
+import org.apache.jena.rdf.model.ModelFactory;
 import org.apache.jena.sparql.pfunction.PropertyFunctionRegistry;
 import org.apache.jena.vocabulary.RDF;
 import org.junit.jupiter.api.AfterEach;
@@ -1015,6 +1017,48 @@ public class CypherQueryFuncTest {
             // Invalid URI should be returned as a literal, not a URI resource
             assertTrue(solution.get("link").isLiteral(),
                 "Invalid URI should be returned as literal");
+        }
+    }
+
+    @Test
+    @DisplayName("Test Cypher query works through inference graph wrapper")
+    public void testCypherQueryWithInferenceGraph() {
+        // Add test data
+        var person = model.createResource("http://example.org/person/john");
+        var name = model.createProperty("http://example.org/name");
+        var personType = model.createResource("http://example.org/Person");
+
+        person.addProperty(RDF.type, personType);
+        person.addProperty(name, "John Doe");
+
+        // Create an inference model wrapping the FalkorDB model
+        // This simulates what happens when RDFS/OWL reasoning is enabled
+        InfModel infModel = ModelFactory.createRDFSModel(model);
+
+        // Create dataset from the inference model
+        Dataset infDataset = DatasetFactory.create(infModel);
+
+        // Execute SPARQL query with magic property through inference graph
+        String sparql = """
+            PREFIX falkor: <http://falkordb.com/jena#>
+            SELECT ?name WHERE {
+                (?name) falkor:cypher '''
+                    MATCH (p:Resource)
+                    WHERE p.`http://example.org/name` IS NOT NULL
+                    RETURN p.`http://example.org/name` AS name
+                '''
+            }
+            """;
+
+        Query query = QueryFactory.create(sparql);
+        try (QueryExecution qexec = QueryExecutionFactory.create(query, infDataset)) {
+            ResultSet results = qexec.execSelect();
+            assertTrue(results.hasNext(), 
+                "Magic property should work through inference graph wrapper");
+
+            QuerySolution solution = results.nextSolution();
+            assertNotNull(solution.get("name"), "name variable should be bound");
+            assertEquals("John Doe", solution.getLiteral("name").getString());
         }
     }
 }

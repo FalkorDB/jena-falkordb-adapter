@@ -18,6 +18,7 @@ import java.util.Map;
 import org.apache.jena.graph.Graph;
 import org.apache.jena.graph.Node;
 import org.apache.jena.graph.NodeFactory;
+import org.apache.jena.reasoner.InfGraph;
 import org.apache.jena.sparql.core.Var;
 import org.apache.jena.sparql.engine.ExecutionContext;
 import org.apache.jena.sparql.engine.QueryIterator;
@@ -134,7 +135,8 @@ public final class CypherQueryFunc extends PropertyFunctionEval {
 
         // Get the FalkorDB graph from the execution context
         Graph graph = execCxt.getActiveGraph();
-        if (!(graph instanceof FalkorDBGraph falkorGraph)) {
+        FalkorDBGraph falkorGraph = findFalkorDBGraph(graph);
+        if (falkorGraph == null) {
             LOGGER.warn("falkor:cypher can only be used with FalkorDBGraph, "
                 + "got: {}", graph.getClass().getName());
             return QueryIterPlainWrapper.create(List.<Binding>of().iterator(),
@@ -392,5 +394,40 @@ public final class CypherQueryFunc extends PropertyFunctionEval {
             return normalized;
         }
         return normalized.substring(0, maxLen) + "...";
+    }
+
+    /**
+     * Find the underlying FalkorDBGraph, unwrapping inference graph wrappers.
+     *
+     * <p>When inference/reasoning is enabled, Jena wraps the underlying graph
+     * in an InfGraph implementation (e.g., FBRuleInfGraph). This method
+     * recursively unwraps such wrappers to find the underlying FalkorDBGraph.</p>
+     *
+     * @param graph the graph to search
+     * @return the underlying FalkorDBGraph, or null if not found
+     */
+    private FalkorDBGraph findFalkorDBGraph(final Graph graph) {
+        if (graph == null) {
+            return null;
+        }
+
+        // Direct match
+        if (graph instanceof FalkorDBGraph) {
+            return (FalkorDBGraph) graph;
+        }
+
+        // Unwrap inference graphs
+        if (graph instanceof InfGraph infGraph) {
+            Graph rawGraph = infGraph.getRawGraph();
+            if (rawGraph != null) {
+                if (LOGGER.isDebugEnabled()) {
+                    LOGGER.debug("Unwrapping InfGraph {} to access raw graph",
+                        graph.getClass().getName());
+                }
+                return findFalkorDBGraph(rawGraph);
+            }
+        }
+
+        return null;
     }
 }

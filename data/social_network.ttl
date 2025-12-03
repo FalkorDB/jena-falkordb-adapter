@@ -15,7 +15,7 @@
 # Network structure:
 # - 100 people (person1 to person100)
 # - Each person knows approximately 10 other people
-# - Creates ~1000 "knows" relationships
+# - Creates ~800 "knows" relationships
 # - Enables testing of 2-hop and 3-hop path queries
 #
 
@@ -324,7 +324,7 @@ social:person100 rdf:type social:Person ;
     social:name "Person 100" .
 
 # ==========================================
-# KNOWS RELATIONSHIPS (~1000 edges)
+# KNOWS RELATIONSHIPS (~800 edges)
 # Each person knows approximately 10 others
 # ==========================================
 

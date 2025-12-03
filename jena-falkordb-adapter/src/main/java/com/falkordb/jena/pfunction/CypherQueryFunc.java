@@ -154,8 +154,6 @@ public final class CypherQueryFunc extends PropertyFunctionEval {
         try (Scope scope = span.makeCurrent()) {
             // Log the query for debugging
             if (LOGGER.isDebugEnabled()) {
-                LOGGER.debug("Executing Cypher via magic property: {}",
-                    cypherQuery);
                 LOGGER.debug("Magic property executing Cypher query: {}",
                     truncateForLog(cypherQuery));
             }
@@ -340,9 +338,16 @@ public final class CypherQueryFunc extends PropertyFunctionEval {
 
         // Handle primitives
         if (value instanceof String strVal) {
-            // Check if it looks like a URI
+            // Check if it looks like a valid URI
             if (strVal.startsWith("http://") || strVal.startsWith("https://")) {
-                return NodeFactory.createURI(strVal);
+                try {
+                    // Validate URI before creating
+                    java.net.URI.create(strVal);
+                    return NodeFactory.createURI(strVal);
+                } catch (IllegalArgumentException e) {
+                    // Invalid URI, treat as string literal
+                    return NodeFactory.createLiteralString(strVal);
+                }
             }
             return NodeFactory.createLiteralString(strVal);
         }

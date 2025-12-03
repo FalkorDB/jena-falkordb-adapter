@@ -941,4 +941,67 @@ public class CypherQueryFuncTest {
         CypherQueryFunc func = new CypherQueryFunc();
         assertNotNull(func, "Constructor should create a valid instance");
     }
+
+    @Test
+    @DisplayName("Test Cypher query with malformed syntax")
+    public void testMalformedCypherQuery() {
+        // Add test data so we have a valid graph
+        var person = model.createResource("http://example.org/person/john");
+        var nameProp = model.createProperty("http://example.org/name");
+        person.addProperty(nameProp, "John");
+
+        Dataset dataset = DatasetFactory.create(model);
+
+        // Intentionally malformed Cypher query (missing closing parenthesis)
+        String sparql = """
+            PREFIX falkor: <http://falkordb.com/jena#>
+            SELECT ?name WHERE {
+                (?name) falkor:cypher '''
+                    MATCH (p:Resource
+                    RETURN p.`http://example.org/name` AS name
+                '''
+            }
+            """;
+
+        Query query = QueryFactory.create(sparql);
+        try (QueryExecution qexec = QueryExecutionFactory.create(query, dataset)) {
+            assertThrows(Exception.class, () -> qexec.execSelect(),
+                "Malformed Cypher should throw an exception");
+        }
+    }
+
+    @Test
+    @DisplayName("Test Cypher query with invalid URI string returns literal")
+    public void testInvalidURIStringReturnsLiteral() {
+        // Add test data with an invalid URI-like string
+        var resource = model.createResource("http://example.org/resource/1");
+        var link = model.createProperty("http://example.org/link");
+        // This looks like a URL but has invalid characters
+        resource.addProperty(link, "http://not a valid uri with spaces");
+
+        Dataset dataset = DatasetFactory.create(model);
+
+        String sparql = """
+            PREFIX falkor: <http://falkordb.com/jena#>
+            SELECT ?link WHERE {
+                (?link) falkor:cypher '''
+                    MATCH (p:Resource)
+                    WHERE p.`http://example.org/link` IS NOT NULL
+                    RETURN p.`http://example.org/link` AS link
+                '''
+            }
+            """;
+
+        Query query = QueryFactory.create(sparql);
+        try (QueryExecution qexec = QueryExecutionFactory.create(query, dataset)) {
+            ResultSet results = qexec.execSelect();
+            assertTrue(results.hasNext(), "Should have at least one result");
+
+            QuerySolution solution = results.nextSolution();
+            assertNotNull(solution.get("link"), "link variable should be bound");
+            // Invalid URI should be returned as a literal, not a URI resource
+            assertTrue(solution.get("link").isLiteral(),
+                "Invalid URI should be returned as literal");
+        }
+    }
 }

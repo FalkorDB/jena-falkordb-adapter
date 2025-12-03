@@ -399,4 +399,175 @@ public class FalkorDBGraphTest {
             model.close();
         }
     }
+
+    // Tests for optimized methods: graphBaseContains, graphBaseSize, isEmpty
+
+    @Test
+    @DisplayName("Test isEmpty on empty graph")
+    public void testIsEmptyOnEmptyGraph() {
+        var model = createTestModel();
+        try {
+            assertTrue(model.isEmpty(), "New empty model should be empty");
+        } finally {
+            model.close();
+        }
+    }
+
+    @Test
+    @DisplayName("Test isEmpty on non-empty graph")
+    public void testIsEmptyOnNonEmptyGraph() {
+        var model = createTestModel();
+        try {
+            var subject = model.createResource("http://test.example.org/person1");
+            var name = model.createProperty("http://test.example.org/name");
+            subject.addProperty(name, "Test Person");
+
+            assertFalse(model.isEmpty(), "Model with data should not be empty");
+        } finally {
+            model.close();
+        }
+    }
+
+    @Test
+    @DisplayName("Test isEmpty after adding and removing triple")
+    public void testIsEmptyAfterAddAndRemove() {
+        var model = createTestModel();
+        try {
+            var subject = model.createResource("http://test.example.org/person1");
+            var name = model.createProperty("http://test.example.org/name");
+            var stmt = model.createStatement(subject, name, "Test Person");
+            
+            model.add(stmt);
+            assertFalse(model.isEmpty(), "Model with data should not be empty");
+            
+            model.remove(stmt);
+            assertTrue(model.isEmpty(), "Model should be empty after removing all data");
+        } finally {
+            model.close();
+        }
+    }
+
+    @Test
+    @DisplayName("Test graphBaseContains with literal property")
+    public void testContainsLiteralProperty() {
+        var model = createTestModel();
+        try {
+            var subject = model.createResource("http://test.example.org/person1");
+            var name = model.createProperty("http://test.example.org/name");
+            subject.addProperty(name, "John Doe");
+
+            // Test contains for exact literal match
+            assertTrue(model.contains(subject, name, model.createLiteral("John Doe")),
+                "Model should contain the literal property triple");
+
+            // Test contains for non-existent literal
+            assertFalse(model.contains(subject, name, model.createLiteral("Jane Doe")),
+                "Model should not contain a non-existent literal");
+        } finally {
+            model.close();
+        }
+    }
+
+    @Test
+    @DisplayName("Test graphBaseContains with rdf:type")
+    public void testContainsRdfType() {
+        var model = createTestModel();
+        try {
+            var subject = model.createResource("http://test.example.org/person1");
+            var personType = model.createResource("http://test.example.org/Person");
+            
+            subject.addProperty(RDF.type, personType);
+
+            // Test contains for exact type match
+            assertTrue(model.contains(subject, RDF.type, personType),
+                "Model should contain the rdf:type triple");
+
+            // Test contains for non-existent type
+            var companyType = model.createResource("http://test.example.org/Company");
+            assertFalse(model.contains(subject, RDF.type, companyType),
+                "Model should not contain a non-existent rdf:type");
+        } finally {
+            model.close();
+        }
+    }
+
+    @Test
+    @DisplayName("Test graphBaseContains with relationship")
+    public void testContainsRelationship() {
+        var model = createTestModel();
+        try {
+            var person1 = model.createResource("http://test.example.org/person1");
+            var person2 = model.createResource("http://test.example.org/person2");
+            var knows = model.createProperty("http://test.example.org/knows");
+            
+            person1.addProperty(knows, person2);
+
+            // Test contains for exact relationship match
+            assertTrue(model.contains(person1, knows, person2),
+                "Model should contain the relationship triple");
+
+            // Test contains for non-existent relationship
+            var person3 = model.createResource("http://test.example.org/person3");
+            assertFalse(model.contains(person1, knows, person3),
+                "Model should not contain a non-existent relationship");
+        } finally {
+            model.close();
+        }
+    }
+
+    @Test
+    @DisplayName("Test graphBaseSize with mixed triples")
+    public void testSizeWithMixedTriples() {
+        var model = createTestModel();
+        try {
+            assertEquals(0, model.size(), "Empty model should have size 0");
+
+            // Test with literal properties only on one subject
+            var person = model.createResource("http://test.example.org/person1");
+            var name = model.createProperty("http://test.example.org/name");
+            var age = model.createProperty("http://test.example.org/age");
+
+            person.addProperty(name, "John Doe");
+            assertEquals(1, model.size(), "Size should be 1 after adding literal property");
+
+            person.addProperty(age, model.createTypedLiteral(30));
+            assertEquals(2, model.size(), "Size should be 2 after adding another literal");
+
+            // Test with rdf:type on a separate subject
+            var animal = model.createResource("http://test.example.org/animal1");
+            var animalType = model.createResource("http://test.example.org/Animal");
+            animal.addProperty(RDF.type, animalType);
+            assertEquals(3, model.size(), "Size should be 3 after adding rdf:type");
+
+            // Test with relationship on separate subjects
+            var person2 = model.createResource("http://test.example.org/person2");
+            var person3 = model.createResource("http://test.example.org/person3");
+            var knows = model.createProperty("http://test.example.org/knows");
+            person2.addProperty(knows, person3);
+            assertEquals(4, model.size(), "Size should be 4 after adding relationship");
+        } finally {
+            model.close();
+        }
+    }
+
+    @Test
+    @DisplayName("Test contains with concrete triple")
+    public void testContainsConcreteTriple() {
+        var model = createTestModel();
+        try {
+            var subject = model.createResource("http://test.example.org/person1");
+            var name = model.createProperty("http://test.example.org/name");
+            var stmt = model.createStatement(subject, name, "Test Name");
+            
+            assertFalse(model.contains(stmt), "Should not contain statement before adding");
+            
+            model.add(stmt);
+            assertTrue(model.contains(stmt), "Should contain statement after adding");
+            
+            model.remove(stmt);
+            assertFalse(model.contains(stmt), "Should not contain statement after removing");
+        } finally {
+            model.close();
+        }
+    }
 }

@@ -663,6 +663,174 @@ public final class FalkorDBGraph extends GraphBase {
         return value.replace("`", "``").replace("\0", "");
     }
 
+    /**
+     * Check if the graph contains the given triple using optimized Cypher
+     * queries.
+     *
+     * <p>This method is more efficient than the default implementation which
+     * uses find() because it can short-circuit as soon as a match is found
+     * without iterating over all results.</p>
+     *
+     * @param triple the triple to check for (may contain ANY wildcards)
+     * @return true if the graph contains a matching triple
+     */
+    @Override
+    protected boolean graphBaseContains(final Triple triple) {
+        // If all parts are concrete, we can do an exact check
+        // Otherwise, fall back to the default containsByFind
+        if (!triple.isConcrete()) {
+            return containsByFind(triple);
+        }
+
+        var subject = nodeToString(triple.getSubject());
+        var predicate = nodeToString(triple.getPredicate());
+        var params = new HashMap<String, Object>(2);
+        String cypher;
+
+        if (triple.getObject().isLiteral()) {
+            // Check for literal property
+            var objectValue = triple.getObject().getLiteralLexicalForm();
+            params.put("subjectUri", subject);
+            params.put("objectValue", objectValue);
+
+            String sanitizedPredicate = sanitizeCypherIdentifier(predicate);
+            cypher = """
+                MATCH (s:Resource {uri: $subjectUri})
+                WHERE s.`%s` = $objectValue
+                RETURN 1 LIMIT 1""".formatted(sanitizedPredicate);
+        } else if (predicate.equals(RDF.type.getURI())) {
+            // Check for rdf:type (label)
+            var objectType = nodeToString(triple.getObject());
+            params.put("subjectUri", subject);
+
+            String sanitizedType = sanitizeCypherIdentifier(objectType);
+            cypher = """
+                MATCH (s:Resource:`%s` {uri: $subjectUri})
+                RETURN 1 LIMIT 1""".formatted(sanitizedType);
+        } else {
+            // Check for relationship
+            var object = nodeToString(triple.getObject());
+            params.put("subjectUri", subject);
+            params.put("objectUri", object);
+
+            String sanitizedPredicate = sanitizeCypherIdentifier(predicate);
+            cypher = """
+                MATCH (s:Resource {uri: $subjectUri})-[:`%s`]->\
+                (o:Resource {uri: $objectUri})
+                RETURN 1 LIMIT 1""".formatted(sanitizedPredicate);
+        }
+
+        var result = graph.query(cypher, params);
+        return result.iterator().hasNext();
+    }
+
+    /**
+     * Return the size of the graph (number of triples) using optimized
+     * Cypher queries.
+     *
+     * <p>This counts all triples stored in the graph:</p>
+     * <ul>
+     *   <li>Literal properties on Resource nodes (excluding 'uri')</li>
+     *   <li>rdf:type triples (labels on Resource nodes, excluding
+     *       'Resource')</li>
+     *   <li>Relationships between Resource nodes</li>
+     * </ul>
+     *
+     * @return the number of triples in the graph
+     */
+    @Override
+    protected int graphBaseSize() {
+        long count = 0;
+
+        // Count literal properties (excluding 'uri' property)
+        var propsResult = graph.query("""
+            MATCH (s:Resource)
+            UNWIND keys(s) AS key
+            WITH key WHERE key <> 'uri'
+            RETURN count(key) AS cnt""");
+        for (var record : propsResult) {
+            Object value = record.getValue("cnt");
+            if (value instanceof Number) {
+                count += ((Number) value).longValue();
+            }
+        }
+
+        // Count rdf:type triples (labels excluding 'Resource')
+        var labelsResult = graph.query("""
+            MATCH (s:Resource)
+            UNWIND labels(s) AS lbl
+            WITH lbl WHERE lbl <> 'Resource'
+            RETURN count(lbl) AS cnt""");
+        for (var record : labelsResult) {
+            Object value = record.getValue("cnt");
+            if (value instanceof Number) {
+                count += ((Number) value).longValue();
+            }
+        }
+
+        // Count relationships
+        var relsResult = graph.query("""
+            MATCH ()-[r]->()
+            RETURN count(r) AS cnt""");
+        for (var record : relsResult) {
+            Object value = record.getValue("cnt");
+            if (value instanceof Number) {
+                count += ((Number) value).longValue();
+            }
+        }
+
+        return (int) count;
+    }
+
+    /**
+     * Check if the graph is empty using an optimized Cypher query.
+     *
+     * <p>This is more efficient than the default implementation which
+     * uses contains(Triple.ANY) because it can quickly check for the
+     * existence of any RDF data without full iteration.</p>
+     *
+     * <p>The graph is considered empty if there are no:</p>
+     * <ul>
+     *   <li>Literal properties (properties other than 'uri')</li>
+     *   <li>rdf:type triples (labels other than 'Resource')</li>
+     *   <li>Relationships between Resource nodes</li>
+     * </ul>
+     *
+     * @return true if the graph contains no triples
+     */
+    @Override
+    public boolean isEmpty() {
+        // Check for any properties (excluding 'uri')
+        var propsResult = graph.query("""
+            MATCH (s:Resource)
+            UNWIND keys(s) AS key
+            WITH key WHERE key <> 'uri'
+            RETURN 1 LIMIT 1""");
+        if (propsResult.iterator().hasNext()) {
+            return false;
+        }
+
+        // Check for any labels (excluding 'Resource')
+        var labelsResult = graph.query("""
+            MATCH (s:Resource)
+            UNWIND labels(s) AS lbl
+            WITH lbl WHERE lbl <> 'Resource'
+            RETURN 1 LIMIT 1""");
+        if (labelsResult.iterator().hasNext()) {
+            return false;
+        }
+
+        // Check for any relationships
+        var relsResult = graph.query("""
+            MATCH ()-[r]->()
+            RETURN 1 LIMIT 1""");
+        if (relsResult.iterator().hasNext()) {
+            return false;
+        }
+
+        return true;
+    }
+
     @Override
     public void close() {
         try {

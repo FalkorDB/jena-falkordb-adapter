@@ -75,8 +75,8 @@ public class FalkorDBQueryPushdownTest {
     }
 
     @Test
-    @DisplayName("Test simple property query falls back to standard evaluation")
-    public void testSimplePropertyQueryFallback() {
+    @DisplayName("Test simple property query uses standard evaluation")
+    public void testSimplePropertyQueryStandardEval() {
         // Add test data
         var person = model.createResource("http://example.org/person/john");
         var name = model.createProperty("http://example.org/name");
@@ -84,7 +84,7 @@ public class FalkorDBQueryPushdownTest {
 
         Dataset dataset = DatasetFactory.create(model);
 
-        // Query with variable object - falls back to standard evaluation
+        // Query with variable object - uses standard evaluation (can't determine if literal)
         String sparql = """
             SELECT ?name WHERE {
                 ?s <http://example.org/name> ?name .
@@ -102,8 +102,8 @@ public class FalkorDBQueryPushdownTest {
     }
 
     @Test
-    @DisplayName("Test relationship query falls back to standard evaluation")
-    public void testRelationshipQueryFallback() {
+    @DisplayName("Test relationship query uses standard evaluation")
+    public void testRelationshipQueryStandardEval() {
         // Add test data
         var alice = model.createResource("http://example.org/person/alice");
         var bob = model.createResource("http://example.org/person/bob");
@@ -116,7 +116,7 @@ public class FalkorDBQueryPushdownTest {
 
         Dataset dataset = DatasetFactory.create(model);
 
-        // Query with variable object - falls back to standard evaluation
+        // Query with variable object - uses standard evaluation
         String sparql = """
             SELECT ?friend WHERE {
                 <http://example.org/person/alice> <http://example.org/knows> ?friend .
@@ -135,8 +135,8 @@ public class FalkorDBQueryPushdownTest {
     }
 
     @Test
-    @DisplayName("Test friends of friends query falls back to standard evaluation")
-    public void testFriendsOfFriendsQueryFallback() {
+    @DisplayName("Test friends of friends query uses standard evaluation")
+    public void testFriendsOfFriendsQueryStandardEval() {
         // Create a simple social network: Alice -> Bob -> Carol
         var alice = model.createResource("http://example.org/person/alice");
         var bob = model.createResource("http://example.org/person/bob");
@@ -148,7 +148,7 @@ public class FalkorDBQueryPushdownTest {
 
         Dataset dataset = DatasetFactory.create(model);
 
-        // Query with variable objects - falls back to standard evaluation
+        // Query with variable objects - uses standard evaluation
         String sparql = """
             SELECT ?fof WHERE {
                 <http://example.org/person/alice> <http://example.org/knows> ?friend .
@@ -205,8 +205,51 @@ public class FalkorDBQueryPushdownTest {
     }
 
     @Test
-    @DisplayName("Test query with multiple patterns falls back to standard evaluation")
-    public void testMultiplePatternsFallback() {
+    @DisplayName("Test query with variable predicate pushdown")
+    public void testVariablePredicatePushdown() {
+        // Add test data
+        var person = model.createResource("http://example.org/person/john");
+        var name = model.createProperty("http://example.org/name");
+        var age = model.createProperty("http://example.org/age");
+        var knows = model.createProperty("http://example.org/knows");
+        var friend = model.createResource("http://example.org/person/jane");
+
+        person.addProperty(name, "John Doe");
+        person.addProperty(age, "30");
+        person.addProperty(knows, friend);
+
+        Dataset dataset = DatasetFactory.create(model);
+
+        // Query with variable predicate - uses UNION in Cypher
+        String sparql = """
+            SELECT ?p ?o WHERE {
+                <http://example.org/person/john> ?p ?o .
+            }
+            """;
+
+        Query query = QueryFactory.create(sparql);
+        try (QueryExecution qexec = QueryExecutionFactory.create(query, dataset)) {
+            ResultSet results = qexec.execSelect();
+
+            Set<String> predicates = new HashSet<>();
+            while (results.hasNext()) {
+                QuerySolution solution = results.nextSolution();
+                predicates.add(solution.getResource("p").getURI());
+            }
+
+            // Should find all three predicates
+            assertTrue(predicates.contains("http://example.org/name"), 
+                "Should find name property");
+            assertTrue(predicates.contains("http://example.org/age"), 
+                "Should find age property");
+            assertTrue(predicates.contains("http://example.org/knows"), 
+                "Should find knows relationship");
+        }
+    }
+
+    @Test
+    @DisplayName("Test query with multiple patterns uses standard evaluation")
+    public void testMultiplePatternsStandardEval() {
         // Add test data
         var person = model.createResource("http://example.org/person/john");
         var name = model.createProperty("http://example.org/name");
@@ -219,7 +262,7 @@ public class FalkorDBQueryPushdownTest {
 
         Dataset dataset = DatasetFactory.create(model);
 
-        // Query with variable objects - falls back to standard evaluation
+        // Query with variable objects - uses standard evaluation
         String sparql = """
             PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
             SELECT ?name WHERE {
@@ -239,24 +282,26 @@ public class FalkorDBQueryPushdownTest {
     }
 
     @Test
-    @DisplayName("Test query returns multiple results with fallback")
-    public void testMultipleResultsFallback() {
-        // Add multiple persons
-        var name = model.createProperty("http://example.org/name");
-        List<String> names = List.of("Alice", "Bob", "Carol", "Dave");
+    @DisplayName("Test query returns multiple results")
+    public void testMultipleResults() {
+        // Add multiple persons with knows relationships
+        var alice = model.createResource("http://example.org/person/alice");
+        var bob = model.createResource("http://example.org/person/bob");
+        var carol = model.createResource("http://example.org/person/carol");
+        var dave = model.createResource("http://example.org/person/dave");
+        var knows = model.createProperty("http://example.org/knows");
 
-        for (String n : names) {
-            var person = model.createResource(
-                "http://example.org/person/" + n.toLowerCase());
-            person.addProperty(name, n);
-        }
+        // Alice knows Bob, Carol, and Dave
+        alice.addProperty(knows, bob);
+        alice.addProperty(knows, carol);
+        alice.addProperty(knows, dave);
 
         Dataset dataset = DatasetFactory.create(model);
 
-        // Query with variable objects - falls back to standard evaluation
+        // Query with variable object - uses standard evaluation
         String sparql = """
-            SELECT ?name WHERE {
-                ?person <http://example.org/name> ?name .
+            SELECT ?friend WHERE {
+                <http://example.org/person/alice> <http://example.org/knows> ?friend .
             }
             """;
 
@@ -264,14 +309,16 @@ public class FalkorDBQueryPushdownTest {
         try (QueryExecution qexec = QueryExecutionFactory.create(query, dataset)) {
             ResultSet results = qexec.execSelect();
 
-            Set<String> resultNames = new HashSet<>();
+            Set<String> friends = new HashSet<>();
             while (results.hasNext()) {
                 QuerySolution solution = results.nextSolution();
-                resultNames.add(solution.getLiteral("name").getString());
+                friends.add(solution.getResource("friend").getURI());
             }
 
-            assertEquals(4, resultNames.size(), "Should have 4 results");
-            assertTrue(resultNames.containsAll(names));
+            assertEquals(3, friends.size(), "Should have 3 friends");
+            assertTrue(friends.contains("http://example.org/person/bob"));
+            assertTrue(friends.contains("http://example.org/person/carol"));
+            assertTrue(friends.contains("http://example.org/person/dave"));
         }
     }
 
@@ -301,5 +348,84 @@ public class FalkorDBQueryPushdownTest {
         FalkorDBQueryEngineFactory factory2 = FalkorDBQueryEngineFactory.get();
         
         assertSame(factory1, factory2, "Factory should be singleton");
+    }
+
+    @Test
+    @DisplayName("Test all properties of a resource with variable predicate")
+    public void testAllPropertiesOfResource() {
+        // Add test data with multiple properties
+        var person = model.createResource("http://example.org/person/jane");
+        var name = model.createProperty("http://example.org/name");
+        var email = model.createProperty("http://example.org/email");
+        var city = model.createProperty("http://example.org/city");
+
+        person.addProperty(name, "Jane Doe");
+        person.addProperty(email, "jane@example.org");
+        person.addProperty(city, "New York");
+
+        Dataset dataset = DatasetFactory.create(model);
+
+        // Query all properties using variable predicate
+        String sparql = """
+            SELECT ?p ?o WHERE {
+                <http://example.org/person/jane> ?p ?o .
+            }
+            """;
+
+        Query query = QueryFactory.create(sparql);
+        try (QueryExecution qexec = QueryExecutionFactory.create(query, dataset)) {
+            ResultSet results = qexec.execSelect();
+
+            int count = 0;
+            Set<String> predicates = new HashSet<>();
+            while (results.hasNext()) {
+                QuerySolution solution = results.nextSolution();
+                predicates.add(solution.getResource("p").getURI());
+                count++;
+            }
+
+            assertTrue(count >= 3, "Should have at least 3 results");
+            assertTrue(predicates.contains("http://example.org/name"));
+            assertTrue(predicates.contains("http://example.org/email"));
+            assertTrue(predicates.contains("http://example.org/city"));
+        }
+    }
+
+    @Test
+    @DisplayName("Test closed chain relationship pattern with pushdown")
+    public void testClosedChainRelationshipPushdown() {
+        // Add test data for mutual friends: Alice knows Bob, Bob knows Alice
+        var alice = model.createResource("http://example.org/person/alice");
+        var bob = model.createResource("http://example.org/person/bob");
+        var knows = model.createProperty("http://example.org/knows");
+
+        alice.addProperty(knows, bob);
+        bob.addProperty(knows, alice);
+
+        Dataset dataset = DatasetFactory.create(model);
+
+        // Query for mutual friends - closed chain pattern can use pushdown
+        String sparql = """
+            SELECT ?a ?b WHERE {
+                ?a <http://example.org/knows> ?b .
+                ?b <http://example.org/knows> ?a .
+            }
+            """;
+
+        Query query = QueryFactory.create(sparql);
+        try (QueryExecution qexec = QueryExecutionFactory.create(query, dataset)) {
+            ResultSet results = qexec.execSelect();
+
+            Set<String> pairs = new HashSet<>();
+            while (results.hasNext()) {
+                QuerySolution solution = results.nextSolution();
+                String a = solution.getResource("a").getURI();
+                String b = solution.getResource("b").getURI();
+                pairs.add(a + "->" + b);
+            }
+
+            // Should find both directions
+            assertTrue(pairs.size() >= 2, "Should find mutual friendship pairs");
+        }
     }
 }

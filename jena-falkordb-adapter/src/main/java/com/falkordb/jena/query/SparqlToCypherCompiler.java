@@ -30,19 +30,33 @@ import java.util.Set;
  *   <li>SPARQL literal objects become property matches</li>
  *   <li>SPARQL variables become Cypher identifiers</li>
  *   <li>rdf:type predicates become label matches</li>
+ *   <li>Variable objects query both relationships and properties using UNION</li>
+ *   <li>Variable predicates query all relationships using type(r)</li>
  * </ul>
  *
- * <h2>Example:</h2>
+ * <h2>Example with variable object:</h2>
  * <pre>{@code
  * // SPARQL BGP:
- * // ?person foaf:name ?name .
  * // ?person foaf:knows ?friend .
  *
  * // Compiled Cypher:
- * // MATCH (person:Resource)
- * // WHERE person.`http://xmlns.com/foaf/0.1/name` IS NOT NULL
- * // MATCH (person)-[:`http://xmlns.com/foaf/0.1/knows`]->(friend:Resource)
- * // RETURN person.uri AS person, person.`...name` AS name, friend.uri AS friend
+ * // MATCH (person:Resource)-[:`http://xmlns.com/foaf/0.1/knows`]->(friend:Resource)
+ * // RETURN person.uri AS person, friend.uri AS friend
+ * }</pre>
+ *
+ * <h2>Example with variable predicate:</h2>
+ * <pre>{@code
+ * // SPARQL BGP:
+ * // ?s ?p ?o .
+ *
+ * // Compiled Cypher (using UNION for relationships and properties):
+ * // MATCH (s:Resource)-[r]->(o:Resource)
+ * // RETURN s.uri AS s, type(r) AS p, o.uri AS o
+ * // UNION ALL
+ * // MATCH (s:Resource)
+ * // UNWIND keys(s) AS propKey
+ * // WITH s, propKey WHERE propKey <> 'uri'
+ * // RETURN s.uri AS s, propKey AS p, s[propKey] AS o
  * }</pre>
  */
 public final class SparqlToCypherCompiler {
@@ -101,26 +115,38 @@ public final class SparqlToCypherCompiler {
 
         List<Triple> triples = bgp.getList();
         
+        // Check if we have variable predicates - handle with special logic
+        boolean hasVariablePredicate = triples.stream()
+            .anyMatch(t -> t.getPredicate().isVariable());
+        
+        if (hasVariablePredicate) {
+            return translateWithVariablePredicates(triples);
+        }
+
         // Classify triples and collect variables
         List<Triple> relationshipTriples = new ArrayList<>();
         List<Triple> literalTriples = new ArrayList<>();
         List<Triple> typeTriples = new ArrayList<>();
+        List<Triple> variableObjectRelTriples = new ArrayList<>();
         Set<String> allVariables = new HashSet<>();
         Set<String> nodeVariables = new HashSet<>();
         Map<String, Object> parameters = new HashMap<>();
         int paramCounter = 0;
+
+        // First pass: identify which variable objects are used as subjects
+        // in other triples (indicating they're resources, not literals)
+        Set<String> resourceVariables = new HashSet<>();
+        for (Triple triple : triples) {
+            if (triple.getSubject().isVariable()) {
+                resourceVariables.add(triple.getSubject().getName());
+            }
+        }
 
         for (Triple triple : triples) {
             collectVariables(triple, allVariables, nodeVariables);
             
             Node predicate = triple.getPredicate();
             Node object = triple.getObject();
-
-            if (predicate.isVariable()) {
-                // Variable predicates are complex - fall back
-                throw new CannotCompileException(
-                    "Variable predicates are not supported for pushdown");
-            }
 
             if (predicate.isURI() && predicate.getURI().equals(RDF_TYPE_URI)) {
                 typeTriples.add(triple);
@@ -130,10 +156,17 @@ public final class SparqlToCypherCompiler {
                 // Concrete URI object - definitely a relationship
                 relationshipTriples.add(triple);
             } else if (object.isVariable()) {
-                // Variable object - could be literal or resource
-                // For now, fall back to standard evaluation for these
-                throw new CannotCompileException(
-                    "Variable objects (may be literal or resource) are not yet supported for pushdown");
+                // Variable object - check if it's used as a subject elsewhere
+                // (indicating it's a resource, not a literal)
+                if (resourceVariables.contains(object.getName())) {
+                    // Used as subject in another triple - treat as relationship
+                    variableObjectRelTriples.add(triple);
+                } else {
+                    // Might be a literal - fall back to standard evaluation
+                    throw new CannotCompileException(
+                        "Variable object '" + object.getName() 
+                        + "' might be a literal - not supported for pushdown");
+                }
             } else {
                 relationshipTriples.add(triple);
             }
@@ -158,48 +191,52 @@ public final class SparqlToCypherCompiler {
             cypher.append("MATCH ");
 
             // Subject
-            if (triple.getSubject().isVariable()) {
-                if (declaredNodes.contains(subjectVar)) {
-                    cypher.append("(").append(subjectVar).append(")");
-                } else {
-                    cypher.append("(").append(subjectVar).append(":Resource)");
-                    declaredNodes.add(subjectVar);
-                }
-            } else {
-                String paramName = "p" + paramCounter++;
-                parameters.put(paramName, triple.getSubject().getURI());
-                if (declaredNodes.contains(subjectVar)) {
-                    cypher.append("(").append(subjectVar).append(")");
-                } else {
-                    cypher.append("(").append(subjectVar)
-                          .append(":Resource {uri: $").append(paramName)
-                          .append("})");
-                    declaredNodes.add(subjectVar);
-                }
+            appendSubjectNode(cypher, triple.getSubject(), subjectVar, 
+                declaredNodes, parameters, paramCounter);
+            if (triple.getSubject().isURI()) {
+                paramCounter++;
             }
 
             // Relationship
             cypher.append("-[:`").append(relType).append("`]->");
 
             // Object
-            if (triple.getObject().isVariable()) {
-                if (declaredNodes.contains(objectVar)) {
-                    cypher.append("(").append(objectVar).append(")");
-                } else {
-                    cypher.append("(").append(objectVar).append(":Resource)");
-                    declaredNodes.add(objectVar);
-                }
-            } else if (triple.getObject().isURI()) {
-                String paramName = "p" + paramCounter++;
-                parameters.put(paramName, triple.getObject().getURI());
-                if (declaredNodes.contains(objectVar)) {
-                    cypher.append("(").append(objectVar).append(")");
-                } else {
-                    cypher.append("(").append(objectVar)
-                          .append(":Resource {uri: $").append(paramName)
-                          .append("})");
-                    declaredNodes.add(objectVar);
-                }
+            appendObjectNode(cypher, triple.getObject(), objectVar,
+                declaredNodes, parameters, paramCounter);
+            if (triple.getObject().isURI()) {
+                paramCounter++;
+            }
+        }
+
+        // Build MATCH clauses for variable object relationship patterns
+        // (where the variable is used as subject in another triple)
+        for (Triple triple : variableObjectRelTriples) {
+            String subjectVar = getNodeVariable(triple.getSubject());
+            String objectVar = getNodeVariable(triple.getObject());
+            String relType = sanitizeCypherIdentifier(
+                triple.getPredicate().getURI());
+
+            if (!cypher.isEmpty()) {
+                cypher.append("\n");
+            }
+            cypher.append("MATCH ");
+
+            // Subject
+            appendSubjectNode(cypher, triple.getSubject(), subjectVar,
+                declaredNodes, parameters, paramCounter);
+            if (triple.getSubject().isURI()) {
+                paramCounter++;
+            }
+
+            // Relationship
+            cypher.append("-[:`").append(relType).append("`]->");
+
+            // Variable object - treat as resource node
+            if (declaredNodes.contains(objectVar)) {
+                cypher.append("(").append(objectVar).append(")");
+            } else {
+                cypher.append("(").append(objectVar).append(":Resource)");
+                declaredNodes.add(objectVar);
             }
         }
 
@@ -331,6 +368,169 @@ public final class SparqlToCypherCompiler {
         }
 
         return new CompilationResult(query, parameters, variableMapping);
+    }
+
+    /**
+     * Translate a BGP with variable predicates to Cypher.
+     * Uses UNION to query both relationships and properties.
+     */
+    private static CompilationResult translateWithVariablePredicates(
+            final List<Triple> triples) throws CannotCompileException {
+        
+        // For now, only support single triple with variable predicate
+        if (triples.size() != 1) {
+            throw new CannotCompileException(
+                "Multiple triples with variable predicates not yet supported");
+        }
+
+        Triple triple = triples.get(0);
+        Map<String, Object> parameters = new HashMap<>();
+        Map<String, String> variableMapping = new HashMap<>();
+        int paramCounter = 0;
+
+        String subjectVar = getNodeVariable(triple.getSubject());
+        String predicateVar = triple.getPredicate().getName();
+        String objectVar = getNodeVariable(triple.getObject());
+
+        StringBuilder cypher = new StringBuilder();
+
+        // Part 1: Query relationships
+        cypher.append("MATCH ");
+        
+        // Subject
+        if (triple.getSubject().isVariable()) {
+            cypher.append("(").append(subjectVar).append(":Resource)");
+        } else {
+            String paramName = "p" + paramCounter++;
+            parameters.put(paramName, triple.getSubject().getURI());
+            cypher.append("(").append(subjectVar)
+                  .append(":Resource {uri: $").append(paramName).append("})");
+        }
+
+        // Relationship with variable type
+        cypher.append("-[_r]->");
+
+        // Object
+        if (triple.getObject().isVariable()) {
+            cypher.append("(").append(objectVar).append(":Resource)");
+        } else if (triple.getObject().isURI()) {
+            String paramName = "p" + paramCounter++;
+            parameters.put(paramName, triple.getObject().getURI());
+            cypher.append("(").append(objectVar)
+                  .append(":Resource {uri: $").append(paramName).append("})");
+        } else {
+            throw new CannotCompileException(
+                "Literal objects with variable predicates not supported");
+        }
+
+        cypher.append("\nRETURN ");
+        cypher.append(subjectVar).append(".uri AS ").append(
+            triple.getSubject().isVariable() ? triple.getSubject().getName() : "_s");
+        cypher.append(", type(_r) AS ").append(predicateVar);
+        cypher.append(", ").append(objectVar).append(".uri AS ").append(
+            triple.getObject().isVariable() ? triple.getObject().getName() : "_o");
+
+        // Part 2: Query properties (using UNION ALL)
+        cypher.append("\nUNION ALL\n");
+        cypher.append("MATCH ");
+        
+        // Subject for properties
+        if (triple.getSubject().isVariable()) {
+            cypher.append("(").append(subjectVar).append(":Resource)");
+        } else {
+            // Reuse the parameter from above
+            cypher.append("(").append(subjectVar)
+                  .append(":Resource {uri: $p0})");
+        }
+
+        cypher.append("\nUNWIND keys(").append(subjectVar).append(") AS _propKey");
+        cypher.append("\nWITH ").append(subjectVar)
+              .append(", _propKey WHERE _propKey <> 'uri'");
+        
+        // Filter by object value if concrete
+        if (triple.getObject().isLiteral()) {
+            String paramName = "p" + paramCounter++;
+            parameters.put(paramName, triple.getObject().getLiteralLexicalForm());
+            cypher.append(" AND ").append(subjectVar)
+                  .append("[_propKey] = $").append(paramName);
+        }
+
+        cypher.append("\nRETURN ");
+        cypher.append(subjectVar).append(".uri AS ").append(
+            triple.getSubject().isVariable() ? triple.getSubject().getName() : "_s");
+        cypher.append(", _propKey AS ").append(predicateVar);
+        cypher.append(", ").append(subjectVar).append("[_propKey] AS ").append(
+            triple.getObject().isVariable() ? triple.getObject().getName() : "_o");
+
+        String query = cypher.toString();
+        if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug("Compiled BGP with variable predicate to Cypher:\n{}", 
+                query);
+        }
+
+        return new CompilationResult(query, parameters, variableMapping);
+    }
+
+    /**
+     * Append subject node pattern to Cypher query.
+     */
+    private static void appendSubjectNode(
+            final StringBuilder cypher,
+            final Node subject,
+            final String subjectVar,
+            final Set<String> declaredNodes,
+            final Map<String, Object> parameters,
+            final int paramCounter) {
+        if (subject.isVariable()) {
+            if (declaredNodes.contains(subjectVar)) {
+                cypher.append("(").append(subjectVar).append(")");
+            } else {
+                cypher.append("(").append(subjectVar).append(":Resource)");
+                declaredNodes.add(subjectVar);
+            }
+        } else {
+            String paramName = "p" + paramCounter;
+            parameters.put(paramName, subject.getURI());
+            if (declaredNodes.contains(subjectVar)) {
+                cypher.append("(").append(subjectVar).append(")");
+            } else {
+                cypher.append("(").append(subjectVar)
+                      .append(":Resource {uri: $").append(paramName)
+                      .append("})");
+                declaredNodes.add(subjectVar);
+            }
+        }
+    }
+
+    /**
+     * Append object node pattern to Cypher query.
+     */
+    private static void appendObjectNode(
+            final StringBuilder cypher,
+            final Node object,
+            final String objectVar,
+            final Set<String> declaredNodes,
+            final Map<String, Object> parameters,
+            final int paramCounter) {
+        if (object.isVariable()) {
+            if (declaredNodes.contains(objectVar)) {
+                cypher.append("(").append(objectVar).append(")");
+            } else {
+                cypher.append("(").append(objectVar).append(":Resource)");
+                declaredNodes.add(objectVar);
+            }
+        } else if (object.isURI()) {
+            String paramName = "p" + paramCounter;
+            parameters.put(paramName, object.getURI());
+            if (declaredNodes.contains(objectVar)) {
+                cypher.append("(").append(objectVar).append(")");
+            } else {
+                cypher.append("(").append(objectVar)
+                      .append(":Resource {uri: $").append(paramName)
+                      .append("})");
+                declaredNodes.add(objectVar);
+            }
+        }
     }
 
     /**

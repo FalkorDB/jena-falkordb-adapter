@@ -30,18 +30,39 @@ public class SparqlToCypherCompilerTest {
     }
 
     @Test
-    @DisplayName("Test variable object throws exception (falls back to standard evaluation)")
-    public void testVariableObjectThrowsException() {
-        // ?s foaf:name ?name - variable object not supported for pushdown
+    @DisplayName("Test variable object that's used as subject compiles to relationship")
+    public void testVariableObjectUsedAsSubjectCompiles() throws Exception {
+        // ?s foaf:knows ?friend . ?friend foaf:knows ?fof .
+        // Here ?friend is a variable object that's also used as subject
         BasicPattern bgp = new BasicPattern();
         bgp.add(Triple.create(
             NodeFactory.createVariable("s"),
-            NodeFactory.createURI("http://xmlns.com/foaf/0.1/name"),
-            NodeFactory.createVariable("name")
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/knows"),
+            NodeFactory.createVariable("friend")
+        ));
+        bgp.add(Triple.create(
+            NodeFactory.createVariable("friend"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/knows"),
+            NodeFactory.createVariable("fof")
         ));
 
-        // Should throw CannotCompileException because we can't determine
-        // if the variable object will be a literal or resource
+        // Should fail because ?fof is not used as subject
+        assertThrows(SparqlToCypherCompiler.CannotCompileException.class,
+            () -> SparqlToCypherCompiler.translate(bgp));
+    }
+
+    @Test
+    @DisplayName("Test single variable object falls back")
+    public void testSingleVariableObjectFallsBack() {
+        // ?s foaf:knows ?o - single triple with variable object
+        BasicPattern bgp = new BasicPattern();
+        bgp.add(Triple.create(
+            NodeFactory.createVariable("s"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/knows"),
+            NodeFactory.createVariable("o")
+        ));
+
+        // Should throw because ?o might be a literal
         assertThrows(SparqlToCypherCompiler.CannotCompileException.class,
             () -> SparqlToCypherCompiler.translate(bgp));
     }
@@ -90,9 +111,9 @@ public class SparqlToCypherCompilerTest {
     }
 
     @Test
-    @DisplayName("Test concrete subject URI with variable object throws exception")
-    public void testConcreteSubjectWithVariableObjectThrowsException() {
-        // <http://example.org/alice> foaf:knows ?o - variable object not supported
+    @DisplayName("Test concrete subject URI with variable object falls back")
+    public void testConcreteSubjectWithVariableObjectFallsBack() {
+        // <http://example.org/alice> foaf:knows ?o - variable object
         BasicPattern bgp = new BasicPattern();
         bgp.add(Triple.create(
             NodeFactory.createURI("http://example.org/alice"),
@@ -100,15 +121,15 @@ public class SparqlToCypherCompilerTest {
             NodeFactory.createVariable("o")
         ));
 
-        // Variable objects are not supported for pushdown
+        // Should throw because ?o might be a literal
         assertThrows(SparqlToCypherCompiler.CannotCompileException.class,
             () -> SparqlToCypherCompiler.translate(bgp));
     }
 
     @Test
-    @DisplayName("Test variable predicate throws exception")
-    public void testVariablePredicateThrowsException() {
-        // ?s ?p ?o - variable predicates not supported
+    @DisplayName("Test variable predicate compiles with UNION")
+    public void testVariablePredicateCompilesWithUnion() throws Exception {
+        // ?s ?p ?o - variable predicate should use UNION
         BasicPattern bgp = new BasicPattern();
         bgp.add(Triple.create(
             NodeFactory.createVariable("s"),
@@ -116,30 +137,89 @@ public class SparqlToCypherCompilerTest {
             NodeFactory.createVariable("o")
         ));
 
+        SparqlToCypherCompiler.CompilationResult result = 
+            SparqlToCypherCompiler.translate(bgp);
+
+        assertNotNull(result);
+        assertNotNull(result.cypherQuery());
+        assertTrue(result.cypherQuery().contains("MATCH"));
+        assertTrue(result.cypherQuery().contains("UNION ALL"));
+        assertTrue(result.cypherQuery().contains("type(_r)"));
+        assertTrue(result.cypherQuery().contains("UNWIND keys"));
+    }
+
+    @Test
+    @DisplayName("Test variable predicate with concrete subject")
+    public void testVariablePredicateWithConcreteSubject() throws Exception {
+        // <http://example.org/alice> ?p ?o
+        BasicPattern bgp = new BasicPattern();
+        bgp.add(Triple.create(
+            NodeFactory.createURI("http://example.org/alice"),
+            NodeFactory.createVariable("p"),
+            NodeFactory.createVariable("o")
+        ));
+
+        SparqlToCypherCompiler.CompilationResult result = 
+            SparqlToCypherCompiler.translate(bgp);
+
+        assertNotNull(result);
+        assertNotNull(result.cypherQuery());
+        assertTrue(result.cypherQuery().contains("MATCH"));
+        assertTrue(result.cypherQuery().contains("UNION ALL"));
+        assertTrue(result.parameters().values().contains("http://example.org/alice"));
+    }
+
+    @Test
+    @DisplayName("Test friends of friends pattern with all relationships compiles")
+    public void testFriendsOfFriendsAllRelationshipsPattern() throws Exception {
+        // ?a foaf:knows ?b . ?b foaf:knows ?c . ?c foaf:knows ?d .
+        // All variable objects are used as subjects - pure relationship pattern
+        BasicPattern bgp = new BasicPattern();
+        bgp.add(Triple.create(
+            NodeFactory.createVariable("a"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/knows"),
+            NodeFactory.createVariable("b")
+        ));
+        bgp.add(Triple.create(
+            NodeFactory.createVariable("b"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/knows"),
+            NodeFactory.createVariable("c")
+        ));
+        bgp.add(Triple.create(
+            NodeFactory.createVariable("c"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/knows"),
+            NodeFactory.createVariable("d")
+        ));
+
+        // ?d is not used as subject, so this should fall back
         assertThrows(SparqlToCypherCompiler.CannotCompileException.class,
             () -> SparqlToCypherCompiler.translate(bgp));
     }
 
     @Test
-    @DisplayName("Test multiple patterns with variable objects throws exception")
-    public void testMultiplePatternsWithVariableObjects() {
-        // ?person foaf:knows ?friend .
-        // ?friend foaf:name ?name .
+    @DisplayName("Test closed chain relationship pattern compiles")
+    public void testClosedChainPattern() throws Exception {
+        // ?a foaf:knows ?b . ?b foaf:knows ?a .
+        // Closed chain - all variables used as subjects
         BasicPattern bgp = new BasicPattern();
         bgp.add(Triple.create(
-            NodeFactory.createVariable("person"),
+            NodeFactory.createVariable("a"),
             NodeFactory.createURI("http://xmlns.com/foaf/0.1/knows"),
-            NodeFactory.createVariable("friend")
+            NodeFactory.createVariable("b")
         ));
         bgp.add(Triple.create(
-            NodeFactory.createVariable("friend"),
-            NodeFactory.createURI("http://xmlns.com/foaf/0.1/name"),
-            NodeFactory.createVariable("name")
+            NodeFactory.createVariable("b"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/knows"),
+            NodeFactory.createVariable("a")
         ));
 
-        // Variable objects are not supported for pushdown
-        assertThrows(SparqlToCypherCompiler.CannotCompileException.class,
-            () -> SparqlToCypherCompiler.translate(bgp));
+        SparqlToCypherCompiler.CompilationResult result = 
+            SparqlToCypherCompiler.translate(bgp);
+
+        assertNotNull(result);
+        assertNotNull(result.cypherQuery());
+        assertTrue(result.cypherQuery().contains("MATCH"));
+        assertTrue(result.cypherQuery().contains("knows"));
     }
 
     @Test
@@ -178,5 +258,48 @@ public class SparqlToCypherCompilerTest {
         assertNotNull(result);
         // Concrete literal should be parameterized
         assertTrue(result.parameters().values().contains("Alice"));
+    }
+
+    @Test
+    @DisplayName("Test friends of friends with concrete start compiles")
+    public void testFriendsOfFriendsWithConcreteStartPattern() throws Exception {
+        // <http://example.org/alice> foaf:knows ?friend .
+        // ?friend foaf:knows ?fof .
+        // ?friend is used as subject, but ?fof is not - falls back
+        BasicPattern bgp = new BasicPattern();
+        bgp.add(Triple.create(
+            NodeFactory.createURI("http://example.org/alice"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/knows"),
+            NodeFactory.createVariable("friend")
+        ));
+        bgp.add(Triple.create(
+            NodeFactory.createVariable("friend"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/knows"),
+            NodeFactory.createVariable("fof")
+        ));
+
+        // ?fof is not used as subject, falls back
+        assertThrows(SparqlToCypherCompiler.CannotCompileException.class,
+            () -> SparqlToCypherCompiler.translate(bgp));
+    }
+
+    @Test
+    @DisplayName("Test rdf:type pattern compiles successfully")
+    public void testRdfTypePattern() throws Exception {
+        // ?s rdf:type foaf:Person
+        BasicPattern bgp = new BasicPattern();
+        bgp.add(Triple.create(
+            NodeFactory.createVariable("s"),
+            NodeFactory.createURI("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/Person")
+        ));
+
+        SparqlToCypherCompiler.CompilationResult result = 
+            SparqlToCypherCompiler.translate(bgp);
+
+        assertNotNull(result);
+        assertNotNull(result.cypherQuery());
+        assertTrue(result.cypherQuery().contains("MATCH"));
+        assertTrue(result.cypherQuery().contains("Person"));
     }
 }

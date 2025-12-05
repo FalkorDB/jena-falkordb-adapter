@@ -155,9 +155,53 @@ Currently, the pushdown optimizer supports:
 | Concrete subject + predicate + object | ✅ | `<uri1> <pred> <uri2>` |
 | rdf:type with concrete type | ✅ | `?s rdf:type <Type>` |
 | Concrete literal values | ✅ | `?s <pred> "value"` |
-| Variable predicates | ❌ (fallback) | `?s ?p ?o` |
-| Variable objects | ❌ (fallback) | `?s <pred> ?o` |
+| Variable predicates (single triple) | ✅ | `<uri> ?p ?o` (uses UNION for properties + relationships) |
+| Closed-chain variable objects | ✅ | `?a <pred> ?b . ?b <pred> ?a` (mutual references) |
+| Variable objects (unknown type) | ❌ (fallback) | `?s <pred> ?o` where ?o might be literal |
 | OPTIONAL, FILTER, UNION | ❌ (fallback) | Complex patterns |
+
+#### Variable Predicate Support
+
+Variable predicates are supported for single-triple patterns. The compiler generates a UNION query
+that fetches both relationships and node properties:
+
+```sparql
+# SPARQL: Get all properties of a resource
+SELECT ?p ?o WHERE {
+    <http://example.org/person/jane> ?p ?o .
+}
+```
+
+```cypher
+# Compiled Cypher (using UNION):
+MATCH (_n...:Resource {uri: $p0})-[_r]->(_o:Resource)
+RETURN _n....uri AS _s, type(_r) AS p, _o.uri AS o
+UNION ALL
+MATCH (_n...:Resource {uri: $p0})
+UNWIND keys(_n...) AS _propKey
+WITH _n..., _propKey WHERE _propKey <> 'uri'
+RETURN _n....uri AS _s, _propKey AS p, _n...[_propKey] AS o
+```
+
+#### Closed-Chain Variable Objects
+
+When a variable object is also used as a subject in another triple pattern, the compiler
+recognizes it as a resource (not a potential literal) and generates a pushdown query:
+
+```sparql
+# SPARQL: Find mutual friends
+SELECT ?a ?b WHERE {
+    ?a <http://example.org/knows> ?b .
+    ?b <http://example.org/knows> ?a .
+}
+```
+
+```cypher
+# Compiled Cypher:
+MATCH (a:Resource)-[:`http://example.org/knows`]->(b:Resource)
+MATCH (b)-[:`http://example.org/knows`]->(a)
+RETURN a.uri AS a, b.uri AS b
+```
 
 When a pattern cannot be pushed down, the optimizer automatically falls back to standard Jena evaluation.
 

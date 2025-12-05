@@ -351,13 +351,7 @@ public final class SparqlToCypherCompiler {
         if (triple.getObject().isVariable()) {
             String name = triple.getObject().getName();
             allVariables.add(name);
-            // Object variables might be nodes or literals
-            // We'll classify them based on the predicate
-            if (!triple.getPredicate().isURI() 
-                || !triple.getPredicate().getURI().equals(RDF_TYPE_URI)) {
-                // For non-type predicates, object might be a node
-                // We'll check if it's used in a literal context
-            }
+            // Object variables are added to nodeVariables as they may bind to URIs
             nodeVariables.add(name);
         }
     }

@@ -289,12 +289,19 @@ public final class FalkorDBOpExecutor extends OpExecutor {
 
         // Handle primitives
         if (value instanceof String strVal) {
-            if (strVal.startsWith("http://") || strVal.startsWith("https://")) {
+            // Only treat as URI if it starts with a known URI scheme
+            // and passes validation
+            if (strVal.startsWith("http://") || strVal.startsWith("https://")
+                    || strVal.startsWith("urn:") || strVal.startsWith("file://")) {
                 try {
-                    java.net.URI.create(strVal);
-                    return NodeFactory.createURI(strVal);
+                    // Validate the URI is well-formed
+                    java.net.URI uri = java.net.URI.create(strVal);
+                    // Additional validation: ensure it has proper structure
+                    if (uri.getScheme() != null && !uri.getScheme().isEmpty()) {
+                        return NodeFactory.createURI(strVal);
+                    }
                 } catch (IllegalArgumentException e) {
-                    return NodeFactory.createLiteralString(strVal);
+                    // Invalid URI, treat as string literal
                 }
             }
             return NodeFactory.createLiteralString(strVal);

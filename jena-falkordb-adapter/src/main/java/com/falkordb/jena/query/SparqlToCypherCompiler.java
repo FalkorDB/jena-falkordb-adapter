@@ -126,6 +126,14 @@ public final class SparqlToCypherCompiler {
                 typeTriples.add(triple);
             } else if (object.isLiteral()) {
                 literalTriples.add(triple);
+            } else if (object.isURI()) {
+                // Concrete URI object - definitely a relationship
+                relationshipTriples.add(triple);
+            } else if (object.isVariable()) {
+                // Variable object - could be literal or resource
+                // For now, fall back to standard evaluation for these
+                throw new CannotCompileException(
+                    "Variable objects (may be literal or resource) are not yet supported for pushdown");
             } else {
                 relationshipTriples.add(triple);
             }

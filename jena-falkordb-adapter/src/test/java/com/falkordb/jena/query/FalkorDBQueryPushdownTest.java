@@ -75,8 +75,8 @@ public class FalkorDBQueryPushdownTest {
     }
 
     @Test
-    @DisplayName("Test simple property query with pushdown")
-    public void testSimplePropertyQuery() {
+    @DisplayName("Test simple property query falls back to standard evaluation")
+    public void testSimplePropertyQueryFallback() {
         // Add test data
         var person = model.createResource("http://example.org/person/john");
         var name = model.createProperty("http://example.org/name");
@@ -84,6 +84,7 @@ public class FalkorDBQueryPushdownTest {
 
         Dataset dataset = DatasetFactory.create(model);
 
+        // Query with variable object - falls back to standard evaluation
         String sparql = """
             SELECT ?name WHERE {
                 ?s <http://example.org/name> ?name .
@@ -101,8 +102,8 @@ public class FalkorDBQueryPushdownTest {
     }
 
     @Test
-    @DisplayName("Test relationship query with pushdown")
-    public void testRelationshipQuery() {
+    @DisplayName("Test relationship query falls back to standard evaluation")
+    public void testRelationshipQueryFallback() {
         // Add test data
         var alice = model.createResource("http://example.org/person/alice");
         var bob = model.createResource("http://example.org/person/bob");
@@ -115,7 +116,7 @@ public class FalkorDBQueryPushdownTest {
 
         Dataset dataset = DatasetFactory.create(model);
 
-        // Query for who Alice knows
+        // Query with variable object - falls back to standard evaluation
         String sparql = """
             SELECT ?friend WHERE {
                 <http://example.org/person/alice> <http://example.org/knows> ?friend .
@@ -134,8 +135,8 @@ public class FalkorDBQueryPushdownTest {
     }
 
     @Test
-    @DisplayName("Test friends of friends query (2-hop) with pushdown")
-    public void testFriendsOfFriendsQuery() {
+    @DisplayName("Test friends of friends query falls back to standard evaluation")
+    public void testFriendsOfFriendsQueryFallback() {
         // Create a simple social network: Alice -> Bob -> Carol
         var alice = model.createResource("http://example.org/person/alice");
         var bob = model.createResource("http://example.org/person/bob");
@@ -147,7 +148,7 @@ public class FalkorDBQueryPushdownTest {
 
         Dataset dataset = DatasetFactory.create(model);
 
-        // Query for friends of friends
+        // Query with variable objects - falls back to standard evaluation
         String sparql = """
             SELECT ?fof WHERE {
                 <http://example.org/person/alice> <http://example.org/knows> ?friend .
@@ -204,8 +205,8 @@ public class FalkorDBQueryPushdownTest {
     }
 
     @Test
-    @DisplayName("Test query with multiple patterns")
-    public void testMultiplePatterns() {
+    @DisplayName("Test query with multiple patterns falls back to standard evaluation")
+    public void testMultiplePatternsFallback() {
         // Add test data
         var person = model.createResource("http://example.org/person/john");
         var name = model.createProperty("http://example.org/name");
@@ -218,7 +219,7 @@ public class FalkorDBQueryPushdownTest {
 
         Dataset dataset = DatasetFactory.create(model);
 
-        // Query combining type and properties
+        // Query with variable objects - falls back to standard evaluation
         String sparql = """
             PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
             SELECT ?name WHERE {
@@ -238,8 +239,8 @@ public class FalkorDBQueryPushdownTest {
     }
 
     @Test
-    @DisplayName("Test query returns multiple results")
-    public void testMultipleResults() {
+    @DisplayName("Test query returns multiple results with fallback")
+    public void testMultipleResultsFallback() {
         // Add multiple persons
         var name = model.createProperty("http://example.org/name");
         List<String> names = List.of("Alice", "Bob", "Carol", "Dave");
@@ -252,6 +253,7 @@ public class FalkorDBQueryPushdownTest {
 
         Dataset dataset = DatasetFactory.create(model);
 
+        // Query with variable objects - falls back to standard evaluation
         String sparql = """
             SELECT ?name WHERE {
                 ?person <http://example.org/name> ?name .

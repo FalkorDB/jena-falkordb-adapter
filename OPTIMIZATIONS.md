@@ -12,6 +12,8 @@ The adapter implements two major optimization strategies:
 
 ## 1. Batch Writes via Transactions
 
+> **Tests**: See [FalkorDBTransactionHandlerTest.java](jena-falkordb-adapter/src/test/java/com/falkordb/jena/FalkorDBTransactionHandlerTest.java)
+
 ### The Problem
 
 By default, Jena's `Graph.add(Triple t)` method is "chatty" - it sends one database command per triple. When loading large datasets, this results in thousands of individual network round-trips:
@@ -85,6 +87,8 @@ try {
 | 10000 triples | 10000 round trips | 10 round trips | 1000x fewer calls |
 
 ## 2. Query Pushdown (SPARQL to Cypher)
+
+> **Tests**: See [SparqlToCypherCompilerTest.java](jena-falkordb-adapter/src/test/java/com/falkordb/jena/query/SparqlToCypherCompilerTest.java) and [FalkorDBQueryPushdownTest.java](jena-falkordb-adapter/src/test/java/com/falkordb/jena/query/FalkorDBQueryPushdownTest.java)
 
 ### The Problem
 
@@ -166,6 +170,8 @@ When a pattern cannot be pushed down, the optimizer automatically falls back to 
 | Type queries | Multiple queries | 1 query | Significant |
 
 ## 3. Magic Property (Direct Cypher Execution)
+
+> **Tests**: See [CypherQueryFuncTest.java](jena-falkordb-adapter/src/test/java/com/falkordb/jena/pfunction/CypherQueryFuncTest.java) and [MagicPropertyDocExamplesTest.java](jena-falkordb-adapter/src/test/java/com/falkordb/jena/pfunction/MagicPropertyDocExamplesTest.java)
 
 For maximum control, you can execute native Cypher queries directly within SPARQL using the magic property `falkor:cypher`:
 

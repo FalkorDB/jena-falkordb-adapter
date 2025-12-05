@@ -310,12 +310,187 @@ try (QueryExecution qexec = QueryExecutionFactory.create(query, model)) {
 
 ## Future Improvements
 
-The query pushdown can be extended to support:
+The query pushdown can be extended to support additional SPARQL patterns. Below are implementation suggestions for each:
 
-- Variable objects (querying both properties and relationships)
-- OPTIONAL patterns
-- FILTER expressions
-- UNION patterns
-- Aggregations
+### Variable Objects (Querying Both Properties and Relationships)
 
-These would require more sophisticated SPARQL-to-Cypher translation.
+**Challenge**: When a variable object `?o` in `?s <pred> ?o` could be either a URI (relationship target) or a literal (property value), we need to query both.
+
+**Implementation Strategy**:
+1. In `SparqlToCypherCompiler.translate()`, detect patterns where the object is a variable that isn't used as a subject elsewhere
+2. Generate a UNION query similar to variable predicates:
+
+```cypher
+# Query relationships
+MATCH (s:Resource {uri: $subj})-[:`predicate`]->(o:Resource)
+RETURN s.uri AS s, o.uri AS o
+UNION ALL
+# Query properties
+MATCH (s:Resource {uri: $subj})
+WHERE s.`predicate` IS NOT NULL
+RETURN s.uri AS s, s.`predicate` AS o
+```
+
+3. In the result iterator, determine the RDF node type based on whether the value is a URI string or literal
+
+**Files to modify**:
+- `SparqlToCypherCompiler.java`: Add `translateVariableObjectPattern()` method
+- `FalkorDBOpExecutor.java`: Handle mixed URI/literal results in `convertToBinding()`
+
+### OPTIONAL Patterns
+
+**Challenge**: SPARQL `OPTIONAL { ... }` returns bindings even when the optional part doesn't match.
+
+**Implementation Strategy**:
+1. In `FalkorDBOpExecutor`, intercept `OpLeftJoin` (which represents OPTIONAL)
+2. Translate to Cypher `OPTIONAL MATCH`:
+
+```sparql
+# SPARQL
+SELECT ?person ?email WHERE {
+    ?person rdf:type <Person> .
+    OPTIONAL { ?person <email> ?email }
+}
+```
+
+```cypher
+# Cypher
+MATCH (person:Resource:`Person`)
+OPTIONAL MATCH (person)-[:`email`]->(email:Resource)
+RETURN person.uri AS person, email.uri AS email
+```
+
+**Files to modify**:
+- `FalkorDBOpExecutor.java`: Override `execute(OpLeftJoin, QueryIterator)` method
+- `SparqlToCypherCompiler.java`: Add `translateOptionalPattern()` that generates `OPTIONAL MATCH`
+
+### FILTER Expressions
+
+**Challenge**: SPARQL `FILTER` expressions need to be translated to Cypher `WHERE` clauses.
+
+**Implementation Strategy**:
+1. In `FalkorDBOpExecutor`, intercept `OpFilter`
+2. Create a `FilterToCypherTranslator` to map SPARQL expressions to Cypher:
+
+| SPARQL | Cypher |
+|--------|--------|
+| `FILTER(?x > 10)` | `WHERE x > 10` |
+| `FILTER(regex(?name, "^A"))` | `WHERE name =~ "^A.*"` |
+| `FILTER(bound(?x))` | `WHERE x IS NOT NULL` |
+| `FILTER(isURI(?x))` | `WHERE x STARTS WITH "http"` |
+| `FILTER(?x = "value")` | `WHERE x = "value"` |
+
+```java
+public class FilterToCypherTranslator extends ExprVisitorBase {
+    @Override
+    public void visit(E_Equals expr) {
+        // Translate = to Cypher =
+    }
+    
+    @Override
+    public void visit(E_Regex expr) {
+        // Translate regex() to Cypher =~
+    }
+}
+```
+
+**Files to modify**:
+- Create new `FilterToCypherTranslator.java` in `com.falkordb.jena.query` package
+- `FalkorDBOpExecutor.java`: Override `execute(OpFilter, QueryIterator)` method
+
+### UNION Patterns
+
+**Challenge**: SPARQL `UNION` combines results from alternative patterns.
+
+**Implementation Strategy**:
+1. In `FalkorDBOpExecutor`, intercept `OpUnion`
+2. Compile each branch separately and combine with Cypher `UNION`:
+
+```sparql
+# SPARQL
+SELECT ?person WHERE {
+    { ?person rdf:type <Student> }
+    UNION
+    { ?person rdf:type <Teacher> }
+}
+```
+
+```cypher
+# Cypher
+MATCH (person:Resource:`Student`)
+RETURN person.uri AS person
+UNION
+MATCH (person:Resource:`Teacher`)
+RETURN person.uri AS person
+```
+
+**Files to modify**:
+- `FalkorDBOpExecutor.java`: Override `execute(OpUnion, QueryIterator)` method
+- `SparqlToCypherCompiler.java`: Add `translateUnionPattern()` method
+
+### Aggregations
+
+**Challenge**: SPARQL aggregations (COUNT, SUM, AVG, etc.) with GROUP BY need Cypher equivalents.
+
+**Implementation Strategy**:
+1. In `FalkorDBOpExecutor`, intercept `OpGroup`
+2. Translate SPARQL aggregations to Cypher:
+
+| SPARQL | Cypher |
+|--------|--------|
+| `COUNT(?x)` | `count(x)` |
+| `SUM(?x)` | `sum(x)` |
+| `AVG(?x)` | `avg(x)` |
+| `MIN(?x)` | `min(x)` |
+| `MAX(?x)` | `max(x)` |
+| `GROUP BY ?g` | `WITH ... GROUP BY g` |
+
+```sparql
+# SPARQL
+SELECT ?type (COUNT(?person) AS ?count) WHERE {
+    ?person rdf:type ?type
+}
+GROUP BY ?type
+```
+
+```cypher
+# Cypher
+MATCH (person:Resource)
+UNWIND labels(person) AS type
+WHERE type <> 'Resource'
+RETURN type, count(person) AS count
+```
+
+**Files to modify**:
+- `FalkorDBOpExecutor.java`: Override `execute(OpGroup, QueryIterator)` method
+- Create new `AggregationToCypherTranslator.java` for expression translation
+
+### General Implementation Notes
+
+1. **Fallback Strategy**: Always implement a fallback to standard Jena evaluation when translation fails
+2. **OpenTelemetry**: Add spans for new translation paths with attributes like `falkordb.pattern.type`
+3. **Testing**: Create unit tests in `SparqlToCypherCompilerTest.java` for each new pattern type
+4. **Integration Tests**: Add tests in `FalkorDBQueryPushdownTest.java` that verify end-to-end execution
+
+```java
+// Example test structure
+@Test
+@DisplayName("Test OPTIONAL pattern with pushdown")
+public void testOptionalPatternPushdown() {
+    // Add test data with and without optional values
+    var person1 = model.createResource("http://example.org/person1");
+    var person2 = model.createResource("http://example.org/person2");
+    person1.addProperty(emailProp, "test@example.org");
+    // person2 has no email
+    
+    String sparql = """
+        SELECT ?person ?email WHERE {
+            ?person a <Person> .
+            OPTIONAL { ?person <email> ?email }
+        }
+        """;
+    
+    // Execute and verify both persons returned,
+    // with email for person1 and null for person2
+}
+```

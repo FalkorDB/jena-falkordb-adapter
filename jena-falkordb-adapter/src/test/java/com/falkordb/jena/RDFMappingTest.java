@@ -383,7 +383,87 @@ public class RDFMappingTest {
     }
 
     // ========================================================================
-    // Test 8: Complex Graph with Mixed Triples
+    // Test 9: Blank Nodes (Anonymous Resources)
+    // Mapping: Blank nodes stored with _: prefix in uri property
+    // ========================================================================
+    
+    /**
+     * Tests blank node (anonymous resource) mapping.
+     * 
+     * RDF:
+     * _:address <http://example.org/street> "123 Main St" .
+     * _:address <http://example.org/city> "Springfield" .
+     * <http://example.org/person1> <http://example.org/hasAddress> _:address .
+     * 
+     * Expected FalkorDB:
+     * (:Resource {uri: "_:b0", `http://example.org/street`: "123 Main St", ...})
+     * (:Resource {uri: "http://example.org/person1"})
+     *   -[:`http://example.org/hasAddress`]->
+     * (:Resource {uri: "_:b0"})
+     * 
+     * @see <a href="../../../../../../MAPPING.md#9-blank-nodes-anonymous-resources">MAPPING.md Section 9</a>
+     */
+    @Test
+    @DisplayName("9. Blank Nodes (Anonymous Resources) - Jena API")
+    public void testBlankNodes() {
+        // Arrange - Create properties
+        Property street = model.createProperty("http://example.org/street");
+        Property city = model.createProperty("http://example.org/city");
+        Property hasAddress = model.createProperty("http://example.org/hasAddress");
+        
+        // Act - Create blank node for address
+        Resource address = model.createResource(); // Creates anonymous resource (blank node)
+        address.addProperty(street, "123 Main St");
+        address.addProperty(city, "Springfield");
+        
+        // Act - Link person to blank node
+        Resource person = model.createResource("http://example.org/person1");
+        person.addProperty(hasAddress, address);
+        
+        // Assert - Verify count: 2 address properties + 1 relationship = 3 triples
+        assertEquals(3, model.size(), "Model should contain three triples");
+        
+        // Assert - Verify blank node is anonymous when created
+        assertTrue(address.isAnon(), "Address should be a blank node when created");
+        
+        // Assert - Verify properties on blank node
+        assertEquals("123 Main St", address.getProperty(street).getString());
+        assertEquals("Springfield", address.getProperty(city).getString());
+        
+        // Assert - Verify relationship to blank node
+        Resource retrievedAddr = person.getProperty(hasAddress).getResource();
+        // Note: When retrieved from FalkorDB, blank nodes are stored with _: prefix
+        // The retrieved resource may have a URI starting with "_:" rather than being
+        // a true Jena blank node, depending on implementation
+        String retrievedUri = retrievedAddr.getURI();
+        if (retrievedUri != null) {
+            assertTrue(retrievedUri.startsWith("_:"), 
+                "Retrieved address URI should start with '_:' for blank nodes");
+        } else {
+            assertTrue(retrievedAddr.isAnon(), "Retrieved address should be anonymous");
+        }
+        assertEquals("123 Main St", retrievedAddr.getProperty(street).getString());
+        
+        // Assert - Verify via SPARQL query
+        String query = """
+            PREFIX ex: <http://example.org/>
+            SELECT ?street ?city WHERE {
+                ex:person1 ex:hasAddress ?addr .
+                ?addr ex:street ?street ;
+                      ex:city ?city .
+            }
+            """;
+        try (var qexec = QueryExecutionFactory.create(query, model)) {
+            ResultSet results = qexec.execSelect();
+            assertTrue(results.hasNext(), "Query should return results");
+            var solution = results.next();
+            assertEquals("123 Main St", solution.getLiteral("street").getString());
+            assertEquals("Springfield", solution.getLiteral("city").getString());
+        }
+    }
+
+    // ========================================================================
+    // Test 10: Complex Graph with Mixed Triples
     // Mapping: Combination of all mapping types
     // ========================================================================
     
@@ -396,10 +476,10 @@ public class RDFMappingTest {
      * - Typed literals
      * - Resource-to-resource relationships
      * 
-     * @see <a href="../../../../../../MAPPING.md#8-complex-graph-with-mixed-triples">MAPPING.md Section 8</a>
+     * @see <a href="../../../../../../MAPPING.md#10-complex-graph-with-mixed-triples">MAPPING.md Section 10</a>
      */
     @Test
-    @DisplayName("8. Complex Graph with Mixed Triples - Jena API")
+    @DisplayName("10. Complex Graph with Mixed Triples - Jena API")
     public void testComplexGraph() {
         // Arrange - Define types
         Resource personType = model.createResource("http://example.org/Person");

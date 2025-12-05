@@ -404,16 +404,67 @@ public class RDFMappingFusekiTest {
     }
 
     // ========================================================================
-    // Test 8: Complex Graph via Fuseki
+    // Test 9: Blank Nodes via Fuseki
+    // ========================================================================
+
+    /**
+     * Tests blank nodes (anonymous resources) via Fuseki/Turtle.
+     * 
+     * Turtle:
+     * @prefix ex: <http://example.org/> .
+     * ex:person1 ex:hasAddress [
+     *     ex:street "123 Main St" ;
+     *     ex:city "Springfield"
+     * ] .
+     * 
+     * @see <a href="../../../../../../MAPPING.md#9-blank-nodes-anonymous-resources">MAPPING.md Section 9</a>
+     */
+    @Test
+    @DisplayName("9. Blank Nodes - Fuseki SPARQL")
+    public void testBlankNodesFuseki() {
+        // Arrange - Insert data with blank node using Turtle bracket syntax
+        String insertQuery = """
+            PREFIX ex: <http://example.org/>
+            INSERT DATA {
+                ex:person1 ex:hasAddress [
+                    ex:street "123 Main St" ;
+                    ex:city "Springfield"
+                ] .
+            }
+            """;
+        UpdateExecutionHTTP.service(updateEndpoint).update(insertQuery).execute();
+
+        // Act - Query through the blank node
+        String selectQuery = """
+            PREFIX ex: <http://example.org/>
+            SELECT ?street ?city WHERE {
+                ex:person1 ex:hasAddress ?addr .
+                ?addr ex:street ?street ;
+                      ex:city ?city .
+            }
+            """;
+
+        // Assert
+        try (QueryExecution qexec = QueryExecutionHTTP.service(sparqlEndpoint).query(selectQuery).build()) {
+            ResultSet results = qexec.execSelect();
+            assertTrue(results.hasNext(), "Query through blank node should return results");
+            var solution = results.next();
+            assertEquals("123 Main St", solution.getLiteral("street").getString());
+            assertEquals("Springfield", solution.getLiteral("city").getString());
+        }
+    }
+
+    // ========================================================================
+    // Test 10: Complex Graph via Fuseki
     // ========================================================================
 
     /**
      * Tests complex graph with all mapping types via Fuseki/Turtle.
      * 
-     * @see <a href="../../../../../../MAPPING.md#8-complex-graph-with-mixed-triples">MAPPING.md Section 8</a>
+     * @see <a href="../../../../../../MAPPING.md#10-complex-graph-with-mixed-triples">MAPPING.md Section 10</a>
      */
     @Test
-    @DisplayName("8. Complex Graph - Fuseki SPARQL")
+    @DisplayName("10. Complex Graph - Fuseki SPARQL")
     public void testComplexGraphFuseki() {
         // Arrange - Insert complex graph using Turtle syntax
         String insertQuery = """

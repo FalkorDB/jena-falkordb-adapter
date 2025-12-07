@@ -6,6 +6,8 @@ import org.apache.jena.sparql.core.BasicPattern;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.util.Map;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -46,9 +48,11 @@ public class SparqlToCypherCompilerTest {
             NodeFactory.createVariable("fof")
         ));
 
-        // Should fail because ?fof is not used as subject
-        assertThrows(SparqlToCypherCompiler.CannotCompileException.class,
-            () -> SparqlToCypherCompiler.translate(bgp));
+        // Should throw CannotCompileException because ?fof is a variable object
+        // not used as a subject in a multi-triple pattern
+        assertThrows(SparqlToCypherCompiler.CannotCompileException.class, () -> {
+            SparqlToCypherCompiler.translate(bgp);
+        }, "Multi-triple patterns with ambiguous variable objects should not compile");
     }
 
     @Test
@@ -208,9 +212,11 @@ public class SparqlToCypherCompilerTest {
             NodeFactory.createVariable("d")
         ));
 
-        // ?d is not used as subject, so this should fall back
-        assertThrows(SparqlToCypherCompiler.CannotCompileException.class,
-            () -> SparqlToCypherCompiler.translate(bgp));
+        // ?d is not used as subject, so it's ambiguous (relationship or property)
+        // Should throw CannotCompileException
+        assertThrows(SparqlToCypherCompiler.CannotCompileException.class, () -> {
+            SparqlToCypherCompiler.translate(bgp);
+        }, "Multi-triple patterns with ambiguous variable objects should not compile");
     }
 
     @Test
@@ -295,9 +301,11 @@ public class SparqlToCypherCompilerTest {
             NodeFactory.createVariable("fof")
         ));
 
-        // ?fof is not used as subject, falls back
-        assertThrows(SparqlToCypherCompiler.CannotCompileException.class,
-            () -> SparqlToCypherCompiler.translate(bgp));
+        // ?fof is not used as subject, so it's ambiguous (relationship or property)
+        // Should throw CannotCompileException
+        assertThrows(SparqlToCypherCompiler.CannotCompileException.class, () -> {
+            SparqlToCypherCompiler.translate(bgp);
+        }, "Multi-triple patterns with ambiguous variable objects should not compile");
     }
 
     @Test
@@ -418,5 +426,431 @@ public class SparqlToCypherCompilerTest {
             "Should have subject in both UNION branches (found " + subjectCount + "). Query:\n" + cypher);
         assertTrue(objectCount >= 2, 
             "Should have object in both UNION branches (found " + objectCount + "). Query:\n" + cypher);
+    }
+
+    // ==================== OPTIONAL Pattern Tests ====================
+
+    @Test
+    @DisplayName("Test basic OPTIONAL pattern with relationship")
+    public void testBasicOptionalPattern() throws Exception {
+        // Required: ?person rdf:type foaf:Person
+        // Optional: ?person foaf:email ?email
+        BasicPattern required = new BasicPattern();
+        required.add(Triple.create(
+            NodeFactory.createVariable("person"),
+            NodeFactory.createURI("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/Person")
+        ));
+
+        BasicPattern optional = new BasicPattern();
+        optional.add(Triple.create(
+            NodeFactory.createVariable("person"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/email"),
+            NodeFactory.createVariable("email")
+        ));
+
+        SparqlToCypherCompiler.CompilationResult result = 
+            SparqlToCypherCompiler.translateWithOptional(required, optional);
+
+        assertNotNull(result);
+        String cypher = result.cypherQuery();
+        assertNotNull(cypher);
+        
+        // Should have MATCH for required pattern
+        assertTrue(cypher.contains("MATCH (person:Resource:`http://xmlns.com/foaf/0.1/Person`)"));
+        
+        // Should have OPTIONAL MATCH for optional pattern
+        assertTrue(cypher.contains("OPTIONAL MATCH"));
+        assertTrue(cypher.contains("`http://xmlns.com/foaf/0.1/email`"));
+        
+        // Should return both variables
+        assertTrue(cypher.contains("RETURN"));
+        assertTrue(cypher.contains("person.uri AS person"));
+        // email can be either a relationship or property - check it's in the result
+        assertTrue(cypher.contains("email") && cypher.contains("AS email"));
+    }
+
+    @Test
+    @DisplayName("Test OPTIONAL pattern with literal property")
+    public void testOptionalPatternWithLiteral() throws Exception {
+        // Required: ?person foaf:name ?name
+        // Optional: ?person foaf:age ?age
+        BasicPattern required = new BasicPattern();
+        required.add(Triple.create(
+            NodeFactory.createVariable("person"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/name"),
+            NodeFactory.createVariable("name")
+        ));
+
+        BasicPattern optional = new BasicPattern();
+        optional.add(Triple.create(
+            NodeFactory.createVariable("person"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/age"),
+            NodeFactory.createVariable("age")
+        ));
+
+        SparqlToCypherCompiler.CompilationResult result = 
+            SparqlToCypherCompiler.translateWithOptional(required, optional);
+
+        assertNotNull(result);
+        String cypher = result.cypherQuery();
+        
+        // Should have OPTIONAL MATCH with WHERE for literal
+        assertTrue(cypher.contains("OPTIONAL MATCH"));
+        assertTrue(cypher.contains("WHERE"));
+        assertTrue(cypher.contains("`http://xmlns.com/foaf/0.1/age` IS NOT NULL"));
+        
+        // Should return both name and age as properties
+        assertTrue(cypher.contains("name") && cypher.contains("AS name"));
+        assertTrue(cypher.contains("age") && cypher.contains("AS age"));
+    }
+
+    @Test
+    @DisplayName("Test OPTIONAL with multiple triples")
+    public void testOptionalWithMultipleTriples() throws Exception {
+        // Required: ?person rdf:type foaf:Person
+        // Optional: ?person foaf:knows ?friend . ?friend foaf:name ?friendName
+        BasicPattern required = new BasicPattern();
+        required.add(Triple.create(
+            NodeFactory.createVariable("person"),
+            NodeFactory.createURI("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/Person")
+        ));
+
+        BasicPattern optional = new BasicPattern();
+        optional.add(Triple.create(
+            NodeFactory.createVariable("person"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/knows"),
+            NodeFactory.createVariable("friend")
+        ));
+        optional.add(Triple.create(
+            NodeFactory.createVariable("friend"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/name"),
+            NodeFactory.createVariable("friendName")
+        ));
+
+        SparqlToCypherCompiler.CompilationResult result = 
+            SparqlToCypherCompiler.translateWithOptional(required, optional);
+
+        assertNotNull(result);
+        String cypher = result.cypherQuery();
+        
+        // Should have two OPTIONAL MATCH clauses
+        long optionalCount = cypher.lines().filter(line -> line.trim().startsWith("OPTIONAL MATCH")).count();
+        assertEquals(2, optionalCount, "Should have 2 OPTIONAL MATCH clauses");
+        
+        // Should reference person, friend, and friendName
+        assertTrue(cypher.contains("person"));
+        assertTrue(cypher.contains("friend"));
+        assertTrue(cypher.contains("friendName"));
+    }
+
+    @Test
+    @DisplayName("Test OPTIONAL with concrete subject")
+    public void testOptionalWithConcreteSubject() throws Exception {
+        // Required: <alice> foaf:name ?name
+        // Optional: <alice> foaf:email ?email
+        BasicPattern required = new BasicPattern();
+        required.add(Triple.create(
+            NodeFactory.createURI("http://example.org/alice"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/name"),
+            NodeFactory.createVariable("name")
+        ));
+
+        BasicPattern optional = new BasicPattern();
+        optional.add(Triple.create(
+            NodeFactory.createURI("http://example.org/alice"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/email"),
+            NodeFactory.createVariable("email")
+        ));
+
+        SparqlToCypherCompiler.CompilationResult result = 
+            SparqlToCypherCompiler.translateWithOptional(required, optional);
+
+        assertNotNull(result);
+        String cypher = result.cypherQuery();
+        Map<String, Object> parameters = result.parameters();
+        
+        // Should have parameters for concrete URI
+        assertTrue(parameters.containsValue("http://example.org/alice"));
+        
+        // Should have OPTIONAL MATCH
+        assertTrue(cypher.contains("OPTIONAL MATCH"));
+    }
+
+    @Test
+    @DisplayName("Test OPTIONAL with concrete literal in optional part")
+    public void testOptionalWithConcreteLiteral() throws Exception {
+        // Required: ?person rdf:type foaf:Person
+        // Optional: ?person foaf:name "Alice"
+        BasicPattern required = new BasicPattern();
+        required.add(Triple.create(
+            NodeFactory.createVariable("person"),
+            NodeFactory.createURI("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/Person")
+        ));
+
+        BasicPattern optional = new BasicPattern();
+        optional.add(Triple.create(
+            NodeFactory.createVariable("person"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/name"),
+            NodeFactory.createLiteralString("Alice")
+        ));
+
+        SparqlToCypherCompiler.CompilationResult result = 
+            SparqlToCypherCompiler.translateWithOptional(required, optional);
+
+        assertNotNull(result);
+        String cypher = result.cypherQuery();
+        Map<String, Object> parameters = result.parameters();
+        
+        // Should have OPTIONAL MATCH with WHERE checking for specific value
+        assertTrue(cypher.contains("OPTIONAL MATCH"));
+        assertTrue(cypher.contains("WHERE"));
+        assertTrue(cypher.contains("="));
+        
+        // Should have parameter for "Alice"
+        assertTrue(parameters.containsValue("Alice"));
+    }
+
+    @Test
+    @DisplayName("Test OPTIONAL throws exception for empty required BGP")
+    public void testOptionalThrowsForEmptyRequired() {
+        BasicPattern required = new BasicPattern();
+        BasicPattern optional = new BasicPattern();
+        optional.add(Triple.create(
+            NodeFactory.createVariable("person"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/email"),
+            NodeFactory.createVariable("email")
+        ));
+
+        assertThrows(SparqlToCypherCompiler.CannotCompileException.class,
+            () -> SparqlToCypherCompiler.translateWithOptional(required, optional));
+    }
+
+    @Test
+    @DisplayName("Test OPTIONAL throws exception for empty optional BGP")
+    public void testOptionalThrowsForEmptyOptional() {
+        BasicPattern required = new BasicPattern();
+        required.add(Triple.create(
+            NodeFactory.createVariable("person"),
+            NodeFactory.createURI("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/Person")
+        ));
+        BasicPattern optional = new BasicPattern();
+
+        assertThrows(SparqlToCypherCompiler.CannotCompileException.class,
+            () -> SparqlToCypherCompiler.translateWithOptional(required, optional));
+    }
+
+    @Test
+    @DisplayName("Test OPTIONAL throws exception for variable predicate in optional part")
+    public void testOptionalThrowsForVariablePredicate() {
+        BasicPattern required = new BasicPattern();
+        required.add(Triple.create(
+            NodeFactory.createVariable("person"),
+            NodeFactory.createURI("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/Person")
+        ));
+
+        BasicPattern optional = new BasicPattern();
+        optional.add(Triple.create(
+            NodeFactory.createVariable("person"),
+            NodeFactory.createVariable("p"),
+            NodeFactory.createVariable("o")
+        ));
+
+        assertThrows(SparqlToCypherCompiler.CannotCompileException.class,
+            () -> SparqlToCypherCompiler.translateWithOptional(required, optional));
+    }
+
+    @Test
+    @DisplayName("Test OPTIONAL pattern structure is correct")
+    public void testOptionalPatternStructure() throws Exception {
+        // Required: ?person rdf:type foaf:Person
+        // Optional: ?person foaf:email ?email
+        BasicPattern required = new BasicPattern();
+        required.add(Triple.create(
+            NodeFactory.createVariable("person"),
+            NodeFactory.createURI("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/Person")
+        ));
+
+        BasicPattern optional = new BasicPattern();
+        optional.add(Triple.create(
+            NodeFactory.createVariable("person"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/email"),
+            NodeFactory.createVariable("email")
+        ));
+
+        SparqlToCypherCompiler.CompilationResult result = 
+            SparqlToCypherCompiler.translateWithOptional(required, optional);
+
+        String cypher = result.cypherQuery();
+        String[] lines = cypher.split("\n");
+        
+        // Verify structure: MATCH ... OPTIONAL MATCH ... RETURN
+        boolean hasMatch = false;
+        boolean hasOptionalMatch = false;
+        boolean hasReturn = false;
+        
+        for (String line : lines) {
+            String trimmed = line.trim();
+            if (trimmed.startsWith("MATCH")) hasMatch = true;
+            if (trimmed.startsWith("OPTIONAL MATCH")) hasOptionalMatch = true;
+            if (trimmed.startsWith("RETURN")) hasReturn = true;
+        }
+        
+        assertTrue(hasMatch, "Should have MATCH clause");
+        assertTrue(hasOptionalMatch, "Should have OPTIONAL MATCH clause");
+        assertTrue(hasReturn, "Should have RETURN clause");
+    }
+
+    @Test
+    @DisplayName("Test OPTIONAL with FILTER less than")
+    public void testOptionalWithFilterLessThan() throws SparqlToCypherCompiler.CannotCompileException {
+        // Required: ?person foaf:name ?name, ?person foaf:age ?age
+        // Filter: ?age < 30
+        // Optional: ?person foaf:email ?email
+        BasicPattern required = new BasicPattern();
+        required.add(Triple.create(
+            NodeFactory.createVariable("person"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/name"),
+            NodeFactory.createVariable("name")
+        ));
+        required.add(Triple.create(
+            NodeFactory.createVariable("person"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/age"),
+            NodeFactory.createVariable("age")
+        ));
+
+        BasicPattern optional = new BasicPattern();
+        optional.add(Triple.create(
+            NodeFactory.createVariable("person"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/email"),
+            NodeFactory.createVariable("email")
+        ));
+
+        // Create filter expression: ?age < 30
+        org.apache.jena.sparql.expr.Expr filterExpr = 
+            new org.apache.jena.sparql.expr.E_LessThan(
+                new org.apache.jena.sparql.expr.ExprVar("age"),
+                org.apache.jena.sparql.expr.NodeValue.makeInteger(30)
+            );
+
+        SparqlToCypherCompiler.CompilationResult result = 
+            SparqlToCypherCompiler.translateWithOptional(required, optional, filterExpr);
+
+        assertNotNull(result);
+        String cypher = result.cypherQuery();
+        
+        // Should have WHERE clause with filter
+        assertTrue(cypher.contains("WHERE"), "Should have WHERE clause");
+        assertTrue(cypher.contains("<"), "Should have < operator");
+        assertTrue(cypher.contains("30"), "Should have value 30");
+        
+        // Should have OPTIONAL MATCH after WHERE
+        assertTrue(cypher.contains("OPTIONAL MATCH"), "Should have OPTIONAL MATCH");
+        
+        // WHERE should come before OPTIONAL MATCH
+        int whereIdx = cypher.indexOf("WHERE");
+        int optionalIdx = cypher.indexOf("OPTIONAL MATCH");
+        assertTrue(whereIdx < optionalIdx && whereIdx > 0, 
+            "WHERE should come before OPTIONAL MATCH");
+    }
+
+    @Test
+    @DisplayName("Test OPTIONAL with FILTER equals")
+    public void testOptionalWithFilterEquals() throws SparqlToCypherCompiler.CannotCompileException {
+        // Required: ?person foaf:name ?name
+        // Filter: ?name = "Alice"
+        // Optional: ?person foaf:email ?email
+        BasicPattern required = new BasicPattern();
+        required.add(Triple.create(
+            NodeFactory.createVariable("person"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/name"),
+            NodeFactory.createVariable("name")
+        ));
+
+        BasicPattern optional = new BasicPattern();
+        optional.add(Triple.create(
+            NodeFactory.createVariable("person"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/email"),
+            NodeFactory.createVariable("email")
+        ));
+
+        // Create filter: ?name = "Alice"
+        org.apache.jena.sparql.expr.Expr filterExpr = 
+            new org.apache.jena.sparql.expr.E_Equals(
+                new org.apache.jena.sparql.expr.ExprVar("name"),
+                org.apache.jena.sparql.expr.NodeValue.makeString("Alice")
+            );
+
+        SparqlToCypherCompiler.CompilationResult result = 
+            SparqlToCypherCompiler.translateWithOptional(required, optional, filterExpr);
+
+        assertNotNull(result);
+        String cypher = result.cypherQuery();
+        
+        // Should have WHERE with equals
+        assertTrue(cypher.contains("WHERE"), "Should have WHERE clause");
+        assertTrue(cypher.contains("="), "Should have = operator");
+        assertTrue(cypher.contains("Alice"), "Should have Alice value");
+        
+        // Should have OPTIONAL MATCH
+        assertTrue(cypher.contains("OPTIONAL MATCH"), "Should have OPTIONAL MATCH");
+    }
+
+    @Test
+    @DisplayName("Test OPTIONAL with FILTER AND condition")
+    public void testOptionalWithFilterAnd() throws SparqlToCypherCompiler.CannotCompileException {
+        // Required: ?person foaf:name ?name, ?person foaf:age ?age
+        // Filter: ?age > 20 AND ?age < 30
+        // Optional: ?person foaf:email ?email
+        BasicPattern required = new BasicPattern();
+        required.add(Triple.create(
+            NodeFactory.createVariable("person"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/name"),
+            NodeFactory.createVariable("name")
+        ));
+        required.add(Triple.create(
+            NodeFactory.createVariable("person"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/age"),
+            NodeFactory.createVariable("age")
+        ));
+
+        BasicPattern optional = new BasicPattern();
+        optional.add(Triple.create(
+            NodeFactory.createVariable("person"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/email"),
+            NodeFactory.createVariable("email")
+        ));
+
+        // Create filter: ?age > 20 AND ?age < 30
+        org.apache.jena.sparql.expr.Expr filterExpr = 
+            new org.apache.jena.sparql.expr.E_LogicalAnd(
+                new org.apache.jena.sparql.expr.E_GreaterThan(
+                    new org.apache.jena.sparql.expr.ExprVar("age"),
+                    org.apache.jena.sparql.expr.NodeValue.makeInteger(20)
+                ),
+                new org.apache.jena.sparql.expr.E_LessThan(
+                    new org.apache.jena.sparql.expr.ExprVar("age"),
+                    org.apache.jena.sparql.expr.NodeValue.makeInteger(30)
+                )
+            );
+
+        SparqlToCypherCompiler.CompilationResult result = 
+            SparqlToCypherCompiler.translateWithOptional(required, optional, filterExpr);
+
+        assertNotNull(result);
+        String cypher = result.cypherQuery();
+        
+        // Should have WHERE with AND
+        assertTrue(cypher.contains("WHERE"), "Should have WHERE clause");
+        assertTrue(cypher.contains("AND"), "Should have AND operator");
+        assertTrue(cypher.contains(">"), "Should have > operator");
+        assertTrue(cypher.contains("<"), "Should have < operator");
+        assertTrue(cypher.contains("20"), "Should have value 20");
+        assertTrue(cypher.contains("30"), "Should have value 30");
     }
 }

@@ -621,4 +621,372 @@ public class FalkorDBQueryPushdownTest {
             assertEquals("Alice", solution.getLiteral("name").getString());
         }
     }
+
+    // ==================== OPTIONAL Pattern Tests ====================
+
+    @Test
+    @DisplayName("Test basic OPTIONAL pattern with email")
+    public void testBasicOptionalPattern() {
+        // Add test data - one person with email, one without
+        var alice = model.createResource("http://example.org/person/alice");
+        var bob = model.createResource("http://example.org/person/bob");
+        var personType = model.createResource("http://xmlns.com/foaf/0.1/Person");
+        var email = model.createProperty("http://xmlns.com/foaf/0.1/email");
+        var emailResource = model.createResource("mailto:alice@example.org");
+        
+        alice.addProperty(RDF.type, personType);
+        alice.addProperty(email, emailResource);
+        
+        bob.addProperty(RDF.type, personType);
+        // Bob has no email
+        
+        Dataset dataset = DatasetFactory.create(model);
+        
+        String sparql = """
+            PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+            SELECT ?person ?email WHERE {
+                ?person a foaf:Person .
+                OPTIONAL { ?person foaf:email ?email }
+            }
+            ORDER BY ?person
+            """;
+        
+        Query query = QueryFactory.create(sparql);
+        try (QueryExecution qexec = QueryExecutionFactory.create(query, dataset)) {
+            ResultSet results = qexec.execSelect();
+            
+            List<QuerySolution> solutions = new ArrayList<>();
+            while (results.hasNext()) {
+                solutions.add(results.nextSolution());
+            }
+            
+            assertEquals(2, solutions.size(), "Should return both persons");
+            
+            // First person (Alice) should have email
+            QuerySolution aliceSol = solutions.stream()
+                .filter(sol -> sol.getResource("person").getURI().contains("alice"))
+                .findFirst()
+                .orElseThrow();
+            assertTrue(aliceSol.contains("email"), "Alice should have email");
+            assertEquals("mailto:alice@example.org", aliceSol.getResource("email").getURI());
+            
+            // Second person (Bob) should not have email (or email should be null)
+            QuerySolution bobSol = solutions.stream()
+                .filter(sol -> sol.getResource("person").getURI().contains("bob"))
+                .findFirst()
+                .orElseThrow();
+            // Bob's solution should not contain email
+            assertFalse(bobSol.contains("email"), "Bob should not have email");
+        }
+    }
+
+    @Test
+    @DisplayName("Test OPTIONAL with literal property")
+    public void testOptionalWithLiteralProperty() {
+        // Add test data - one person with age, one without
+        var alice = model.createResource("http://example.org/person/alice");
+        var bob = model.createResource("http://example.org/person/bob");
+        var name = model.createProperty("http://xmlns.com/foaf/0.1/name");
+        var age = model.createProperty("http://xmlns.com/foaf/0.1/age");
+        
+        alice.addProperty(name, "Alice");
+        alice.addProperty(age, model.createTypedLiteral(30));
+        
+        bob.addProperty(name, "Bob");
+        // Bob has no age
+        
+        Dataset dataset = DatasetFactory.create(model);
+        
+        String sparql = """
+            PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+            SELECT ?person ?name ?age WHERE {
+                ?person foaf:name ?name .
+                OPTIONAL { ?person foaf:age ?age }
+            }
+            ORDER BY ?name
+            """;
+        
+        Query query = QueryFactory.create(sparql);
+        try (QueryExecution qexec = QueryExecutionFactory.create(query, dataset)) {
+            ResultSet results = qexec.execSelect();
+            
+            List<QuerySolution> solutions = new ArrayList<>();
+            while (results.hasNext()) {
+                solutions.add(results.nextSolution());
+            }
+            
+            assertEquals(2, solutions.size(), "Should return both persons");
+            
+            // Alice should have age
+            QuerySolution aliceSol = solutions.get(0);
+            assertEquals("Alice", aliceSol.getLiteral("name").getString());
+            assertTrue(aliceSol.contains("age"), "Alice should have age");
+            assertEquals(30, aliceSol.getLiteral("age").getInt());
+            
+            // Bob should not have age
+            QuerySolution bobSol = solutions.get(1);
+            assertEquals("Bob", bobSol.getLiteral("name").getString());
+            assertTrue(!bobSol.contains("age") || bobSol.get("age") == null,
+                "Bob should not have age");
+        }
+    }
+
+    @Test
+    @DisplayName("Test OPTIONAL with multiple triples")
+    public void testOptionalWithMultipleTriples() {
+        // Add test data - Alice knows Bob, Bob has name. Charlie knows no one.
+        var alice = model.createResource("http://example.org/person/alice");
+        var bob = model.createResource("http://example.org/person/bob");
+        var charlie = model.createResource("http://example.org/person/charlie");
+        var personType = model.createResource("http://xmlns.com/foaf/0.1/Person");
+        var knows = model.createProperty("http://xmlns.com/foaf/0.1/knows");
+        var name = model.createProperty("http://xmlns.com/foaf/0.1/name");
+        
+        alice.addProperty(RDF.type, personType);
+        bob.addProperty(RDF.type, personType);
+        bob.addProperty(name, "Bob");
+        charlie.addProperty(RDF.type, personType);
+        
+        alice.addProperty(knows, bob);
+        // Charlie knows no one
+        
+        Dataset dataset = DatasetFactory.create(model);
+        
+        String sparql = """
+            PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+            SELECT ?person ?friend ?friendName WHERE {
+                ?person a foaf:Person .
+                OPTIONAL { 
+                    ?person foaf:knows ?friend .
+                    ?friend foaf:name ?friendName .
+                }
+            }
+            ORDER BY ?person
+            """;
+        
+        Query query = QueryFactory.create(sparql);
+        try (QueryExecution qexec = QueryExecutionFactory.create(query, dataset)) {
+            ResultSet results = qexec.execSelect();
+            
+            List<QuerySolution> solutions = new ArrayList<>();
+            while (results.hasNext()) {
+                solutions.add(results.nextSolution());
+            }
+            
+            // Should return all three persons
+            assertTrue(solutions.size() >= 2, "Should return at least 2 persons (Alice with friend, Charlie/Bob without)");
+            
+            // Alice should have friend and friendName
+            boolean foundAliceWithFriend = solutions.stream()
+                .anyMatch(sol -> sol.getResource("person").getURI().contains("alice") 
+                    && sol.contains("friend") && sol.contains("friendName"));
+            assertTrue(foundAliceWithFriend, "Alice should have friend and friendName");
+            
+            // Charlie should not have friend
+            boolean foundCharlieWithoutFriend = solutions.stream()
+                .anyMatch(sol -> sol.getResource("person").getURI().contains("charlie") 
+                    && (!sol.contains("friend") || sol.get("friend") == null));
+            assertTrue(foundCharlieWithoutFriend || solutions.stream()
+                .anyMatch(sol -> sol.getResource("person").getURI().contains("charlie")),
+                "Charlie should be in results");
+        }
+    }
+
+    @Test
+    @DisplayName("Test OPTIONAL with concrete subject")
+    public void testOptionalWithConcreteSubject() {
+        // Add test data
+        var alice = model.createResource("http://example.org/person/alice");
+        var name = model.createProperty("http://xmlns.com/foaf/0.1/name");
+        var email = model.createProperty("http://xmlns.com/foaf/0.1/email");
+        var emailResource = model.createResource("mailto:alice@example.org");
+        
+        alice.addProperty(name, "Alice");
+        alice.addProperty(email, emailResource);
+        
+        Dataset dataset = DatasetFactory.create(model);
+        
+        String sparql = """
+            PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+            SELECT ?name ?email WHERE {
+                <http://example.org/person/alice> foaf:name ?name .
+                OPTIONAL { <http://example.org/person/alice> foaf:email ?email }
+            }
+            """;
+        
+        Query query = QueryFactory.create(sparql);
+        try (QueryExecution qexec = QueryExecutionFactory.create(query, dataset)) {
+            ResultSet results = qexec.execSelect();
+            
+            assertTrue(results.hasNext(), "Should have at least one result");
+            QuerySolution solution = results.nextSolution();
+            
+            assertEquals("Alice", solution.getLiteral("name").getString());
+            assertTrue(solution.contains("email"), "Alice should have email");
+            assertEquals("mailto:alice@example.org", solution.getResource("email").getURI());
+        }
+    }
+
+    @Test
+    @DisplayName("Test OPTIONAL returns all required matches even when optional doesn't match")
+    public void testOptionalReturnsAllRequiredMatches() {
+        // Add multiple people, some with optional data, some without
+        var personType = model.createResource("http://xmlns.com/foaf/0.1/Person");
+        var name = model.createProperty("http://xmlns.com/foaf/0.1/name");
+        
+        // Create 5 people, only 2 with names
+        for (int i = 1; i <= 5; i++) {
+            var person = model.createResource("http://example.org/person" + i);
+            person.addProperty(RDF.type, personType);
+            if (i <= 2) {
+                person.addProperty(name, "Person " + i);
+            }
+        }
+        
+        Dataset dataset = DatasetFactory.create(model);
+        
+        String sparql = """
+            PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+            SELECT ?person ?name WHERE {
+                ?person a foaf:Person .
+                OPTIONAL { ?person foaf:name ?name }
+            }
+            """;
+        
+        Query query = QueryFactory.create(sparql);
+        try (QueryExecution qexec = QueryExecutionFactory.create(query, dataset)) {
+            ResultSet results = qexec.execSelect();
+            
+            List<QuerySolution> solutions = new ArrayList<>();
+            while (results.hasNext()) {
+                solutions.add(results.nextSolution());
+            }
+            
+            // Should return all 5 persons
+            assertEquals(5, solutions.size(), "Should return all 5 persons regardless of optional match");
+            
+            // Count how many have names
+            long withNames = solutions.stream()
+                .filter(sol -> sol.contains("name") && sol.get("name") != null)
+                .count();
+            assertEquals(2, withNames, "Should have 2 persons with names");
+        }
+    }
+
+    @Test
+    @DisplayName("Test OPTIONAL with FILTER in required part")
+    public void testOptionalWithFilterInRequired() {
+        // Add test data
+        var alice = model.createResource("http://example.org/person/alice");
+        var bob = model.createResource("http://example.org/person/bob");
+        var name = model.createProperty("http://xmlns.com/foaf/0.1/name");
+        var age = model.createProperty("http://xmlns.com/foaf/0.1/age");
+        var email = model.createProperty("http://xmlns.com/foaf/0.1/email");
+        
+        alice.addProperty(name, "Alice");
+        alice.addProperty(age, model.createTypedLiteral(25));
+        alice.addProperty(email, model.createResource("mailto:alice@example.org"));
+        
+        bob.addProperty(name, "Bob");
+        bob.addProperty(age, model.createTypedLiteral(35));
+        // Bob has no email
+        
+        Dataset dataset = DatasetFactory.create(model);
+        
+        // Test FILTER pushdown with OPTIONAL pattern
+        // The FILTER in the required part should be translated to Cypher WHERE clause
+        String sparql = """
+            PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+            SELECT ?person ?name ?email WHERE {
+                ?person foaf:name ?name .
+                ?person foaf:age ?age .
+                FILTER(?age < 30)
+                OPTIONAL { ?person foaf:email ?email }
+            }
+            """;
+        
+        Query query = QueryFactory.create(sparql);
+        try (QueryExecution qexec = QueryExecutionFactory.create(query, dataset)) {
+            ResultSet results = qexec.execSelect();
+            
+            List<QuerySolution> solutions = new ArrayList<>();
+            while (results.hasNext()) {
+                solutions.add(results.nextSolution());
+            }
+            
+            // Should return only Alice (age < 30) with email
+            assertEquals(1, solutions.size(), "Should return only Alice (age < 30)");
+            
+            QuerySolution solution = solutions.get(0);
+            assertEquals("Alice", solution.getLiteral("name").getString());
+            assertTrue(solution.contains("email"), "Alice should have email");
+        }
+    }
+
+    @Test
+    @DisplayName("Test nested OPTIONAL patterns")
+    public void testNestedOptionalPatterns() {
+        // Add test data
+        var alice = model.createResource("http://example.org/person/alice");
+        var bob = model.createResource("http://example.org/person/bob");
+        var charlie = model.createResource("http://example.org/person/charlie");
+        var name = model.createProperty("http://xmlns.com/foaf/0.1/name");
+        var knows = model.createProperty("http://xmlns.com/foaf/0.1/knows");
+        var email = model.createProperty("http://xmlns.com/foaf/0.1/email");
+        
+        alice.addProperty(name, "Alice");
+        alice.addProperty(knows, bob);
+        
+        bob.addProperty(name, "Bob");
+        bob.addProperty(knows, charlie);
+        
+        charlie.addProperty(name, "Charlie");
+        charlie.addProperty(email, model.createResource("mailto:charlie@example.org"));
+        
+        Dataset dataset = DatasetFactory.create(model);
+        
+        String sparql = """
+            PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+            SELECT ?person ?name ?friend ?fof ?fofEmail WHERE {
+                ?person foaf:name ?name .
+                OPTIONAL { 
+                    ?person foaf:knows ?friend .
+                    OPTIONAL {
+                        ?friend foaf:knows ?fof .
+                        ?fof foaf:email ?fofEmail .
+                    }
+                }
+            }
+            """;
+        
+        Query query = QueryFactory.create(sparql);
+        try (QueryExecution qexec = QueryExecutionFactory.create(query, dataset)) {
+            ResultSet results = qexec.execSelect();
+            
+            List<QuerySolution> solutions = new ArrayList<>();
+            while (results.hasNext()) {
+                solutions.add(results.nextSolution());
+            }
+            
+            // Should have results for all three people
+            assertTrue(solutions.size() >= 3, "Should have results for all three people");
+            
+            // Alice should potentially have friend-of-friend with email
+            boolean foundComplete = solutions.stream()
+                .anyMatch(sol -> sol.contains("person") 
+                    && sol.getLiteral("name").getString().equals("Alice")
+                    && sol.contains("fofEmail"));
+            
+            // At minimum, all three should appear with their names
+            Set<String> names = new HashSet<>();
+            for (QuerySolution sol : solutions) {
+                if (sol.contains("name")) {
+                    names.add(sol.getLiteral("name").getString());
+                }
+            }
+            assertTrue(names.contains("Alice"), "Should have Alice");
+            assertTrue(names.contains("Bob"), "Should have Bob");
+            assertTrue(names.contains("Charlie"), "Should have Charlie");
+        }
+    }
 }

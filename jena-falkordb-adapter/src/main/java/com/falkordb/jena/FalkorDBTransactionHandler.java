@@ -633,7 +633,7 @@ public final class FalkorDBTransactionHandler extends TransactionHandlerBase {
             // Group by predicate, tracking subjects and values
             // Use parallel lists since FalkorDB doesn't handle List<Map> params
             Map<String, List<String>> predicateSubjects = new HashMap<>();
-            Map<String, List<String>> predicateValues = new HashMap<>();
+            Map<String, List<Object>> predicateValues = new HashMap<>();
 
             for (Triple triple : batch) {
                 String predicate = nodeToString(triple.getPredicate());
@@ -644,14 +644,23 @@ public final class FalkorDBTransactionHandler extends TransactionHandlerBase {
 
                 predicateSubjects.get(predicate).add(
                     nodeToString(triple.getSubject()));
-                predicateValues.get(predicate).add(
-                    triple.getObject().getLiteralLexicalForm());
+                
+                // Use typed value for comparison, not lexical form
+                Object value;
+                var literal = triple.getObject().getLiteral();
+                var literalValue = literal.getValue();
+                if (literalValue instanceof Number || literalValue instanceof Boolean) {
+                    value = literalValue;
+                } else {
+                    value = triple.getObject().getLiteralLexicalForm();
+                }
+                predicateValues.get(predicate).add(value);
             }
 
             // Execute batch for each predicate
             for (String predicate : predicateSubjects.keySet()) {
                 List<String> subjects = predicateSubjects.get(predicate);
-                List<String> values = predicateValues.get(predicate);
+                List<Object> values = predicateValues.get(predicate);
 
                 Map<String, Object> params = new HashMap<>();
                 params.put("subjects", subjects);

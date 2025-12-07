@@ -366,6 +366,227 @@ public class FalkorDBTransactionHandlerTest {
     }
 
     @Test
+    @DisplayName("Test delete with typed integer literal")
+    public void testDeleteTypedIntegerLiteral() {
+        var subject = model.createResource("http://test.example.org/person");
+        var age = model.createProperty("http://test.example.org/age");
+        
+        // Add integer property
+        subject.addProperty(age, model.createTypedLiteral(42));
+        assertEquals(1, model.size());
+        
+        // Delete specific integer value
+        var handler = graph.getTransactionHandler();
+        handler.begin();
+        model.remove(subject, age, model.createTypedLiteral(42));
+        handler.commit();
+        
+        assertEquals(0, model.size(), "Integer property should be deleted");
+        assertFalse(model.contains(subject, age), "Should not contain age property");
+    }
+
+    @Test
+    @DisplayName("Test delete with typed long literal")
+    public void testDeleteTypedLongLiteral() {
+        var subject = model.createResource("http://test.example.org/data");
+        var count = model.createProperty("http://test.example.org/count");
+        
+        // Add long property
+        long largeNumber = 9876543210L;
+        subject.addProperty(count, model.createTypedLiteral(largeNumber));
+        assertEquals(1, model.size());
+        
+        // Delete specific long value
+        var handler = graph.getTransactionHandler();
+        handler.begin();
+        model.remove(subject, count, model.createTypedLiteral(largeNumber));
+        handler.commit();
+        
+        assertEquals(0, model.size(), "Long property should be deleted");
+    }
+
+    @Test
+    @DisplayName("Test delete with typed double literal")
+    public void testDeleteTypedDoubleLiteral() {
+        var subject = model.createResource("http://test.example.org/measurement");
+        var temperature = model.createProperty("http://test.example.org/temperature");
+        
+        // Add double property
+        subject.addProperty(temperature, model.createTypedLiteral(98.6));
+        assertEquals(1, model.size());
+        
+        // Delete specific double value
+        var handler = graph.getTransactionHandler();
+        handler.begin();
+        model.remove(subject, temperature, model.createTypedLiteral(98.6));
+        handler.commit();
+        
+        assertEquals(0, model.size(), "Double property should be deleted");
+    }
+
+    @Test
+    @DisplayName("Test delete with typed float literal")
+    public void testDeleteTypedFloatLiteral() {
+        var subject = model.createResource("http://test.example.org/measurement");
+        var weight = model.createProperty("http://test.example.org/weight");
+        
+        // Add float property
+        subject.addProperty(weight, model.createTypedLiteral(72.5f));
+        assertEquals(1, model.size());
+        
+        // Delete specific float value
+        var handler = graph.getTransactionHandler();
+        handler.begin();
+        model.remove(subject, weight, model.createTypedLiteral(72.5f));
+        handler.commit();
+        
+        assertEquals(0, model.size(), "Float property should be deleted");
+    }
+
+    @Test
+    @DisplayName("Test delete with typed boolean literal (true)")
+    public void testDeleteTypedBooleanLiteralTrue() {
+        var subject = model.createResource("http://test.example.org/person");
+        var active = model.createProperty("http://test.example.org/active");
+        
+        // Add boolean property
+        subject.addProperty(active, model.createTypedLiteral(true));
+        assertEquals(1, model.size());
+        
+        // Delete specific boolean value
+        var handler = graph.getTransactionHandler();
+        handler.begin();
+        model.remove(subject, active, model.createTypedLiteral(true));
+        handler.commit();
+        
+        assertEquals(0, model.size(), "Boolean property should be deleted");
+    }
+
+    @Test
+    @DisplayName("Test delete with typed boolean literal (false)")
+    public void testDeleteTypedBooleanLiteralFalse() {
+        var subject = model.createResource("http://test.example.org/person");
+        var verified = model.createProperty("http://test.example.org/verified");
+        
+        // Add boolean property
+        subject.addProperty(verified, model.createTypedLiteral(false));
+        assertEquals(1, model.size());
+        
+        // Delete specific boolean value
+        var handler = graph.getTransactionHandler();
+        handler.begin();
+        model.remove(subject, verified, model.createTypedLiteral(false));
+        handler.commit();
+        
+        assertEquals(0, model.size(), "Boolean false property should be deleted");
+    }
+
+    @Test
+    @DisplayName("Test delete does not remove wrong typed value")
+    public void testDeleteWrongTypedValue() {
+        var subject = model.createResource("http://test.example.org/person");
+        var age = model.createProperty("http://test.example.org/age");
+        
+        // Add integer property with value 30
+        subject.addProperty(age, model.createTypedLiteral(30));
+        assertEquals(1, model.size());
+        
+        // Try to delete with wrong value (40 instead of 30)
+        var handler = graph.getTransactionHandler();
+        handler.begin();
+        model.remove(subject, age, model.createTypedLiteral(40));
+        handler.commit();
+        
+        // Should still have 1 triple since we tried to delete wrong value
+        assertEquals(1, model.size(), "Property should not be deleted with wrong value");
+        assertTrue(model.contains(subject, age), "Should still contain age property");
+    }
+
+    @Test
+    @DisplayName("Test delete multiple typed literals in batch")
+    public void testDeleteMultipleTypedLiterals() {
+        var person1 = model.createResource("http://test.example.org/person1");
+        var person2 = model.createResource("http://test.example.org/person2");
+        var person3 = model.createResource("http://test.example.org/person3");
+        
+        var age = model.createProperty("http://test.example.org/age");
+        var score = model.createProperty("http://test.example.org/score");
+        var active = model.createProperty("http://test.example.org/active");
+        
+        // Add mixed typed properties
+        person1.addProperty(age, model.createTypedLiteral(25));
+        person2.addProperty(age, model.createTypedLiteral(30));
+        person3.addProperty(age, model.createTypedLiteral(35));
+        
+        person1.addProperty(score, model.createTypedLiteral(95.5));
+        person2.addProperty(score, model.createTypedLiteral(87.3));
+        person3.addProperty(score, model.createTypedLiteral(78.9));
+        
+        person1.addProperty(active, model.createTypedLiteral(true));
+        person2.addProperty(active, model.createTypedLiteral(false));
+        person3.addProperty(active, model.createTypedLiteral(true));
+        
+        assertEquals(9, model.size(), "Should have 9 properties total");
+        
+        // Delete all age properties in a transaction
+        var handler = graph.getTransactionHandler();
+        handler.begin();
+        
+        model.remove(person1, age, model.createTypedLiteral(25));
+        model.remove(person2, age, model.createTypedLiteral(30));
+        model.remove(person3, age, model.createTypedLiteral(35));
+        
+        handler.commit();
+        
+        assertEquals(6, model.size(), "Should have 6 properties after deleting ages");
+        assertFalse(model.contains(person1, age), "Person1 should not have age");
+        assertFalse(model.contains(person2, age), "Person2 should not have age");
+        assertFalse(model.contains(person3, age), "Person3 should not have age");
+        
+        // Scores and active flags should remain
+        assertTrue(model.contains(person1, score), "Person1 should still have score");
+        assertTrue(model.contains(person2, score), "Person2 should still have score");
+        assertTrue(model.contains(person3, score), "Person3 should still have score");
+        assertTrue(model.contains(person1, active), "Person1 should still have active flag");
+        assertTrue(model.contains(person2, active), "Person2 should still have active flag");
+        assertTrue(model.contains(person3, active), "Person3 should still have active flag");
+    }
+
+    @Test
+    @DisplayName("Test delete mixed string and typed literals")
+    public void testDeleteMixedStringAndTypedLiterals() {
+        var subject = model.createResource("http://test.example.org/person");
+        var name = model.createProperty("http://test.example.org/name");
+        var age = model.createProperty("http://test.example.org/age");
+        var score = model.createProperty("http://test.example.org/score");
+        var active = model.createProperty("http://test.example.org/active");
+        
+        // Add mixed properties: string, int, double, boolean
+        subject.addProperty(name, "John Doe");
+        subject.addProperty(age, model.createTypedLiteral(30));
+        subject.addProperty(score, model.createTypedLiteral(95.5));
+        subject.addProperty(active, model.createTypedLiteral(true));
+        
+        assertEquals(4, model.size());
+        
+        // Delete only typed literals, leave string
+        var handler = graph.getTransactionHandler();
+        handler.begin();
+        
+        model.remove(subject, age, model.createTypedLiteral(30));
+        model.remove(subject, score, model.createTypedLiteral(95.5));
+        model.remove(subject, active, model.createTypedLiteral(true));
+        
+        handler.commit();
+        
+        assertEquals(1, model.size(), "Should have only name property left");
+        assertTrue(model.contains(subject, name), "Name property should remain");
+        assertFalse(model.contains(subject, age), "Age should be deleted");
+        assertFalse(model.contains(subject, score), "Score should be deleted");
+        assertFalse(model.contains(subject, active), "Active should be deleted");
+    }
+
+    @Test
     @DisplayName("Test buffered deletes discarded on abort")
     public void testBufferedDeletesDiscardedOnAbort() {
         // First add some data

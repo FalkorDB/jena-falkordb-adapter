@@ -15,7 +15,12 @@ import org.apache.jena.graph.Graph;
 import org.apache.jena.graph.Node;
 import org.apache.jena.graph.NodeFactory;
 import org.apache.jena.reasoner.InfGraph;
+import org.apache.jena.sparql.algebra.Op;
 import org.apache.jena.sparql.algebra.op.OpBGP;
+import org.apache.jena.sparql.algebra.op.OpFilter;
+import org.apache.jena.sparql.algebra.op.OpLeftJoin;
+import org.apache.jena.sparql.core.BasicPattern;
+import org.apache.jena.sparql.expr.Expr;
 import org.apache.jena.sparql.core.Var;
 import org.apache.jena.sparql.engine.ExecutionContext;
 import org.apache.jena.sparql.engine.QueryIterator;
@@ -207,6 +212,122 @@ public final class FalkorDBOpExecutor extends OpExecutor {
     }
 
     /**
+     * Execute an OPTIONAL (left join) pattern.
+     *
+     * <p>This method attempts to compile the left and right BGPs with OPTIONAL
+     * and execute them natively on FalkorDB using OPTIONAL MATCH. If compilation
+     * fails, it falls back to the standard Jena evaluation.</p>
+     *
+     * @param opLeftJoin the left join operation (OPTIONAL)
+     * @param input the input query iterator
+     * @return the result query iterator
+     */
+    @Override
+    protected QueryIterator execute(final OpLeftJoin opLeftJoin,
+                                    final QueryIterator input) {
+        // If we don't have a FalkorDB graph, fall back to standard execution
+        if (falkorGraph == null) {
+            return super.execute(opLeftJoin, input);
+        }
+
+        Span span = tracer.spanBuilder("FalkorDBOpExecutor.executeOptional")
+            .setSpanKind(SpanKind.INTERNAL)
+            .startSpan();
+
+        try (Scope scope = span.makeCurrent()) {
+            // Extract left (required) and right (optional) patterns
+            Op left = opLeftJoin.getLeft();
+            Op right = opLeftJoin.getRight();
+            
+            // Handle OpFilter wrapping OpBGP on the left side
+            Expr filterExpr = null;
+            if (left instanceof OpFilter) {
+                OpFilter opFilter = (OpFilter) left;
+                filterExpr = opFilter.getExprs().getList().isEmpty() 
+                    ? null 
+                    : opFilter.getExprs().getList().get(0);
+                left = opFilter.getSubOp();
+            }
+            
+            // Check if both sides are BGPs (after unwrapping filter)
+            if (!(left instanceof OpBGP) || !(right instanceof OpBGP)) {
+                span.setAttribute(ATTR_FALLBACK, true);
+                span.addEvent("Left or right is not BGP, falling back");
+                span.setStatus(StatusCode.OK);
+                return super.execute(opLeftJoin, input);
+            }
+            
+            BasicPattern leftBGP = ((OpBGP) left).getPattern();
+            BasicPattern rightBGP = ((OpBGP) right).getPattern();
+            
+            int totalTriples = leftBGP.size() + rightBGP.size();
+            span.setAttribute(ATTR_TRIPLE_COUNT, (long) totalTriples);
+            
+            // Try to compile with OPTIONAL support (with FILTER if present)
+            SparqlToCypherCompiler.CompilationResult compilation =
+                SparqlToCypherCompiler.translateWithOptional(leftBGP, rightBGP, filterExpr);
+
+            String cypherQuery = compilation.cypherQuery();
+            Map<String, Object> parameters = compilation.parameters();
+
+            span.setAttribute(ATTR_CYPHER_QUERY, cypherQuery);
+            span.setAttribute(ATTR_FALLBACK, false);
+
+            if (LOGGER.isDebugEnabled()) {
+                LOGGER.debug("OPTIONAL pushdown: executing Cypher query:\n{}",
+                    cypherQuery);
+            }
+
+            // Execute on FalkorDB
+            ResultSet resultSet = falkorGraph.getTracedGraph()
+                .query(cypherQuery, parameters);
+
+            // Convert results to bindings
+            List<Binding> bindings = convertResultsToBindings(
+                resultSet, input);
+
+            span.setAttribute(ATTR_RESULT_COUNT, (long) bindings.size());
+            span.setStatus(StatusCode.OK);
+
+            if (LOGGER.isDebugEnabled()) {
+                LOGGER.debug("OPTIONAL pushdown: returned {} results",
+                    bindings.size());
+            }
+
+            return QueryIterPlainWrapper.create(bindings.iterator(), execCxt);
+
+        } catch (SparqlToCypherCompiler.CannotCompileException e) {
+            // Fall back to standard Jena execution
+            span.setAttribute(ATTR_FALLBACK, true);
+            span.addEvent("Falling back to standard execution: " 
+                + e.getMessage());
+
+            if (LOGGER.isDebugEnabled()) {
+                LOGGER.debug("OPTIONAL pushdown failed, falling back: {}",
+                    e.getMessage());
+            }
+
+            span.setStatus(StatusCode.OK);
+            return super.execute(opLeftJoin, input);
+
+        } catch (Exception e) {
+            span.setStatus(StatusCode.ERROR, e.getMessage());
+            span.recordException(e);
+
+            if (LOGGER.isWarnEnabled()) {
+                LOGGER.warn("Error during OPTIONAL pushdown, falling back: {}",
+                    e.getMessage());
+            }
+
+            // Fall back to standard execution on any error
+            return super.execute(opLeftJoin, input);
+
+        } finally {
+            span.end();
+        }
+    }
+
+    /**
      * Convert FalkorDB result set to Jena bindings.
      *
      * @param resultSet the FalkorDB result set
@@ -292,7 +413,9 @@ public final class FalkorDBOpExecutor extends OpExecutor {
             // Only treat as URI if it starts with a known URI scheme
             // and passes validation
             if (strVal.startsWith("http://") || strVal.startsWith("https://")
-                    || strVal.startsWith("urn:") || strVal.startsWith("file://")) {
+                    || strVal.startsWith("urn:") || strVal.startsWith("file://")
+                    || strVal.startsWith("mailto:") || strVal.startsWith("ftp://")
+                    || strVal.startsWith("ftps://")) {
                 try {
                     // Validate the URI is well-formed
                     java.net.URI uri = java.net.URI.create(strVal);

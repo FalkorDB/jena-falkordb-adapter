@@ -1,0 +1,147 @@
+# OPTIONAL Patterns - SPARQL Query Examples
+# ==========================================
+#
+# These queries demonstrate OPTIONAL patterns that are translated to
+# Cypher OPTIONAL MATCH clauses for efficient execution.
+#
+# For more details, see: OPTIMIZATIONS.md#optional-patterns
+
+# Example 1: Basic OPTIONAL - Find people with optional email
+# Returns all persons, with email if they have one
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT ?person ?name ?email WHERE {
+    ?person a foaf:Person .
+    ?person foaf:name ?name .
+    OPTIONAL { ?person foaf:email ?email }
+}
+ORDER BY ?name
+
+# Generated Cypher:
+# MATCH (person:Resource:`http://xmlns.com/foaf/0.1/Person`)
+# WHERE person.`http://xmlns.com/foaf/0.1/name` IS NOT NULL
+# OPTIONAL MATCH (person)-[:`http://xmlns.com/foaf/0.1/email`]->(email:Resource)
+# RETURN person.uri AS person, person.`http://xmlns.com/foaf/0.1/name` AS name, email.uri AS email
+
+
+# Example 2: Multiple OPTIONAL clauses - Contact information
+# Returns all persons with any available contact info
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT ?person ?name ?email ?phone WHERE {
+    ?person a foaf:Person .
+    ?person foaf:name ?name .
+    OPTIONAL { ?person foaf:email ?email }
+    OPTIONAL { ?person foaf:phone ?phone }
+}
+ORDER BY ?name
+
+# Generated Cypher:
+# MATCH (person:Resource:`http://xmlns.com/foaf/0.1/Person`)
+# WHERE person.`http://xmlns.com/foaf/0.1/name` IS NOT NULL
+# OPTIONAL MATCH (person)-[:`http://xmlns.com/foaf/0.1/email`]->(email:Resource)
+# OPTIONAL MATCH (person)
+# WHERE person.`http://xmlns.com/foaf/0.1/phone` IS NOT NULL
+# RETURN person.uri AS person, person.`http://xmlns.com/foaf/0.1/name` AS name,
+#        email.uri AS email, person.`http://xmlns.com/foaf/0.1/phone` AS phone
+
+
+# Example 3: OPTIONAL with literal property
+# Find all persons with optional age (stored as node property)
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT ?person ?name ?age WHERE {
+    ?person a foaf:Person .
+    ?person foaf:name ?name .
+    OPTIONAL { ?person foaf:age ?age }
+}
+ORDER BY ?name
+
+# Generated Cypher:
+# MATCH (person:Resource:`http://xmlns.com/foaf/0.1/Person`)
+# WHERE person.`http://xmlns.com/foaf/0.1/name` IS NOT NULL
+# OPTIONAL MATCH (person)
+# WHERE person.`http://xmlns.com/foaf/0.1/age` IS NOT NULL
+# RETURN person.uri AS person, person.`http://xmlns.com/foaf/0.1/name` AS name,
+#        person.`http://xmlns.com/foaf/0.1/age` AS age
+
+
+# Example 4: OPTIONAL with multiple triples - Friend information
+# Find all persons with optional information about their friends
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT ?person ?name ?friend ?friendName WHERE {
+    ?person a foaf:Person .
+    ?person foaf:name ?name .
+    OPTIONAL { 
+        ?person foaf:knows ?friend .
+        ?friend foaf:name ?friendName .
+    }
+}
+ORDER BY ?name
+
+# Generated Cypher:
+# MATCH (person:Resource:`http://xmlns.com/foaf/0.1/Person`)
+# WHERE person.`http://xmlns.com/foaf/0.1/name` IS NOT NULL
+# OPTIONAL MATCH (person)-[:`http://xmlns.com/foaf/0.1/knows`]->(friend:Resource)
+# OPTIONAL MATCH (friend)
+# WHERE friend.`http://xmlns.com/foaf/0.1/name` IS NOT NULL
+# RETURN person.uri AS person, person.`http://xmlns.com/foaf/0.1/name` AS name,
+#        friend.uri AS friend, friend.`http://xmlns.com/foaf/0.1/name` AS friendName
+
+
+# Example 5: Concrete subject with OPTIONAL
+# Get information about a specific person with optional data
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT ?name ?age ?email WHERE {
+    <http://example.org/person/bob> foaf:name ?name .
+    OPTIONAL { <http://example.org/person/bob> foaf:age ?age }
+    OPTIONAL { <http://example.org/person/bob> foaf:email ?email }
+}
+
+# Generated Cypher:
+# MATCH (n:Resource {uri: $p0})
+# WHERE n.`http://xmlns.com/foaf/0.1/name` IS NOT NULL
+# OPTIONAL MATCH (n)
+# WHERE n.`http://xmlns.com/foaf/0.1/age` IS NOT NULL
+# OPTIONAL MATCH (n)-[:`http://xmlns.com/foaf/0.1/email`]->(email:Resource)
+# RETURN n.`http://xmlns.com/foaf/0.1/name` AS name,
+#        n.`http://xmlns.com/foaf/0.1/age` AS age, email.uri AS email
+
+
+# Example 6: OPTIONAL with FILTER in required part
+# Find young persons (age < 35) with optional email
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT ?person ?name ?age ?email WHERE {
+    ?person a foaf:Person .
+    ?person foaf:name ?name .
+    ?person foaf:age ?age .
+    FILTER(?age < 35)
+    OPTIONAL { ?person foaf:email ?email }
+}
+ORDER BY ?age
+
+# Generated Cypher:
+# MATCH (person:Resource:`http://xmlns.com/foaf/0.1/Person`)
+# WHERE person.`http://xmlns.com/foaf/0.1/name` IS NOT NULL
+#   AND person.`http://xmlns.com/foaf/0.1/age` IS NOT NULL
+# WHERE person.`http://xmlns.com/foaf/0.1/age` < 35
+# OPTIONAL MATCH (person)-[:`http://xmlns.com/foaf/0.1/email`]->(email:Resource)
+# RETURN person.uri AS person, person.`http://xmlns.com/foaf/0.1/name` AS name,
+#        person.`http://xmlns.com/foaf/0.1/age` AS age, email.uri AS email
+#
+# Note: The FILTER is translated to a WHERE clause and applied after the required
+# pattern match, then OPTIONAL MATCH is applied to the filtered results
+
+
+# Performance Notes:
+# - OPTIONAL MATCH returns NULL for missing optional data (no separate queries)
+# - Single database roundtrip for entire query (required + optional)
+# - Native Cypher OPTIONAL MATCH is highly optimized
+# - Much faster than fetching all required data then separate queries for optional data
+# 
+# Performance comparison:
+# - Standard: 1 query for required + N queries for optional (N+1 problem)
+# - With OPTIONAL pushdown: 1 query total (Nx improvement)

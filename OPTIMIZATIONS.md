@@ -1019,7 +1019,7 @@ SPARQL `FILTER` expressions are now automatically translated to Cypher `WHERE` c
 | `FILTER(?x = "value")` | `WHERE x = 'value'` | Equals |
 | `FILTER(?x != "value")` | `WHERE x <> 'value'` | Not equals |
 | `FILTER(?x > 10 && ?x < 20)` | `WHERE (x > 10 AND x < 20)` | Logical AND |
-| `FILTER(?x < 10 \|\| ?x > 20)` | `WHERE (x < 10 OR x > 20)` | Logical OR |
+| `FILTER(?x < 10 || ?x > 20)` | `WHERE (x < 10 OR x > 20)` | Logical OR |
 | `FILTER(! (?x < 10))` | `WHERE NOT (x < 10)` | Logical NOT |
 
 **Example:**

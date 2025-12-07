@@ -10,7 +10,7 @@ The FalkorDB adapter automatically pushes FILTER expressions down to native Cyph
 
 ### Comparison Operators
 - `<` - Less than
-- `<=` - Less than or equal  
+- `<=` - Less than or equal
 - `>` - Greater than
 - `>=` - Greater than or equal
 - `=` - Equals

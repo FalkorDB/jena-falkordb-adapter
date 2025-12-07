@@ -21,7 +21,7 @@ import org.apache.jena.vocabulary.RDF;
  * 
  * <h2>Supported FILTER Operators:</h2>
  * <ul>
- *   <li>Comparison: {@code <}, {@code <=}, {@code >}, {@code >=}, {@code =}, {@code !=}</li>
+ *   <li>Comparison: {@code <}, {@code <=}, {@code >}, {@code >=}, {@code =}, {@code !=} (mapped to {@code <>} in Cypher)</li>
  *   <li>Logical: {@code &&} (AND), {@code ||} (OR), {@code !} (NOT)</li>
  *   <li>Operands: Variables, numeric literals, string literals, boolean literals</li>
  * </ul>

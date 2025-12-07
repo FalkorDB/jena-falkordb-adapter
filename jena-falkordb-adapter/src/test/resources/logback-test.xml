@@ -18,7 +18,9 @@
     <logger name="org.apache.sis" level="ERROR"/>
 
     <!-- Logger for the FalkorDB Jena adapter -->
-    <logger name="com.falkordb.jena" level="INFO"/>
+    <logger name="com.falkordb.jena" level="DEBUG"/>
+    <logger name="com.falkordb.jena.query.SparqlToCypherCompiler" level="DEBUG"/>
+    <logger name="com.falkordb.jena.query.FalkorDBOpExecutor" level="DEBUG"/>
 
     <!-- Root logger configuration -->
     <root level="INFO">

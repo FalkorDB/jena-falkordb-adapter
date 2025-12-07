@@ -358,17 +358,24 @@ public final class SparqlToCypherCompiler {
         
         returnClause.append(String.join(", ", returnParts));
         
-        // Add FILTER WHERE clause if present
-        StringBuilder filterClause = new StringBuilder();
+        // Add FILTER condition if present
+        String finalRequiredMatches = requiredMatches;
         if (filterExpr != null) {
             String filterCypher = translateFilterExpr(filterExpr, variableMapping, nodeVariables, parameters, paramCounter);
             if (filterCypher != null && !filterCypher.isEmpty()) {
-                filterClause.append("\nWHERE ").append(filterCypher);
+                // Check if there's already a WHERE clause in requiredMatches
+                if (requiredMatches.contains("\nWHERE ")) {
+                    // Append to existing WHERE with AND
+                    finalRequiredMatches = requiredMatches + " AND " + filterCypher;
+                } else {
+                    // Add new WHERE clause
+                    finalRequiredMatches = requiredMatches + "\nWHERE " + filterCypher;
+                }
             }
         }
         
         // Combine required + filter + optional + return
-        String finalQuery = requiredMatches + filterClause.toString() + optionalCypher.toString() + returnClause.toString();
+        String finalQuery = finalRequiredMatches + optionalCypher.toString() + returnClause.toString();
         
         if (LOGGER.isDebugEnabled()) {
             LOGGER.debug("Compiled BGP with OPTIONAL to Cypher:\n{}", finalQuery);
@@ -989,6 +996,7 @@ public final class SparqlToCypherCompiler {
         }
 
         // Handle literal property patterns
+        List<String> whereConditions = new ArrayList<>();
         for (Triple triple : literalTriples) {
             String subjectVar = getNodeVariable(triple.getSubject());
             String predUri = sanitizeCypherIdentifier(
@@ -1010,15 +1018,11 @@ public final class SparqlToCypherCompiler {
                 }
                 declaredNodes.add(subjectVar);
             }
-
-            if (!cypher.isEmpty()) {
-                cypher.append("\n");
-            }
             
             if (triple.getObject().isVariable()) {
                 // Variable literal - check property exists
-                cypher.append("WHERE ").append(subjectVar)
-                      .append(".`").append(predUri).append("` IS NOT NULL");
+                String condition = subjectVar + ".`" + predUri + "` IS NOT NULL";
+                whereConditions.add(condition);
                 String objVar = triple.getObject().getName();
                 variableMapping.put(objVar, 
                     subjectVar + ".`" + predUri + "`");
@@ -1027,10 +1031,15 @@ public final class SparqlToCypherCompiler {
                 String paramName = "p" + paramCounter++;
                 parameters.put(paramName, 
                     triple.getObject().getLiteralLexicalForm());
-                cypher.append("WHERE ").append(subjectVar)
-                      .append(".`").append(predUri).append("` = $")
-                      .append(paramName);
+                String condition = subjectVar + ".`" + predUri + "` = $" + paramName;
+                whereConditions.add(condition);
             }
+        }
+        
+        // Add combined WHERE clause if there are conditions
+        if (!whereConditions.isEmpty()) {
+            cypher.append("\nWHERE ");
+            cypher.append(String.join(" AND ", whereConditions));
         }
 
         // Build RETURN clause

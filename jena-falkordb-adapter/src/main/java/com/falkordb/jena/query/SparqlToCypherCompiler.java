@@ -101,6 +101,230 @@ public final class SparqlToCypherCompiler {
     }
 
     /**
+     * Translate a SPARQL Basic Graph Pattern with OPTIONAL clause to a Cypher query.
+     * 
+     * <p>This method handles SPARQL OPTIONAL patterns by translating them to Cypher
+     * OPTIONAL MATCH clauses. The required BGP is compiled first, followed by the
+     * optional BGP with OPTIONAL MATCH.</p>
+     * 
+     * <h2>Example:</h2>
+     * <pre>{@code
+     * // SPARQL:
+     * // SELECT ?person ?email WHERE {
+     * //   ?person rdf:type foaf:Person .
+     * //   OPTIONAL { ?person foaf:email ?email }
+     * // }
+     * 
+     * // Compiled Cypher:
+     * // MATCH (person:Resource:`http://xmlns.com/foaf/0.1/Person`)
+     * // OPTIONAL MATCH (person)-[:`http://xmlns.com/foaf/0.1/email`]->(email:Resource)
+     * // RETURN person.uri AS person, email.uri AS email
+     * }</pre>
+     *
+     * @param requiredBGP the required Basic Graph Pattern
+     * @param optionalBGP the optional Basic Graph Pattern
+     * @return the compilation result containing Cypher query and metadata
+     * @throws CannotCompileException if either BGP cannot be compiled
+     */
+    public static CompilationResult translateWithOptional(
+            final BasicPattern requiredBGP,
+            final BasicPattern optionalBGP)
+            throws CannotCompileException {
+        
+        if (requiredBGP == null || requiredBGP.isEmpty()) {
+            throw new CannotCompileException(
+                "Required BGP cannot be empty for OPTIONAL pattern");
+        }
+        
+        if (optionalBGP == null || optionalBGP.isEmpty()) {
+            throw new CannotCompileException(
+                "Optional BGP cannot be empty");
+        }
+        
+        // Compile the required pattern first
+        CompilationResult requiredResult = translate(requiredBGP);
+        
+        // Get required query parts (remove RETURN clause)
+        String requiredQuery = requiredResult.cypherQuery();
+        int returnIndex = requiredQuery.lastIndexOf("\nRETURN");
+        if (returnIndex < 0) {
+            throw new CannotCompileException(
+                "Could not find RETURN clause in required pattern");
+        }
+        String requiredMatches = requiredQuery.substring(0, returnIndex);
+        
+        // Collect variables and parameters from required pattern
+        Map<String, Object> parameters = new HashMap<>(requiredResult.parameters());
+        Map<String, String> variableMapping = new HashMap<>(requiredResult.variableMapping());
+        Set<String> allVariables = new HashSet<>();
+        Set<String> nodeVariables = new HashSet<>();
+        Set<String> declaredNodes = new HashSet<>();
+        
+        // Parse required pattern to identify declared nodes
+        for (Triple triple : requiredBGP.getList()) {
+            collectVariables(triple, allVariables, nodeVariables);
+            if (triple.getSubject().isVariable()) {
+                declaredNodes.add(getNodeVariable(triple.getSubject()));
+            }
+            if (triple.getObject().isVariable() && !triple.getObject().isLiteral()) {
+                declaredNodes.add(getNodeVariable(triple.getObject()));
+            }
+        }
+        
+        // Build the optional pattern - translate triples to OPTIONAL MATCH
+        StringBuilder optionalCypher = new StringBuilder();
+        int paramCounter = parameters.size();
+        
+        List<Triple> optionalTriples = optionalBGP.getList();
+        
+        // Check for variable predicates or variable objects in optional pattern
+        boolean hasVariablePredicate = optionalTriples.stream()
+            .anyMatch(t -> t.getPredicate().isVariable());
+        
+        if (hasVariablePredicate) {
+            throw new CannotCompileException(
+                "Variable predicates in OPTIONAL patterns not yet supported");
+        }
+        
+        // Process optional triples
+        for (Triple triple : optionalTriples) {
+            collectVariables(triple, allVariables, nodeVariables);
+            
+            Node predicate = triple.getPredicate();
+            Node object = triple.getObject();
+            
+            optionalCypher.append("\nOPTIONAL MATCH ");
+            
+            String subjectVar = getNodeVariable(triple.getSubject());
+            String objectVar = getNodeVariable(triple.getObject());
+            
+            if (predicate.isURI() && predicate.getURI().equals(RDF_TYPE_URI)) {
+                // Handle rdf:type in optional pattern
+                if (object.isVariable()) {
+                    throw new CannotCompileException(
+                        "Variable types in OPTIONAL rdf:type not yet supported");
+                }
+                
+                String typeLabel = sanitizeCypherIdentifier(object.getURI());
+                
+                // Subject should already be declared
+                if (triple.getSubject().isVariable()) {
+                    optionalCypher.append("(").append(subjectVar)
+                          .append(":`").append(typeLabel).append("`)");
+                } else {
+                    String paramName = "p" + paramCounter++;
+                    parameters.put(paramName, triple.getSubject().getURI());
+                    optionalCypher.append("(").append(subjectVar)
+                          .append(":`").append(typeLabel)
+                          .append("` {uri: $").append(paramName).append("})");
+                }
+            } else if (object.isLiteral()) {
+                // Handle literal property in optional pattern
+                String predUri = sanitizeCypherIdentifier(predicate.getURI());
+                
+                // Match node if not already declared
+                if (!declaredNodes.contains(subjectVar)) {
+                    if (triple.getSubject().isVariable()) {
+                        optionalCypher.append("(").append(subjectVar).append(":Resource)");
+                    } else {
+                        String paramName = "p" + paramCounter++;
+                        parameters.put(paramName, triple.getSubject().getURI());
+                        optionalCypher.append("(").append(subjectVar)
+                              .append(":Resource {uri: $").append(paramName).append("})");
+                    }
+                    declaredNodes.add(subjectVar);
+                }
+                
+                // Add WHERE clause for literal match
+                optionalCypher.append("\nWHERE ");
+                
+                if (object.isVariable()) {
+                    // Variable literal - just check property exists
+                    optionalCypher.append(subjectVar)
+                          .append(".`").append(predUri).append("` IS NOT NULL");
+                    // Map variable to property expression
+                    variableMapping.put(object.getName(), 
+                        subjectVar + ".`" + predUri + "`");
+                } else {
+                    // Concrete literal - match value
+                    String paramName = "p" + paramCounter++;
+                    parameters.put(paramName, object.getLiteralLexicalForm());
+                    optionalCypher.append(subjectVar)
+                          .append(".`").append(predUri).append("` = $")
+                          .append(paramName);
+                }
+            } else {
+                // Handle relationship in optional pattern
+                String relType = sanitizeCypherIdentifier(predicate.getURI());
+                
+                // Subject (should already be declared from required pattern)
+                if (triple.getSubject().isVariable()) {
+                    if (declaredNodes.contains(subjectVar)) {
+                        optionalCypher.append("(").append(subjectVar).append(")");
+                    } else {
+                        optionalCypher.append("(").append(subjectVar).append(":Resource)");
+                        declaredNodes.add(subjectVar);
+                    }
+                } else {
+                    String paramName = "p" + paramCounter++;
+                    parameters.put(paramName, triple.getSubject().getURI());
+                    if (declaredNodes.contains(subjectVar)) {
+                        optionalCypher.append("(").append(subjectVar).append(")");
+                    } else {
+                        optionalCypher.append("(").append(subjectVar)
+                              .append(":Resource {uri: $").append(paramName).append("})");
+                        declaredNodes.add(subjectVar);
+                    }
+                }
+                
+                // Relationship
+                optionalCypher.append("-[:`").append(relType).append("`]->");
+                
+                // Object
+                if (object.isVariable()) {
+                    optionalCypher.append("(").append(objectVar).append(":Resource)");
+                    declaredNodes.add(objectVar);
+                } else if (object.isURI()) {
+                    String paramName = "p" + paramCounter++;
+                    parameters.put(paramName, object.getURI());
+                    optionalCypher.append("(").append(objectVar)
+                          .append(":Resource {uri: $").append(paramName).append("})");
+                    declaredNodes.add(objectVar);
+                }
+            }
+        }
+        
+        // Build RETURN clause with all variables (required + optional)
+        StringBuilder returnClause = new StringBuilder("\nRETURN ");
+        List<String> returnParts = new ArrayList<>();
+        
+        for (String varName : allVariables) {
+            if (variableMapping.containsKey(varName)) {
+                // Literal variable - return the property expression
+                returnParts.add(variableMapping.get(varName) + " AS " + varName);
+            } else if (nodeVariables.contains(varName)) {
+                // Node variable - return the URI
+                returnParts.add(sanitizeVariableName(varName) + ".uri AS " + varName);
+            }
+        }
+        
+        if (returnParts.isEmpty()) {
+            returnParts.add("1 AS _result");
+        }
+        
+        returnClause.append(String.join(", ", returnParts));
+        
+        // Combine required + optional + return
+        String finalQuery = requiredMatches + optionalCypher.toString() + returnClause.toString();
+        
+        if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug("Compiled BGP with OPTIONAL to Cypher:\n{}", finalQuery);
+        }
+        
+        return new CompilationResult(finalQuery, parameters, variableMapping);
+    }
+
+    /**
      * Translate a SPARQL Basic Graph Pattern to a Cypher query.
      *
      * @param bgp the Basic Graph Pattern to translate

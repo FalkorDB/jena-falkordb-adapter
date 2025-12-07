@@ -47,7 +47,7 @@ SELECT ?name ?age WHERE {
 MATCH (person:Resource)
 WHERE person.`foaf:name` IS NOT NULL
   AND person.`foaf:age` IS NOT NULL
-WHERE person.`foaf:age` < 30
+  AND person.`foaf:age` < 30
 RETURN person.`foaf:name` AS name, person.`foaf:age` AS age
 ```
 
@@ -69,7 +69,7 @@ SELECT ?name ?age WHERE {
 MATCH (person:Resource)
 WHERE person.`foaf:name` IS NOT NULL
   AND person.`foaf:age` IS NOT NULL
-WHERE (person.`foaf:age` >= 18 AND person.`foaf:age` < 65)
+  AND (person.`foaf:age` >= 18 AND person.`foaf:age` < 65)
 RETURN person.`foaf:name` AS name, person.`foaf:age` AS age
 ```
 
@@ -91,7 +91,7 @@ SELECT ?email WHERE {
 MATCH (person:Resource)
 WHERE person.`foaf:name` IS NOT NULL
   AND person.`foaf:email` IS NOT NULL
-WHERE person.`foaf:name` = 'Alice'
+  AND person.`foaf:name` = 'Alice'
 RETURN person.`foaf:email` AS email
 ```
 
@@ -113,7 +113,7 @@ SELECT ?name ?age WHERE {
 MATCH (person:Resource)
 WHERE person.`foaf:name` IS NOT NULL
   AND person.`foaf:age` IS NOT NULL
-WHERE NOT (person.`foaf:age` < 18)
+  AND NOT (person.`foaf:age` < 18)
 RETURN person.`foaf:name` AS name, person.`foaf:age` AS age
 ```
 
@@ -135,7 +135,7 @@ SELECT ?name ?age WHERE {
 MATCH (person:Resource)
 WHERE person.`foaf:name` IS NOT NULL
   AND person.`foaf:age` IS NOT NULL
-WHERE (person.`foaf:age` < 18 OR person.`foaf:age` > 65)
+  AND (person.`foaf:age` < 18 OR person.`foaf:age` > 65)
 RETURN person.`foaf:name` AS name, person.`foaf:age` AS age
 ```
 
@@ -155,7 +155,7 @@ SELECT ?name WHERE {
 ```cypher
 MATCH (person:Resource)
 WHERE person.`foaf:name` IS NOT NULL
-WHERE person.`foaf:name` <> 'Bob'
+  AND person.`foaf:name` <> 'Bob'
 RETURN person.`foaf:name` AS name
 ```
 

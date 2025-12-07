@@ -1037,7 +1037,7 @@ SELECT ?person ?age WHERE {
 # Generated Cypher with WHERE clause
 MATCH (person:Resource)
 WHERE person.`http://xmlns.com/foaf/0.1/age` IS NOT NULL
-WHERE (person.`http://xmlns.com/foaf/0.1/age` >= 18 
+  AND (person.`http://xmlns.com/foaf/0.1/age` >= 18 
    AND person.`http://xmlns.com/foaf/0.1/age` < 65)
 RETURN person.uri AS person, 
        person.`http://xmlns.com/foaf/0.1/age` AS age
@@ -1050,12 +1050,14 @@ When a BGP uses variable object optimization (resulting in UNION), FILTER is aut
 ```cypher
 # UNION query with FILTER on each branch
 MATCH (person:Resource)-[:`foaf:age`]->(age:Resource)
-WHERE age.uri >= 18 AND age.uri < 65
+WHERE age.uri >= 18 
+  AND age.uri < 65
 RETURN person.uri AS person, age.uri AS age
 UNION ALL
 MATCH (person:Resource)
 WHERE person.`foaf:age` IS NOT NULL
-  AND person.`foaf:age` >= 18 AND person.`foaf:age` < 65
+  AND person.`foaf:age` >= 18 
+  AND person.`foaf:age` < 65
 RETURN person.uri AS person, person.`foaf:age` AS age
 ```
 

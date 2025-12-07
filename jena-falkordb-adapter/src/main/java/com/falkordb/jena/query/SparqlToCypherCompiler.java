@@ -924,17 +924,17 @@ public final class SparqlToCypherCompiler {
                         finalQuery.append("\nUNION ALL\n");
                     }
                     
-                    finalQuery.append(matchPart);
-                    
                     // Add WHERE clause for filter
+                    String finalMatchPart;
                     if (matchPart.contains("\nWHERE ")) {
-                        // Append to existing WHERE with AND
-                        finalQuery.append("\n  AND ").append(filterCypher);
+                        // Append to existing WHERE clause with AND
+                        finalMatchPart = matchPart + "\n  AND " + filterCypher;
                     } else {
                         // Add new WHERE clause
-                        finalQuery.append("\nWHERE ").append(filterCypher);
+                        finalMatchPart = matchPart + "\nWHERE " + filterCypher;
                     }
                     
+                    finalQuery.append(finalMatchPart);
                     finalQuery.append(returnPart);
                 } else {
                     // No RETURN found - shouldn't happen, but handle gracefully
@@ -964,17 +964,18 @@ public final class SparqlToCypherCompiler {
             String returnPart = bgpQuery.substring(returnIndex);
             
             // Combine: MATCH part + additional WHERE for filter + RETURN part
-            StringBuilder finalQuery = new StringBuilder(matchPart);
+            String finalMatchPart;
             
             // Check if there's already a WHERE clause
             if (matchPart.contains("\nWHERE ")) {
-                // Append to existing WHERE with AND
-                finalQuery.append("\n  AND ").append(filterCypher);
+                // Append to existing WHERE clause with AND
+                finalMatchPart = matchPart + "\n  AND " + filterCypher;
             } else {
                 // Add new WHERE clause
-                finalQuery.append("\nWHERE ").append(filterCypher);
+                finalMatchPart = matchPart + "\nWHERE " + filterCypher;
             }
             
+            StringBuilder finalQuery = new StringBuilder(finalMatchPart);
             finalQuery.append(returnPart);
             
             String finalQueryStr = finalQuery.toString();

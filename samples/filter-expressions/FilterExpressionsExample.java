@@ -89,7 +89,7 @@ public class FilterExpressionsExample {
             System.out.println("MATCH (person:Resource)");
             System.out.println("WHERE person.`foaf:name` IS NOT NULL");
             System.out.println("  AND person.`foaf:age` IS NOT NULL");
-            System.out.println("WHERE person.`foaf:age` < 30");
+            System.out.println("  AND person.`foaf:age` < 30");
             System.out.println("RETURN person.`foaf:name` AS name, person.`foaf:age` AS age");
             
         } finally {

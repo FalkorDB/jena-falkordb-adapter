@@ -1163,4 +1163,272 @@ public class SparqlToCypherCompilerTest {
         // Both should be equivalent
         assertEquals(resultWithoutFilter.cypherQuery(), resultWithNull.cypherQuery());
     }
+
+    // ==================== UNION Pattern Tests ====================
+
+    @Test
+    @DisplayName("Test basic UNION pattern with type queries")
+    public void testUnionWithTypePatterns() throws SparqlToCypherCompiler.CannotCompileException {
+        // Left: ?person rdf:type foaf:Student
+        BasicPattern leftBGP = new BasicPattern();
+        leftBGP.add(Triple.create(
+            NodeFactory.createVariable("person"),
+            NodeFactory.createURI("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/Student")
+        ));
+
+        // Right: ?person rdf:type foaf:Teacher
+        BasicPattern rightBGP = new BasicPattern();
+        rightBGP.add(Triple.create(
+            NodeFactory.createVariable("person"),
+            NodeFactory.createURI("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/Teacher")
+        ));
+
+        SparqlToCypherCompiler.CompilationResult result = 
+            SparqlToCypherCompiler.translateUnion(leftBGP, rightBGP);
+
+        assertNotNull(result);
+        String cypher = result.cypherQuery();
+        
+        // Should contain UNION keyword
+        assertTrue(cypher.contains("UNION"), "Should have UNION keyword");
+        
+        // Should have MATCH clauses for both patterns
+        assertTrue(cypher.contains("MATCH"), "Should have MATCH clauses");
+        
+        // Should have both type labels
+        assertTrue(cypher.contains("Student"), "Should reference Student type");
+        assertTrue(cypher.contains("Teacher"), "Should reference Teacher type");
+        
+        // Should have RETURN clauses
+        assertTrue(cypher.contains("RETURN"), "Should have RETURN clauses");
+        assertTrue(cypher.contains("person"), "Should return person variable");
+    }
+
+    @Test
+    @DisplayName("Test UNION with relationship patterns")
+    public void testUnionWithRelationships() throws SparqlToCypherCompiler.CannotCompileException {
+        // Left: ?person foaf:knows ?friend
+        BasicPattern leftBGP = new BasicPattern();
+        leftBGP.add(Triple.create(
+            NodeFactory.createVariable("person"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/knows"),
+            NodeFactory.createVariable("friend")
+        ));
+
+        // Right: ?person foaf:worksWith ?colleague
+        BasicPattern rightBGP = new BasicPattern();
+        rightBGP.add(Triple.create(
+            NodeFactory.createVariable("person"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/worksWith"),
+            NodeFactory.createVariable("colleague")
+        ));
+
+        SparqlToCypherCompiler.CompilationResult result = 
+            SparqlToCypherCompiler.translateUnion(leftBGP, rightBGP);
+
+        assertNotNull(result);
+        String cypher = result.cypherQuery();
+        
+        // Should contain UNION
+        assertTrue(cypher.contains("UNION"), "Should have UNION keyword");
+        
+        // Should reference both relationships
+        assertTrue(cypher.contains("knows") || cypher.contains("foaf"), 
+            "Should reference knows relationship");
+        assertTrue(cypher.contains("worksWith") || cypher.contains("foaf"), 
+            "Should reference worksWith relationship");
+    }
+
+    @Test
+    @DisplayName("Test UNION with concrete subjects")
+    public void testUnionWithConcreteSubjects() throws SparqlToCypherCompiler.CannotCompileException {
+        // Left: <alice> foaf:knows ?friend
+        BasicPattern leftBGP = new BasicPattern();
+        leftBGP.add(Triple.create(
+            NodeFactory.createURI("http://example.org/alice"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/knows"),
+            NodeFactory.createVariable("friend")
+        ));
+
+        // Right: <bob> foaf:knows ?friend
+        BasicPattern rightBGP = new BasicPattern();
+        rightBGP.add(Triple.create(
+            NodeFactory.createURI("http://example.org/bob"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/knows"),
+            NodeFactory.createVariable("friend")
+        ));
+
+        SparqlToCypherCompiler.CompilationResult result = 
+            SparqlToCypherCompiler.translateUnion(leftBGP, rightBGP);
+
+        assertNotNull(result);
+        String cypher = result.cypherQuery();
+        Map<String, Object> params = result.parameters();
+        
+        // Should have UNION
+        assertTrue(cypher.contains("UNION"), "Should have UNION keyword");
+        
+        // Should have parameters for both URIs
+        assertTrue(params.size() >= 2, "Should have at least 2 parameters for the URIs");
+        
+        // Parameters should contain alice and bob URIs
+        boolean hasAlice = params.values().stream()
+            .anyMatch(v -> v.toString().contains("alice"));
+        boolean hasBob = params.values().stream()
+            .anyMatch(v -> v.toString().contains("bob"));
+        assertTrue(hasAlice, "Should have parameter for alice");
+        assertTrue(hasBob, "Should have parameter for bob");
+    }
+
+    @Test
+    @DisplayName("Test UNION with multi-triple patterns")
+    public void testUnionWithMultiTriplePatterns() throws SparqlToCypherCompiler.CannotCompileException {
+        // Left: ?person rdf:type foaf:Student . ?person foaf:name "StudentName"
+        // Using concrete literal to avoid variable object issue
+        BasicPattern leftBGP = new BasicPattern();
+        leftBGP.add(Triple.create(
+            NodeFactory.createVariable("person"),
+            NodeFactory.createURI("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/Student")
+        ));
+        leftBGP.add(Triple.create(
+            NodeFactory.createVariable("person"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/age"),
+            NodeFactory.createLiteralByValue(20, null)
+        ));
+
+        // Right: ?person rdf:type foaf:Teacher . ?person foaf:age 30
+        BasicPattern rightBGP = new BasicPattern();
+        rightBGP.add(Triple.create(
+            NodeFactory.createVariable("person"),
+            NodeFactory.createURI("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/Teacher")
+        ));
+        rightBGP.add(Triple.create(
+            NodeFactory.createVariable("person"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/age"),
+            NodeFactory.createLiteralByValue(30, null)
+        ));
+
+        SparqlToCypherCompiler.CompilationResult result = 
+            SparqlToCypherCompiler.translateUnion(leftBGP, rightBGP);
+
+        assertNotNull(result);
+        String cypher = result.cypherQuery();
+        
+        // Should have UNION
+        assertTrue(cypher.contains("UNION"), "Should have UNION keyword");
+        
+        // Should reference both types
+        assertTrue(cypher.contains("Student"), "Should reference Student");
+        assertTrue(cypher.contains("Teacher"), "Should reference Teacher");
+        
+        // Should reference age property
+        assertTrue(cypher.contains("age"), "Should reference age property");
+        
+        // Should return person variable
+        assertTrue(cypher.contains("person"), "Should return person variable");
+    }
+
+    @Test
+    @DisplayName("Test UNION throws exception for empty left BGP")
+    public void testUnionThrowsForEmptyLeft() {
+        BasicPattern emptyBGP = new BasicPattern();
+        BasicPattern rightBGP = new BasicPattern();
+        rightBGP.add(Triple.create(
+            NodeFactory.createVariable("s"),
+            NodeFactory.createURI("http://example.org/pred"),
+            NodeFactory.createVariable("o")
+        ));
+
+        assertThrows(SparqlToCypherCompiler.CannotCompileException.class,
+            () -> SparqlToCypherCompiler.translateUnion(emptyBGP, rightBGP),
+            "Should throw exception for empty left BGP");
+    }
+
+    @Test
+    @DisplayName("Test UNION throws exception for empty right BGP")
+    public void testUnionThrowsForEmptyRight() {
+        BasicPattern leftBGP = new BasicPattern();
+        leftBGP.add(Triple.create(
+            NodeFactory.createVariable("s"),
+            NodeFactory.createURI("http://example.org/pred"),
+            NodeFactory.createVariable("o")
+        ));
+        BasicPattern emptyBGP = new BasicPattern();
+
+        assertThrows(SparqlToCypherCompiler.CannotCompileException.class,
+            () -> SparqlToCypherCompiler.translateUnion(leftBGP, emptyBGP),
+            "Should throw exception for empty right BGP");
+    }
+
+    @Test
+    @DisplayName("Test UNION result structure")
+    public void testUnionResultStructure() throws SparqlToCypherCompiler.CannotCompileException {
+        // Simple UNION with type patterns
+        BasicPattern leftBGP = new BasicPattern();
+        leftBGP.add(Triple.create(
+            NodeFactory.createVariable("x"),
+            NodeFactory.createURI("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
+            NodeFactory.createURI("http://example.org/TypeA")
+        ));
+
+        BasicPattern rightBGP = new BasicPattern();
+        rightBGP.add(Triple.create(
+            NodeFactory.createVariable("x"),
+            NodeFactory.createURI("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
+            NodeFactory.createURI("http://example.org/TypeB")
+        ));
+
+        SparqlToCypherCompiler.CompilationResult result = 
+            SparqlToCypherCompiler.translateUnion(leftBGP, rightBGP);
+
+        assertNotNull(result, "Result should not be null");
+        assertNotNull(result.cypherQuery(), "Cypher query should not be null");
+        assertNotNull(result.parameters(), "Parameters should not be null");
+        assertNotNull(result.variableMapping(), "Variable mapping should not be null");
+        
+        // Should have at least one entry in variable mapping (depending on how rdf:type is handled)
+        // The important part is that the query is compiled successfully
+        assertFalse(result.cypherQuery().isEmpty(), "Cypher query should not be empty");
+    }
+
+    @Test
+    @DisplayName("Test UNION with parameter name conflicts")
+    public void testUnionWithParameterConflicts() throws SparqlToCypherCompiler.CannotCompileException {
+        // Both branches use the same predicate, which could create parameter conflicts
+        BasicPattern leftBGP = new BasicPattern();
+        leftBGP.add(Triple.create(
+            NodeFactory.createURI("http://example.org/alice"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/name"),
+            NodeFactory.createLiteralString("Alice")
+        ));
+
+        BasicPattern rightBGP = new BasicPattern();
+        rightBGP.add(Triple.create(
+            NodeFactory.createURI("http://example.org/bob"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/name"),
+            NodeFactory.createLiteralString("Bob")
+        ));
+
+        SparqlToCypherCompiler.CompilationResult result = 
+            SparqlToCypherCompiler.translateUnion(leftBGP, rightBGP);
+
+        assertNotNull(result);
+        Map<String, Object> params = result.parameters();
+        
+        // Should handle parameter conflicts - check that all values are present
+        assertTrue(params.containsValue("Alice"), "Should have Alice literal");
+        assertTrue(params.containsValue("Bob"), "Should have Bob literal");
+        
+        // Check URIs are present
+        boolean hasAlice = params.values().stream()
+            .anyMatch(v -> v.toString().contains("alice"));
+        boolean hasBob = params.values().stream()
+            .anyMatch(v -> v.toString().contains("bob"));
+        assertTrue(hasAlice, "Should have alice URI");
+        assertTrue(hasBob, "Should have bob URI");
+    }
 }

@@ -1,0 +1,35 @@
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix ex: <http://example.org/> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+
+# Students
+ex:alice rdf:type ex:Student ;
+         foaf:name "Alice" ;
+         foaf:age 20 ;
+         foaf:email "alice@example.org" .
+
+ex:charlie rdf:type ex:Student ;
+           foaf:name "Charlie" ;
+           foaf:age 22 ;
+           foaf:phone "555-0001" .
+
+# Teachers
+ex:bob rdf:type ex:Teacher ;
+       foaf:name "Bob" ;
+       foaf:age 35 ;
+       foaf:email "bob@example.org" .
+
+ex:diana rdf:type ex:Teacher ;
+        foaf:name "Diana" ;
+        foaf:age 40 ;
+        foaf:phone "555-0002" .
+
+# Staff
+ex:eve rdf:type ex:Staff ;
+       foaf:name "Eve" ;
+       foaf:age 30 .
+
+# Relationships
+ex:alice foaf:knows ex:charlie .
+ex:bob ex:worksWith ex:diana .
+ex:charlie foaf:knows ex:alice .

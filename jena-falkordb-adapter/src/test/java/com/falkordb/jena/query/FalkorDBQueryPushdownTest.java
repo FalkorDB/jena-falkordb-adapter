@@ -1330,4 +1330,333 @@ public class FalkorDBQueryPushdownTest {
             assertEquals("Charlie", solutions.get(1).getLiteral("name").getString());
         }
     }
+
+    // ==================== UNION Pattern Tests ====================
+
+    @Test
+    @DisplayName("Test UNION with type patterns")
+    public void testUnionWithTypes() {
+        // Add test data with different types
+        var alice = model.createResource("http://example.org/alice");
+        var bob = model.createResource("http://example.org/bob");
+        var charlie = model.createResource("http://example.org/charlie");
+        
+        var studentType = model.createResource("http://example.org/Student");
+        var teacherType = model.createResource("http://example.org/Teacher");
+        
+        alice.addProperty(RDF.type, studentType);
+        bob.addProperty(RDF.type, teacherType);
+        charlie.addProperty(RDF.type, studentType);
+
+        // Query using UNION
+        String sparql = """
+            PREFIX ex: <http://example.org/>
+            SELECT ?person WHERE {
+                { ?person a ex:Student }
+                UNION
+                { ?person a ex:Teacher }
+            }
+            ORDER BY ?person
+            """;
+
+        Query query = QueryFactory.create(sparql);
+        try (QueryExecution qexec = QueryExecutionFactory.create(query, model)) {
+            ResultSet results = qexec.execSelect();
+            List<String> persons = new ArrayList<>();
+            while (results.hasNext()) {
+                QuerySolution solution = results.nextSolution();
+                persons.add(solution.getResource("person").getURI());
+            }
+
+            // Should return all three people (alice, charlie as students, bob as teacher)
+            assertEquals(3, persons.size(), "Should return 3 people");
+            assertTrue(persons.contains("http://example.org/alice"), "Should include alice");
+            assertTrue(persons.contains("http://example.org/bob"), "Should include bob");
+            assertTrue(persons.contains("http://example.org/charlie"), "Should include charlie");
+        }
+    }
+
+    @Test
+    @DisplayName("Test UNION with relationship patterns")
+    public void testUnionWithRelationships() {
+        // Add test data with different relationships
+        var alice = model.createResource("http://example.org/alice");
+        var bob = model.createResource("http://example.org/bob");
+        var charlie = model.createResource("http://example.org/charlie");
+        var diana = model.createResource("http://example.org/diana");
+        
+        var knows = model.createProperty("http://xmlns.com/foaf/0.1/knows");
+        var worksWith = model.createProperty("http://example.org/worksWith");
+        
+        // Alice knows Bob and works with Charlie
+        alice.addProperty(knows, bob);
+        alice.addProperty(worksWith, charlie);
+        
+        // Bob works with Diana
+        bob.addProperty(worksWith, diana);
+
+        // Query using UNION to find all connections (friends or colleagues)
+        String sparql = """
+            PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+            PREFIX ex: <http://example.org/>
+            SELECT ?person ?connection WHERE {
+                { ?person foaf:knows ?connection }
+                UNION
+                { ?person ex:worksWith ?connection }
+            }
+            ORDER BY ?person ?connection
+            """;
+
+        Query query = QueryFactory.create(sparql);
+        try (QueryExecution qexec = QueryExecutionFactory.create(query, model)) {
+            ResultSet results = qexec.execSelect();
+            List<String> pairs = new ArrayList<>();
+            while (results.hasNext()) {
+                QuerySolution solution = results.nextSolution();
+                String person = solution.getResource("person").getURI();
+                String connection = solution.getResource("connection").getURI();
+                pairs.add(person + " -> " + connection);
+            }
+
+            // Should return 3 connections
+            assertEquals(3, pairs.size(), "Should return 3 connections");
+            assertTrue(pairs.contains("http://example.org/alice -> http://example.org/bob"), 
+                "Should include alice knows bob");
+            assertTrue(pairs.contains("http://example.org/alice -> http://example.org/charlie"), 
+                "Should include alice works with charlie");
+            assertTrue(pairs.contains("http://example.org/bob -> http://example.org/diana"), 
+                "Should include bob works with diana");
+        }
+    }
+
+    @Test
+    @DisplayName("Test UNION with concrete subjects")
+    public void testUnionWithConcreteSubjects() {
+        // Add test data
+        var alice = model.createResource("http://example.org/alice");
+        var bob = model.createResource("http://example.org/bob");
+        var charlie = model.createResource("http://example.org/charlie");
+        var diana = model.createResource("http://example.org/diana");
+        
+        var knows = model.createProperty("http://xmlns.com/foaf/0.1/knows");
+        
+        alice.addProperty(knows, charlie);
+        bob.addProperty(knows, diana);
+
+        // Query friends of either alice or bob using UNION
+        String sparql = """
+            PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+            SELECT ?friend WHERE {
+                { <http://example.org/alice> foaf:knows ?friend }
+                UNION
+                { <http://example.org/bob> foaf:knows ?friend }
+            }
+            ORDER BY ?friend
+            """;
+
+        Query query = QueryFactory.create(sparql);
+        try (QueryExecution qexec = QueryExecutionFactory.create(query, model)) {
+            ResultSet results = qexec.execSelect();
+            Set<String> friends = new HashSet<>();
+            while (results.hasNext()) {
+                QuerySolution solution = results.nextSolution();
+                friends.add(solution.getResource("friend").getURI());
+            }
+
+            // Should return Charlie and Diana
+            assertEquals(2, friends.size(), "Should return 2 friends");
+            assertTrue(friends.contains("http://example.org/charlie"), "Should include charlie");
+            assertTrue(friends.contains("http://example.org/diana"), "Should include diana");
+        }
+    }
+
+    @Test
+    @DisplayName("Test UNION with multi-triple patterns")
+    public void testUnionWithMultiTriplePatterns() {
+        // Add test data with students and teachers
+        var alice = model.createResource("http://example.org/alice");
+        var bob = model.createResource("http://example.org/bob");
+        var charlie = model.createResource("http://example.org/charlie");
+        
+        var studentType = model.createResource("http://example.org/Student");
+        var teacherType = model.createResource("http://example.org/Teacher");
+        var name = model.createProperty("http://xmlns.com/foaf/0.1/name");
+        
+        alice.addProperty(RDF.type, studentType);
+        alice.addProperty(name, "Alice");
+        
+        bob.addProperty(RDF.type, teacherType);
+        bob.addProperty(name, "Bob");
+        
+        charlie.addProperty(RDF.type, studentType);
+        charlie.addProperty(name, "Charlie");
+
+        // Query using UNION with multiple triples per branch
+        String sparql = """
+            PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+            PREFIX ex: <http://example.org/>
+            SELECT ?person ?name WHERE {
+                { ?person a ex:Student . ?person foaf:name ?name }
+                UNION
+                { ?person a ex:Teacher . ?person foaf:name ?name }
+            }
+            ORDER BY ?name
+            """;
+
+        Query query = QueryFactory.create(sparql);
+        try (QueryExecution qexec = QueryExecutionFactory.create(query, model)) {
+            ResultSet results = qexec.execSelect();
+            List<String> names = new ArrayList<>();
+            while (results.hasNext()) {
+                QuerySolution solution = results.nextSolution();
+                names.add(solution.getLiteral("name").getString());
+            }
+
+            // Should return all three names
+            assertEquals(3, names.size(), "Should return 3 names");
+            assertEquals("Alice", names.get(0), "First should be Alice");
+            assertEquals("Bob", names.get(1), "Second should be Bob");
+            assertEquals("Charlie", names.get(2), "Third should be Charlie");
+        }
+    }
+
+    @Test
+    @DisplayName("Test UNION with overlapping results")
+    public void testUnionWithOverlappingResults() {
+        // Add a person who is both student and teacher
+        var alice = model.createResource("http://example.org/alice");
+        var bob = model.createResource("http://example.org/bob");
+        
+        var studentType = model.createResource("http://example.org/Student");
+        var teacherType = model.createResource("http://example.org/Teacher");
+        
+        // Alice is both student and teacher
+        alice.addProperty(RDF.type, studentType);
+        alice.addProperty(RDF.type, teacherType);
+        
+        // Bob is only a student
+        bob.addProperty(RDF.type, studentType);
+
+        // Query using UNION - alice should appear in both branches
+        String sparql = """
+            PREFIX ex: <http://example.org/>
+            SELECT ?person WHERE {
+                { ?person a ex:Student }
+                UNION
+                { ?person a ex:Teacher }
+            }
+            ORDER BY ?person
+            """;
+
+        Query query = QueryFactory.create(sparql);
+        try (QueryExecution qexec = QueryExecutionFactory.create(query, model)) {
+            ResultSet results = qexec.execSelect();
+            List<String> persons = new ArrayList<>();
+            while (results.hasNext()) {
+                QuerySolution solution = results.nextSolution();
+                persons.add(solution.getResource("person").getURI());
+            }
+
+            // UNION without DISTINCT may return duplicates
+            // But the result should include both alice and bob
+            assertTrue(persons.size() >= 2, "Should have at least 2 results");
+            
+            // Convert to set to check unique values
+            Set<String> uniquePersons = new HashSet<>(persons);
+            assertEquals(2, uniquePersons.size(), "Should have 2 unique persons");
+            assertTrue(uniquePersons.contains("http://example.org/alice"), "Should include alice");
+            assertTrue(uniquePersons.contains("http://example.org/bob"), "Should include bob");
+        }
+    }
+
+    @Test
+    @DisplayName("Test UNION with property queries")
+    public void testUnionWithProperties() {
+        // Add test data with different properties
+        var alice = model.createResource("http://example.org/alice");
+        var bob = model.createResource("http://example.org/bob");
+        
+        var email = model.createProperty("http://xmlns.com/foaf/0.1/email");
+        var phone = model.createProperty("http://xmlns.com/foaf/0.1/phone");
+        
+        alice.addProperty(email, "alice@example.org");
+        bob.addProperty(phone, "555-1234");
+
+        // Query using UNION to find any contact info
+        String sparql = """
+            PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+            SELECT ?person ?contact WHERE {
+                { ?person foaf:email ?contact }
+                UNION
+                { ?person foaf:phone ?contact }
+            }
+            ORDER BY ?person
+            """;
+
+        Query query = QueryFactory.create(sparql);
+        try (QueryExecution qexec = QueryExecutionFactory.create(query, model)) {
+            ResultSet results = qexec.execSelect();
+            List<String> contacts = new ArrayList<>();
+            while (results.hasNext()) {
+                QuerySolution solution = results.nextSolution();
+                String person = solution.getResource("person").getURI();
+                String contact = solution.getLiteral("contact").getString();
+                contacts.add(person + ": " + contact);
+            }
+
+            // Should return both contacts
+            assertEquals(2, contacts.size(), "Should return 2 contacts");
+            assertTrue(contacts.stream().anyMatch(c -> c.contains("alice@example.org")), 
+                "Should include alice's email");
+            assertTrue(contacts.stream().anyMatch(c -> c.contains("555-1234")), 
+                "Should include bob's phone");
+        }
+    }
+
+    @Test
+    @DisplayName("Test nested UNION patterns")
+    public void testNestedUnionPatterns() {
+        // Add test data with multiple types
+        var alice = model.createResource("http://example.org/alice");
+        var bob = model.createResource("http://example.org/bob");
+        var charlie = model.createResource("http://example.org/charlie");
+        var diana = model.createResource("http://example.org/diana");
+        
+        var studentType = model.createResource("http://example.org/Student");
+        var teacherType = model.createResource("http://example.org/Teacher");
+        var staffType = model.createResource("http://example.org/Staff");
+        
+        alice.addProperty(RDF.type, studentType);
+        bob.addProperty(RDF.type, teacherType);
+        charlie.addProperty(RDF.type, staffType);
+        diana.addProperty(RDF.type, studentType);
+
+        // Query with nested UNION (teacher or staff is academic)
+        String sparql = """
+            PREFIX ex: <http://example.org/>
+            SELECT ?person WHERE {
+                { ?person a ex:Student }
+                UNION
+                { { ?person a ex:Teacher } UNION { ?person a ex:Staff } }
+            }
+            ORDER BY ?person
+            """;
+
+        Query query = QueryFactory.create(sparql);
+        try (QueryExecution qexec = QueryExecutionFactory.create(query, model)) {
+            ResultSet results = qexec.execSelect();
+            Set<String> persons = new HashSet<>();
+            while (results.hasNext()) {
+                QuerySolution solution = results.nextSolution();
+                persons.add(solution.getResource("person").getURI());
+            }
+
+            // Should return all four people
+            assertEquals(4, persons.size(), "Should return 4 people");
+            assertTrue(persons.contains("http://example.org/alice"));
+            assertTrue(persons.contains("http://example.org/bob"));
+            assertTrue(persons.contains("http://example.org/charlie"));
+            assertTrue(persons.contains("http://example.org/diana"));
+        }
+    }
 }

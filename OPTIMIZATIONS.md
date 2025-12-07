@@ -172,7 +172,7 @@ Currently, the pushdown optimizer supports:
 | Closed-chain variable objects | ✅ | `?a <pred> ?b . ?b <pred> ?a` (mutual references) |
 | OPTIONAL patterns | ✅ | `OPTIONAL { ?s ?p ?o }` (uses Cypher OPTIONAL MATCH) |
 | FILTER expressions | ✅ | `FILTER(?age < 30)` (translates to Cypher WHERE clause) |
-| UNION patterns | ❌ (fallback) | Complex alternative patterns |
+| UNION patterns | ✅ | `{ ?s rdf:type <TypeA> } UNION { ?s rdf:type <TypeB> }` (alternative patterns) |
 
 #### Variable Predicate Support
 
@@ -1105,33 +1105,293 @@ RETURN person.uri AS person, person.`foaf:age` AS age
 
 ### UNION Patterns
 
-**Challenge**: SPARQL `UNION` combines results from alternative patterns.
+> **Status**: ✅ **IMPLEMENTED**  
+> **Tests**: See [SparqlToCypherCompilerTest.java](jena-falkordb-adapter/src/test/java/com/falkordb/jena/query/SparqlToCypherCompilerTest.java) (`testUnion*` methods) and [FalkorDBQueryPushdownTest.java](jena-falkordb-adapter/src/test/java/com/falkordb/jena/query/FalkorDBQueryPushdownTest.java) (`testUnion*` methods)  
+> **Examples**: See [samples/union-patterns/](samples/union-patterns/)  
+> **Documentation**: See [UNION Patterns section](#union-patterns) below for complete documentation
 
-**Implementation Strategy**:
-1. In `FalkorDBOpExecutor`, intercept `OpUnion`
-2. Compile each branch separately and combine with Cypher `UNION`:
+SPARQL `UNION` patterns are now automatically translated to Cypher `UNION` queries. This allows combining results from alternative query patterns in a single database query, avoiding multiple round trips.
+
+**The Problem:**
+
+Without UNION pattern pushdown, SPARQL UNION requires executing each branch separately and combining results on the client side:
 
 ```sparql
-# SPARQL
+# SPARQL: Find all people who are either students or teachers
 SELECT ?person WHERE {
-    { ?person rdf:type <Student> }
+    { ?person rdf:type foaf:Student }
     UNION
-    { ?person rdf:type <Teacher> }
+    { ?person rdf:type foaf:Teacher }
+}
+```
+
+Gets executed as:
+1. Query 1: `find all persons of type Student` → Returns N students
+2. Query 2: `find all persons of type Teacher` → Returns M teachers
+3. Client combines results
+
+This results in 2 database round trips plus client-side merging.
+
+**The Solution:**
+
+The query pushdown mechanism translates SPARQL UNION patterns to a single Cypher `UNION` query:
+
+```cypher
+# Compiled Cypher:
+MATCH (person:Resource:`http://xmlns.com/foaf/0.1/Student`)
+RETURN person.uri AS person
+UNION
+MATCH (person:Resource:`http://xmlns.com/foaf/0.1/Teacher`)
+RETURN person.uri AS person
+```
+
+This executes as a single database operation, with FalkorDB handling the union internally.
+
+**Supported UNION Patterns:**
+
+| Pattern Type | Supported | Example |
+|-------------|-----------|---------|
+| Type patterns | ✅ | `{ ?s rdf:type <TypeA> } UNION { ?s rdf:type <TypeB> }` |
+| Relationship patterns | ✅ | `{ ?s foaf:knows ?o } UNION { ?s foaf:worksWith ?o }` |
+| Property patterns | ✅ | `{ ?s foaf:email ?v } UNION { ?s foaf:phone ?v }` |
+| Concrete subjects | ✅ | `{ <alice> foaf:knows ?f } UNION { <bob> foaf:knows ?f }` |
+| Multi-triple patterns | ✅ | `{ ?s rdf:type <Student> . ?s foaf:age 20 } UNION { ?s rdf:type <Teacher> . ?s foaf:age 30 }` |
+| Nested UNION | ✅ | `{ ... } UNION { { ... } UNION { ... } }` |
+| UNION with variable predicates | ❌ (fallback) | Requires each branch to avoid variable predicates |
+| UNION with unsupported patterns | ❌ (fallback) | Falls back if any branch can't compile |
+
+**Example 1: Basic Type UNION**
+
+```sparql
+# SPARQL with UNION
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+SELECT ?person WHERE {
+    { ?person rdf:type foaf:Student }
+    UNION
+    { ?person rdf:type foaf:Teacher }
 }
 ```
 
 ```cypher
-# Cypher
-MATCH (person:Resource:`Student`)
+# Generated Cypher with UNION
+MATCH (person:Resource:`http://xmlns.com/foaf/0.1/Student`)
 RETURN person.uri AS person
 UNION
-MATCH (person:Resource:`Teacher`)
+MATCH (person:Resource:`http://xmlns.com/foaf/0.1/Teacher`)
 RETURN person.uri AS person
 ```
 
-**Files to modify**:
-- `FalkorDBOpExecutor.java`: Override `execute(OpUnion, QueryIterator)` method
-- `SparqlToCypherCompiler.java`: Add `translateUnionPattern()` method
+**Example 2: UNION with Relationships**
+
+```sparql
+# SPARQL: Find all connections (friends or colleagues)
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX ex: <http://example.org/>
+
+SELECT ?person ?connection WHERE {
+    { ?person foaf:knows ?connection }
+    UNION
+    { ?person ex:worksWith ?connection }
+}
+```
+
+```cypher
+# Generated Cypher
+MATCH (person:Resource)-[:`http://xmlns.com/foaf/0.1/knows`]->(connection:Resource)
+RETURN person.uri AS person, connection.uri AS connection
+UNION
+MATCH (person:Resource)-[:`http://example.org/worksWith`]->(connection:Resource)
+RETURN person.uri AS person, connection.uri AS connection
+```
+
+**Example 3: UNION with Concrete Subjects**
+
+```sparql
+# SPARQL: Get friends of either Alice or Bob
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT ?friend WHERE {
+    { <http://example.org/alice> foaf:knows ?friend }
+    UNION
+    { <http://example.org/bob> foaf:knows ?friend }
+}
+```
+
+```cypher
+# Generated Cypher (parameterized)
+MATCH (s:Resource {uri: $p0})-[:`http://xmlns.com/foaf/0.1/knows`]->(friend:Resource)
+RETURN friend.uri AS friend
+UNION
+MATCH (s:Resource {uri: $p1})-[:`http://xmlns.com/foaf/0.1/knows`]->(friend:Resource)
+RETURN friend.uri AS friend
+
+# Parameters: {p0: "http://example.org/alice", p1: "http://example.org/bob"}
+```
+
+**Example 4: UNION with Multi-Triple Patterns**
+
+```sparql
+# SPARQL: Find all students aged 20 or teachers aged 30
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX ex: <http://example.org/>
+
+SELECT ?person WHERE {
+    { ?person rdf:type ex:Student . ?person foaf:age 20 }
+    UNION
+    { ?person rdf:type ex:Teacher . ?person foaf:age 30 }
+}
+```
+
+```cypher
+# Generated Cypher
+MATCH (person:Resource:`http://example.org/Student`)
+WHERE person.`http://xmlns.com/foaf/0.1/age` IS NOT NULL
+  AND person.`http://xmlns.com/foaf/0.1/age` = $p0
+RETURN person.uri AS person
+UNION
+MATCH (person:Resource:`http://example.org/Teacher`)
+WHERE person.`http://xmlns.com/foaf/0.1/age` IS NOT NULL
+  AND person.`http://xmlns.com/foaf/0.1/age` = $p1
+RETURN person.uri AS person
+
+# Parameters: {p0: 20, p1: 30}
+```
+
+**Example 5: UNION with Property Values**
+
+```sparql
+# SPARQL: Find any contact info (email or phone)
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT ?person ?contact WHERE {
+    { ?person foaf:email ?contact }
+    UNION
+    { ?person foaf:phone ?contact }
+}
+```
+
+```cypher
+# Generated Cypher
+MATCH (person:Resource)
+WHERE person.`http://xmlns.com/foaf/0.1/email` IS NOT NULL
+RETURN person.uri AS person, person.`http://xmlns.com/foaf/0.1/email` AS contact
+UNION
+MATCH (person:Resource)
+WHERE person.`http://xmlns.com/foaf/0.1/phone` IS NOT NULL
+RETURN person.uri AS person, person.`http://xmlns.com/foaf/0.1/phone` AS contact
+```
+
+**Key Benefits:**
+
+- ✅ **Single query execution**: One database round-trip instead of N queries
+- ✅ **Native FalkorDB optimization**: Database handles union efficiently
+- ✅ **Handles overlapping results**: Returns all matches (duplicates possible without DISTINCT)
+- ✅ **Transparent**: Works automatically for supported UNION patterns
+- ✅ **Parameter handling**: Automatically renames conflicting parameters between branches
+
+**Performance Comparison:**
+
+| Scenario | Without UNION Pushdown | With UNION Pushdown | Improvement |
+|----------|----------------------|---------------------|-------------|
+| 2 alternative type queries | 2 queries | 1 query | 2x fewer calls |
+| N alternative patterns | N queries | 1 query | Nx fewer calls |
+| UNION with relationships | N queries + merge | 1 query | Nx fewer calls |
+| Nested UNION (3 branches) | 3 queries + merge | 1 query | 3x fewer calls |
+
+**Java Usage Example:**
+
+```java
+// Setup: Create people with different types
+Model model = FalkorDBModelFactory.createModel("myGraph");
+
+var alice = model.createResource("http://example.org/alice");
+var bob = model.createResource("http://example.org/bob");
+var charlie = model.createResource("http://example.org/charlie");
+
+var studentType = model.createResource("http://example.org/Student");
+var teacherType = model.createResource("http://example.org/Teacher");
+
+alice.addProperty(RDF.type, studentType);
+bob.addProperty(RDF.type, teacherType);
+charlie.addProperty(RDF.type, studentType);
+
+// Query with UNION - automatically uses pushdown
+String sparql = """
+    PREFIX ex: <http://example.org/>
+    SELECT ?person WHERE {
+        { ?person a ex:Student }
+        UNION
+        { ?person a ex:Teacher }
+    }
+    ORDER BY ?person
+    """;
+
+Query query = QueryFactory.create(sparql);
+try (QueryExecution qexec = QueryExecutionFactory.create(query, model)) {
+    ResultSet results = qexec.execSelect();
+    while (results.hasNext()) {
+        QuerySolution solution = results.nextSolution();
+        String person = solution.getResource("person").getURI();
+        System.out.println("Person: " + person);
+    }
+}
+
+// Output:
+// Person: http://example.org/alice
+// Person: http://example.org/bob
+// Person: http://example.org/charlie
+```
+
+**Limitations:**
+
+The UNION pattern optimization has the following limitations:
+
+1. **Variable predicates not supported**: Each UNION branch must have concrete predicates. Patterns like `{ ?s ?p ?o } UNION { ?s ?p2 ?o2 }` will fall back to standard evaluation.
+
+2. **Existing BGP limitations apply**: Each UNION branch is compiled independently, so existing limitations for BGPs apply to each branch:
+   - Multi-triple patterns with ambiguous variable objects require the object to be used as a subject
+   - Complex patterns that can't be compiled individually will cause the entire UNION to fall back
+
+3. **DISTINCT not automatic**: SPARQL UNION doesn't eliminate duplicates by default. If the same result appears in multiple branches, it will be returned multiple times. Use `SELECT DISTINCT` if needed:
+   ```sparql
+   SELECT DISTINCT ?person WHERE {
+       { ?person rdf:type ex:Student }
+       UNION
+       { ?person rdf:type ex:Teacher }
+   }
+   ```
+
+4. **No MINUS support yet**: SPARQL MINUS (set difference) is not yet optimized and will fall back to standard evaluation.
+
+5. **Parameter conflicts handled but may affect readability**: When both branches use the same parameter names (e.g., for URIs), the compiler renames parameters in the right branch (e.g., `$p0` becomes `$p0_r`). This is transparent but may make debugging more complex.
+
+6. **Fallback on compilation failure**: If any branch of the UNION cannot be compiled to Cypher, the entire UNION operation falls back to standard Jena evaluation. Check logs for "UNION pushdown failed, falling back" messages.
+
+**When Pushdown Fails:**
+
+The optimizer will fall back to standard Jena evaluation in these cases:
+
+- One or both branches are not BGPs (e.g., contain FILTER, OPTIONAL)
+- One or both branches contain unsupported patterns
+- Any branch contains variable predicates
+- Compilation errors occur
+
+**Example of Fallback:**
+
+```sparql
+# This will fall back because of variable predicate
+SELECT ?s ?p ?o WHERE {
+    { ?s ?p ?o }  # Variable predicate - not supported
+    UNION
+    { ?s foaf:name ?o }
+}
+```
+
+**Implementation:**
+- `FalkorDBOpExecutor.java`: `execute(OpUnion, QueryIterator)` method intercepts UNION operations
+- `SparqlToCypherCompiler.java`: `translateUnion()` method generates Cypher UNION queries
+- Automatic parameter renaming to avoid conflicts between branches
+- Full OpenTelemetry tracing support with span `FalkorDBOpExecutor.executeUnion`
 
 ### Aggregations
 

@@ -608,7 +608,7 @@ public class SparqlToCypherCompilerTest {
 
     @Test
     @DisplayName("Test OPTIONAL with FILTER less than")
-    public void testOptionalWithFilterLessThan() {
+    public void testOptionalWithFilterLessThan() throws SparqlToCypherCompiler.CannotCompileException {
         // Required: ?person name ?name, ?person age ?age
         // Filter: ?age < 30
         // Optional: ?person email ?email
@@ -660,7 +660,7 @@ public class SparqlToCypherCompilerTest {
 
     @Test
     @DisplayName("Test OPTIONAL with FILTER equals")
-    public void testOptionalWithFilterEquals() {
+    public void testOptionalWithFilterEquals() throws SparqlToCypherCompiler.CannotCompileException {
         BasicPattern required = new BasicPattern();
         required.add(Triple.create(
             NodeFactory.createVariable("person"),
@@ -696,7 +696,7 @@ public class SparqlToCypherCompilerTest {
 
     @Test
     @DisplayName("Test OPTIONAL with FILTER AND condition")
-    public void testOptionalWithFilterAnd() {
+    public void testOptionalWithFilterAnd() throws SparqlToCypherCompiler.CannotCompileException {
         BasicPattern required = new BasicPattern();
         required.add(Triple.create(
             NodeFactory.createVariable("person"),

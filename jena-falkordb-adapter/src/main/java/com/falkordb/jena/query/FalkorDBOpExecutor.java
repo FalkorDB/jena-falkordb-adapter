@@ -401,7 +401,9 @@ public final class FalkorDBOpExecutor extends OpExecutor {
             // Only treat as URI if it starts with a known URI scheme
             // and passes validation
             if (strVal.startsWith("http://") || strVal.startsWith("https://")
-                    || strVal.startsWith("urn:") || strVal.startsWith("file://")) {
+                    || strVal.startsWith("urn:") || strVal.startsWith("file://")
+                    || strVal.startsWith("mailto:") || strVal.startsWith("ftp://")
+                    || strVal.startsWith("ftps://")) {
                 try {
                     // Validate the URI is well-formed
                     java.net.URI uri = java.net.URI.create(strVal);

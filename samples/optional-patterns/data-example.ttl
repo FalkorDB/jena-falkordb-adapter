@@ -1,0 +1,40 @@
+@prefix ex:   <http://example.org/> .
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+
+# Sample data for demonstrating OPTIONAL patterns
+# Some people have complete information, others have partial data
+
+# Alice - has all information
+ex:person/alice 
+    a foaf:Person ;
+    foaf:name "Alice" ;
+    foaf:age 30 ;
+    foaf:email <mailto:alice@example.org> ;
+    foaf:phone "+1-555-0101" ;
+    foaf:knows ex:person/bob .
+
+# Bob - has name and age, but no email or phone
+ex:person/bob 
+    a foaf:Person ;
+    foaf:name "Bob" ;
+    foaf:age 35 ;
+    foaf:knows ex:person/charlie .
+
+# Charlie - has only name
+ex:person/charlie 
+    a foaf:Person ;
+    foaf:name "Charlie" .
+
+# Diana - has name and email, but no age
+ex:person/diana 
+    a foaf:Person ;
+    foaf:name "Diana" ;
+    foaf:email <mailto:diana@example.org> .
+
+# Eve - has name, email, and phone
+ex:person/eve 
+    a foaf:Person ;
+    foaf:name "Eve" ;
+    foaf:email <mailto:eve@example.org> ;
+    foaf:phone "+1-555-0105" .

@@ -32,6 +32,9 @@ This is a multi-module Maven project consisting of:
 - ✅ **Automatic URI indexing** for optimal query performance
 - ✅ **Custom driver support** for advanced configuration
 - ✅ **Automatic query pushdown** - SPARQL to Cypher translation enabled by default
+  - Variable objects (queries both properties and relationships with UNION)
+  - Variable predicates (queries all properties, relationships, and types)
+  - Closed-chain patterns (mutual references)
 - ✅ **Magic property (falkor:cypher)** for direct Cypher execution within SPARQL
 - ✅ **Fuseki SPARQL server** with FalkorDB backend
 - ✅ **Inference support** with rule-based reasoning (RDFS/OWL rules)

@@ -586,9 +586,10 @@ public final class SparqlToCypherCompiler {
         if (triple.getSubject().isVariable()) {
             cypher.append("(").append(subjectVar).append(":Resource)");
         } else {
-            // Reuse the parameter from above
+            // Reuse the parameter name from Part 1 (stored in parameters map)
+            String firstParamName = parameters.keySet().iterator().next();
             cypher.append("(").append(subjectVar)
-                  .append(":Resource {uri: $p0})");
+                  .append(":Resource {uri: $").append(firstParamName).append("})");
         }
 
         // Check if property exists

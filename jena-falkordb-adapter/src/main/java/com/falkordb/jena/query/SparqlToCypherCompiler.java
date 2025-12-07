@@ -604,6 +604,124 @@ public final class SparqlToCypherCompiler {
     }
 
     /**
+     * Translate a SPARQL UNION pattern to a Cypher query.
+     *
+     * <p>This method handles SPARQL UNION patterns by translating them to Cypher
+     * UNION queries. Each branch is compiled separately and combined with UNION.</p>
+     *
+     * <h3>Example:</h3>
+     * <pre>{@code
+     * // SPARQL:
+     * // SELECT ?person WHERE {
+     * //   { ?person rdf:type foaf:Student }
+     * //   UNION
+     * //   { ?person rdf:type foaf:Teacher }
+     * // }
+     * 
+     * // Compiled Cypher:
+     * // MATCH (person:Resource:`http://xmlns.com/foaf/0.1/Student`)
+     * // RETURN person.uri AS person
+     * // UNION
+     * // MATCH (person:Resource:`http://xmlns.com/foaf/0.1/Teacher`)
+     * // RETURN person.uri AS person
+     * }</pre>
+     *
+     * @param leftBGP the left Basic Graph Pattern
+     * @param rightBGP the right Basic Graph Pattern
+     * @return the compilation result containing Cypher query and metadata
+     * @throws CannotCompileException if either BGP cannot be compiled
+     */
+    public static CompilationResult translateUnion(
+            final BasicPattern leftBGP,
+            final BasicPattern rightBGP)
+            throws CannotCompileException {
+        
+        if (leftBGP == null || leftBGP.isEmpty()) {
+            throw new CannotCompileException(
+                "Left BGP cannot be empty for UNION pattern");
+        }
+        
+        if (rightBGP == null || rightBGP.isEmpty()) {
+            throw new CannotCompileException(
+                "Right BGP cannot be empty for UNION pattern");
+        }
+        
+        String inputPattern = "{ " + formatBGP(leftBGP) + " } UNION { " + formatBGP(rightBGP) + " }";
+        
+        Span span = TRACER.spanBuilder("SparqlToCypherCompiler.translateUnion")
+            .setSpanKind(SpanKind.INTERNAL)
+            .setAttribute(ATTR_OPTIMIZATION_TYPE, "UNION_PUSHDOWN")
+            .setAttribute(ATTR_TRIPLE_COUNT, (long) (leftBGP.size() + rightBGP.size()))
+            .setAttribute(ATTR_INPUT_BGP, inputPattern)
+            .startSpan();
+
+        try (Scope scope = span.makeCurrent()) {
+            // Compile left branch
+            CompilationResult leftResult = translate(leftBGP);
+            
+            // Compile right branch
+            CompilationResult rightResult = translate(rightBGP);
+            
+            // Merge parameters from both branches with unique names
+            Map<String, Object> parameters = new HashMap<>(leftResult.parameters());
+            Map<String, Object> rightParams = rightResult.parameters();
+            
+            // Check if parameter names conflict and rename if necessary
+            String rightQuery = rightResult.cypherQuery();
+            for (Map.Entry<String, Object> entry : rightParams.entrySet()) {
+                String paramName = entry.getKey();
+                if (parameters.containsKey(paramName)) {
+                    // Conflict - need to rename parameter in right query
+                    String newParamName = paramName + "_r";
+                    int counter = 1;
+                    while (parameters.containsKey(newParamName) || rightParams.containsKey(newParamName)) {
+                        newParamName = paramName + "_r" + counter++;
+                    }
+                    // Replace parameter name in right query
+                    rightQuery = rightQuery.replace("$" + paramName, "$" + newParamName);
+                    parameters.put(newParamName, entry.getValue());
+                } else {
+                    parameters.put(paramName, entry.getValue());
+                }
+            }
+            
+            // Combine variable mappings - they should be consistent for UNION
+            Map<String, String> variableMapping = new HashMap<>(leftResult.variableMapping());
+            variableMapping.putAll(rightResult.variableMapping());
+            
+            // Combine queries with UNION
+            StringBuilder cypherQuery = new StringBuilder();
+            cypherQuery.append(leftResult.cypherQuery());
+            cypherQuery.append("\nUNION\n");
+            cypherQuery.append(rightQuery);
+            
+            String finalQuery = cypherQuery.toString();
+            
+            span.setAttribute(ATTR_OUTPUT_CYPHER, finalQuery);
+            span.setAttribute(ATTR_PARAM_COUNT, (long) parameters.size());
+            span.setAttribute(ATTR_VAR_COUNT, (long) variableMapping.size());
+            span.setStatus(StatusCode.OK);
+            
+            if (LOGGER.isDebugEnabled()) {
+                LOGGER.debug("Compiled UNION pattern to Cypher:\n{}", finalQuery);
+            }
+            
+            return new CompilationResult(finalQuery, parameters, variableMapping);
+            
+        } catch (CannotCompileException e) {
+            span.setStatus(StatusCode.ERROR, e.getMessage());
+            span.recordException(e);
+            throw e;
+        } catch (Exception e) {
+            span.setStatus(StatusCode.ERROR, e.getMessage());
+            span.recordException(e);
+            throw new CannotCompileException("Error compiling UNION: " + e.getMessage());
+        } finally {
+            span.end();
+        }
+    }
+
+    /**
      * Translate a SPARQL Basic Graph Pattern to a Cypher query.
      *
      * @param bgp the Basic Graph Pattern to translate

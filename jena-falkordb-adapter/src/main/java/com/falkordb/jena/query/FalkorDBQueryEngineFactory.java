@@ -232,24 +232,26 @@ public final class FalkorDBQueryEngineFactory implements QueryEngineFactory {
     /**
      * Check if a graph is backed by FalkorDB.
      *
+     * <p>Note: This method returns false for InfGraphs even if they wrap
+     * a FalkorDB graph, because query pushdown would bypass the inference
+     * layer. Queries against inference models must use standard Jena
+     * evaluation to ensure inference rules are applied correctly.</p>
+     *
      * @param graph the graph to check
-     * @return true if the graph is a FalkorDBGraph
+     * @return true if the graph is a FalkorDBGraph (not wrapped in inference)
      */
     private boolean isFalkorDBGraph(final Graph graph) {
         if (graph == null) {
             return false;
         }
 
-        if (graph instanceof FalkorDBGraph) {
-            return true;
+        // Don't accept InfGraphs - they need standard Jena evaluation
+        // to apply inference rules correctly
+        if (graph instanceof InfGraph) {
+            return false;
         }
 
-        // Unwrap inference graphs
-        if (graph instanceof InfGraph infGraph) {
-            return isFalkorDBGraph(infGraph.getRawGraph());
-        }
-
-        return false;
+        return graph instanceof FalkorDBGraph;
     }
 
     /**

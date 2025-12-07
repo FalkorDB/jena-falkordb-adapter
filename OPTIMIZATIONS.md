@@ -155,8 +155,8 @@ Currently, the pushdown optimizer supports:
 | rdf:type with concrete type | ✅ | `?s rdf:type <Type>` |
 | Concrete literal values | ✅ | `?s <pred> "value"` |
 | Variable predicates (single triple) | ✅ | `<uri> ?p ?o` (uses UNION for properties + relationships) |
+| Variable objects (single triple) | ✅ | `?s <pred> ?o` (uses UNION for properties + relationships) |
 | Closed-chain variable objects | ✅ | `?a <pred> ?b . ?b <pred> ?a` (mutual references) |
-| Variable objects (unknown type) | ❌ (fallback) | `?s <pred> ?o` where ?o might be literal |
 | OPTIONAL, FILTER, UNION | ❌ (fallback) | Complex patterns |
 
 #### Variable Predicate Support
@@ -195,6 +195,77 @@ This three-part UNION ensures that all triple patterns are retrieved, including:
 - Literal properties on nodes (Part 2)
 - `rdf:type` triples derived from node labels (Part 3)
 
+#### Variable Object Support
+
+> **Tests**: See [SparqlToCypherCompilerTest.java](jena-falkordb-adapter/src/test/java/com/falkordb/jena/query/SparqlToCypherCompilerTest.java) (`testSingleVariableObjectCompilesWithUnion`, `testConcreteSubjectWithVariableObjectCompilesWithUnion`, `testVariableObjectOptimizationStructure`, `testVariableObjectConcreteSubjectParameters`, `testVariableObjectReturnsCorrectVariables`) and [FalkorDBQueryPushdownTest.java](jena-falkordb-adapter/src/test/java/com/falkordb/jena/query/FalkorDBQueryPushdownTest.java) (`testVariableObjectOptimization*`)
+
+Variable objects are supported for single-triple patterns. When a variable object `?o` could be either a URI (relationship target) or a literal (property value), the compiler generates a UNION query similar to variable predicates:
+
+```sparql
+# SPARQL: Get all values of a specific predicate
+SELECT ?value WHERE {
+    <http://example.org/person/alice> <http://xmlns.com/foaf/0.1/knows> ?value .
+}
+```
+
+```cypher
+# Compiled Cypher (using dual UNION):
+# Part 1: Relationships (edges)
+MATCH (s:Resource {uri: $p0})-[:`http://xmlns.com/foaf/0.1/knows`]->(o:Resource)
+RETURN s.uri AS _s, o.uri AS value
+UNION ALL
+# Part 2: Properties (node attributes)
+MATCH (s:Resource {uri: $p0})
+WHERE s.`http://xmlns.com/foaf/0.1/knows` IS NOT NULL
+RETURN s.uri AS _s, s.`http://xmlns.com/foaf/0.1/knows` AS value
+```
+
+This two-part UNION retrieves both:
+- Resource relationships (Part 1): When the predicate connects two nodes via an edge
+- Literal properties (Part 2): When the predicate is stored as a node property
+
+**Key Benefits:**
+- ✅ **Single query execution**: One database round-trip instead of multiple queries
+- ✅ **Handles mixed data**: Automatically retrieves both relationships and properties
+- ✅ **Efficient**: Uses native Cypher operations optimized by FalkorDB
+- ✅ **Transparent**: Works automatically for single-triple BGPs with variable objects
+
+**Example with Mixed Data:**
+
+```java
+// Add both property and relationship values for the same predicate
+var alice = model.createResource("http://example.org/person/alice");
+var bob = model.createResource("http://example.org/person/bob");
+var prop = model.createProperty("http://example.org/value");
+
+// Alice has a literal value
+alice.addProperty(prop, "literal value");
+// Bob has a resource value  
+var resource = model.createResource("http://example.org/resource1");
+bob.addProperty(prop, resource);
+
+// Query both - automatically uses UNION optimization
+String sparql = """
+    SELECT ?s ?o WHERE {
+        ?s <http://example.org/value> ?o .
+    }
+    """;
+
+Query query = QueryFactory.create(sparql);
+try (QueryExecution qexec = QueryExecutionFactory.create(query, model)) {
+    ResultSet results = qexec.execSelect();
+    while (results.hasNext()) {
+        QuerySolution solution = results.nextSolution();
+        // Will retrieve both Alice->literal and Bob->resource
+        System.out.println(solution.get("s") + " -> " + solution.get("o"));
+    }
+}
+```
+
+**Limitations:**
+- Only supports single-triple patterns (multi-triple patterns with variable objects fall back to standard evaluation)
+- Multi-triple patterns require the object variable to be used as a subject elsewhere (see Closed-Chain Variable Objects)
+
 #### Closed-Chain Variable Objects
 
 When a variable object is also used as a subject in another triple pattern, the compiler
@@ -217,13 +288,189 @@ RETURN a.uri AS a, b.uri AS b
 
 When a pattern cannot be pushed down, the optimizer automatically falls back to standard Jena evaluation.
 
+### Complete Examples
+
+#### Example 1: Query Person's Properties and Relationships
+
+```java
+// Setup: Create a person with both properties and relationships
+Model model = FalkorDBModelFactory.createModel("myGraph");
+
+var alice = model.createResource("http://example.org/person/alice");
+var bob = model.createResource("http://example.org/person/bob");
+var knows = model.createProperty("http://xmlns.com/foaf/0.1/knows");
+
+// Alice has a name property (literal)
+alice.addProperty(FOAF.name, "Alice");
+// Alice knows Bob (relationship)
+alice.addProperty(knows, bob);
+
+// Query using variable object optimization
+String sparql = """
+    PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+    SELECT ?value WHERE {
+        <http://example.org/person/alice> foaf:knows ?value .
+    }
+    """;
+
+Query query = QueryFactory.create(sparql);
+try (QueryExecution qexec = QueryExecutionFactory.create(query, model)) {
+    ResultSet results = qexec.execSelect();
+    while (results.hasNext()) {
+        QuerySolution solution = results.nextSolution();
+        // Will retrieve Bob (relationship target)
+        System.out.println("Value: " + solution.get("value"));
+    }
+}
+```
+
+**Generated Cypher:**
+```cypher
+-- Part 1: Query relationships
+MATCH (s:Resource {uri: $p0})-[:`http://xmlns.com/foaf/0.1/knows`]->(o:Resource)
+RETURN s.uri AS _s, o.uri AS value
+UNION ALL
+-- Part 2: Query properties
+MATCH (s:Resource {uri: $p0})
+WHERE s.`http://xmlns.com/foaf/0.1/knows` IS NOT NULL
+RETURN s.uri AS _s, s.`http://xmlns.com/foaf/0.1/knows` AS value
+```
+
+#### Example 2: Retrieve Mixed Data Types
+
+```java
+// Setup: Different resources with different value types
+var person1 = model.createResource("http://example.org/person1");
+var person2 = model.createResource("http://example.org/person2");
+var valueProp = model.createProperty("http://example.org/hasValue");
+
+// Person1 has a literal value
+person1.addProperty(valueProp, "literal string");
+
+// Person2 has a resource value
+var resource = model.createResource("http://example.org/resource1");
+person2.addProperty(valueProp, resource);
+
+// Query retrieves both types automatically
+String sparql = """
+    SELECT ?subject ?object WHERE {
+        ?subject <http://example.org/hasValue> ?object .
+    }
+    ORDER BY ?subject
+    """;
+
+Query query = QueryFactory.create(sparql);
+try (QueryExecution qexec = QueryExecutionFactory.create(query, model)) {
+    ResultSet results = qexec.execSelect();
+    while (results.hasNext()) {
+        QuerySolution solution = results.nextSolution();
+        String subject = solution.getResource("subject").getURI();
+        
+        if (solution.get("object").isLiteral()) {
+            String literal = solution.getLiteral("object").getString();
+            System.out.println(subject + " has literal: " + literal);
+        } else if (solution.get("object").isResource()) {
+            String resource = solution.getResource("object").getURI();
+            System.out.println(subject + " has resource: " + resource);
+        }
+    }
+}
+
+// Output:
+// http://example.org/person1 has literal: literal string
+// http://example.org/person2 has resource: http://example.org/resource1
+```
+
+#### Example 3: Variable Subject and Object
+
+```java
+// Setup: Multiple people with names
+var alice = model.createResource("http://example.org/person/alice");
+var bob = model.createResource("http://example.org/person/bob");
+
+alice.addProperty(FOAF.name, "Alice");
+bob.addProperty(FOAF.name, "Bob");
+
+// Both subject and object are variables - uses variable object optimization
+String sparql = """
+    PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+    SELECT ?person ?name WHERE {
+        ?person foaf:name ?name .
+    }
+    ORDER BY ?name
+    """;
+
+Query query = QueryFactory.create(sparql);
+try (QueryExecution qexec = QueryExecutionFactory.create(query, model)) {
+    ResultSet results = qexec.execSelect();
+    while (results.hasNext()) {
+        QuerySolution solution = results.nextSolution();
+        String person = solution.getResource("person").getURI();
+        String name = solution.getLiteral("name").getString();
+        System.out.println(person + " is named " + name);
+    }
+}
+
+// Output:
+// http://example.org/person/alice is named Alice
+// http://example.org/person/bob is named Bob
+```
+
+#### Example 4: Integration with Transactions (Bulk Load + Query)
+
+```java
+Model model = FalkorDBModelFactory.createModel("myGraph");
+
+// Bulk load with transaction optimization
+model.begin(ReadWrite.WRITE);
+try {
+    for (int i = 0; i < 100; i++) {
+        var person = model.createResource("http://example.org/person/" + i);
+        person.addProperty(FOAF.name, "Person " + i);
+        
+        if (i > 0) {
+            var previous = model.createResource("http://example.org/person/" + (i-1));
+            person.addProperty(FOAF.knows, previous);
+        }
+    }
+    model.commit();  // Bulk flush using UNWIND
+} catch (Exception e) {
+    model.abort();
+    throw e;
+} finally {
+    model.end();
+}
+
+// Query with variable object optimization
+String sparql = """
+    PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+    SELECT ?person ?value WHERE {
+        ?person foaf:knows ?value .
+    }
+    LIMIT 10
+    """;
+
+Query query = QueryFactory.create(sparql);
+try (QueryExecution qexec = QueryExecutionFactory.create(query, model)) {
+    ResultSet results = qexec.execSelect();
+    int count = 0;
+    while (results.hasNext()) {
+        results.nextSolution();
+        count++;
+    }
+    System.out.println("Found " + count + " relationships");
+}
+```
+
 ### Performance Gains
 
 | Query Type | Standard SPARQL | With Pushdown | Improvement |
 |------------|----------------|---------------|-------------|
+| Variable object queries | 2+ queries (property + relationship) | 1 UNION query | 2x fewer round trips |
 | Friends of Friends | ~N+1 round trips | 1 round trip | Nx fewer calls |
 | 3-hop traversal | ~N² round trips | 1 round trip | N²x fewer calls |
 | Type queries | Multiple queries | 1 query | Significant |
+| Mixed data retrieval | Separate queries for each type | Single UNION query | 2x-3x fewer calls |
 
 ## 3. Magic Property (Direct Cypher Execution)
 
@@ -411,31 +658,6 @@ try (QueryExecution qexec = QueryExecutionFactory.create(query, model)) {
 ## Future Improvements
 
 The query pushdown can be extended to support additional SPARQL patterns. Below are implementation suggestions for each:
-
-### Variable Objects (Querying Both Properties and Relationships)
-
-**Challenge**: When a variable object `?o` in `?s <pred> ?o` could be either a URI (relationship target) or a literal (property value), we need to query both.
-
-**Implementation Strategy**:
-1. In `SparqlToCypherCompiler.translate()`, detect patterns where the object is a variable that isn't used as a subject elsewhere
-2. Generate a UNION query similar to variable predicates:
-
-```cypher
-# Query relationships
-MATCH (s:Resource {uri: $subj})-[:`predicate`]->(o:Resource)
-RETURN s.uri AS s, o.uri AS o
-UNION ALL
-# Query properties
-MATCH (s:Resource {uri: $subj})
-WHERE s.`predicate` IS NOT NULL
-RETURN s.uri AS s, s.`predicate` AS o
-```
-
-3. In the result iterator, determine the RDF node type based on whether the value is a URI string or literal
-
-**Files to modify**:
-- `SparqlToCypherCompiler.java`: Add `translateVariableObjectPattern()` method
-- `FalkorDBOpExecutor.java`: Handle mixed URI/literal results in `convertToBinding()`
 
 ### OPTIONAL Patterns
 

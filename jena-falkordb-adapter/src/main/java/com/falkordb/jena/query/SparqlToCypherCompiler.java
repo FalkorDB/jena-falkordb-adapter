@@ -107,7 +107,7 @@ public final class SparqlToCypherCompiler {
      * OPTIONAL MATCH clauses. The required BGP is compiled first, followed by the
      * optional BGP with OPTIONAL MATCH.</p>
      * 
-     * <h2>Example:</h2>
+     * <h3>Example:</h3>
      * <pre>{@code
      * // SPARQL:
      * // SELECT ?person ?email WHERE {
@@ -177,13 +177,27 @@ public final class SparqlToCypherCompiler {
         
         List<Triple> optionalTriples = optionalBGP.getList();
         
-        // Check for variable predicates or variable objects in optional pattern
+        // Check for variable predicates in optional pattern
         boolean hasVariablePredicate = optionalTriples.stream()
             .anyMatch(t -> t.getPredicate().isVariable());
         
         if (hasVariablePredicate) {
             throw new CannotCompileException(
                 "Variable predicates in OPTIONAL patterns not yet supported");
+        }
+        
+        // Identify which variables in the optional pattern are resources (used as subjects)
+        Set<String> optionalResourceVariables = new HashSet<>();
+        for (Triple t : optionalTriples) {
+            if (t.getSubject().isVariable()) {
+                optionalResourceVariables.add(t.getSubject().getName());
+            }
+        }
+        // Also check required triples to see if optional variables are used as subjects there
+        for (Triple t : requiredBGP.getList()) {
+            if (t.getSubject().isVariable()) {
+                optionalResourceVariables.add(t.getSubject().getName());
+            }
         }
         
         // Process optional triples
@@ -218,8 +232,10 @@ public final class SparqlToCypherCompiler {
                           .append(":`").append(typeLabel)
                           .append("` {uri: $").append(paramName).append("})");
                 }
-            } else if (object.isLiteral()) {
+            } else if (object.isLiteral() || 
+                       (object.isVariable() && !optionalResourceVariables.contains(object.getName()))) {
                 // Handle literal property in optional pattern
+                // This includes concrete literals and variables that aren't used as subjects
                 String predUri = sanitizeCypherIdentifier(predicate.getURI());
                 
                 // Match node if not already declared
@@ -245,7 +261,7 @@ public final class SparqlToCypherCompiler {
                     // Map variable to property expression
                     variableMapping.put(object.getName(), 
                         subjectVar + ".`" + predUri + "`");
-                } else {
+                } else if (object.isLiteral()) {
                     // Concrete literal - match value
                     String paramName = "p" + paramCounter++;
                     parameters.put(paramName, object.getLiteralLexicalForm());

@@ -48,14 +48,11 @@ public class SparqlToCypherCompilerTest {
             NodeFactory.createVariable("fof")
         ));
 
-        // Should now compile successfully with variable objects treated as relationships or properties
-        // ?fof is treated as a relationship since it's an object variable
-        SparqlToCypherCompiler.CompilationResult result = 
+        // Should throw CannotCompileException because ?fof is a variable object
+        // not used as a subject in a multi-triple pattern
+        assertThrows(SparqlToCypherCompiler.CannotCompileException.class, () -> {
             SparqlToCypherCompiler.translate(bgp);
-        
-        assertNotNull(result);
-        assertNotNull(result.cypherQuery());
-        assertTrue(result.cypherQuery().contains("MATCH"));
+        }, "Multi-triple patterns with ambiguous variable objects should not compile");
     }
 
     @Test
@@ -215,14 +212,11 @@ public class SparqlToCypherCompilerTest {
             NodeFactory.createVariable("d")
         ));
 
-        // ?d is not used as subject, so it will be treated as a relationship
-        // This now compiles successfully
-        SparqlToCypherCompiler.CompilationResult result =
+        // ?d is not used as subject, so it's ambiguous (relationship or property)
+        // Should throw CannotCompileException
+        assertThrows(SparqlToCypherCompiler.CannotCompileException.class, () -> {
             SparqlToCypherCompiler.translate(bgp);
-        
-        assertNotNull(result);
-        assertNotNull(result.cypherQuery());
-        assertTrue(result.cypherQuery().contains("MATCH"));
+        }, "Multi-triple patterns with ambiguous variable objects should not compile");
     }
 
     @Test
@@ -307,14 +301,11 @@ public class SparqlToCypherCompilerTest {
             NodeFactory.createVariable("fof")
         ));
 
-        // ?fof is not used as subject, will be treated as a relationship
-        // This now compiles successfully
-        SparqlToCypherCompiler.CompilationResult result =
+        // ?fof is not used as subject, so it's ambiguous (relationship or property)
+        // Should throw CannotCompileException
+        assertThrows(SparqlToCypherCompiler.CannotCompileException.class, () -> {
             SparqlToCypherCompiler.translate(bgp);
-        
-        assertNotNull(result);
-        assertNotNull(result.cypherQuery());
-        assertTrue(result.cypherQuery().contains("MATCH"));
+        }, "Multi-triple patterns with ambiguous variable objects should not compile");
     }
 
     @Test

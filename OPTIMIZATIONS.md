@@ -349,10 +349,10 @@ This executes as a single database operation, with NULL returned for persons wit
 | Multiple OPTIONAL clauses | ✅ | Multiple separate OPTIONAL blocks |
 | OPTIONAL with multiple triples | ✅ | `OPTIONAL { ?s foaf:knows ?f . ?f foaf:name ?n }` |
 | Concrete subjects | ✅ | `OPTIONAL { <alice> foaf:email ?email }` |
-| FILTER in required part | ⚠️ (fallback) | Falls back to Jena evaluation |
+| FILTER in required part | ✅ | `FILTER(?age < 30)` before OPTIONAL |
 | Variable predicates in OPTIONAL | ❌ (fallback) | Not yet supported |
 
-**Note on FILTER**: When FILTER appears in the required pattern before OPTIONAL, the query automatically falls back to standard Jena evaluation. This ensures correct results while maintaining compatibility. The fallback is transparent and produces the expected results.
+**FILTER Support**: FILTER expressions in the required pattern are translated to Cypher WHERE clauses. Supported operators include comparisons (`<`, `<=`, `>`, `>=`, `=`, `<>`), logical operators (`AND`, `OR`, `NOT`), and work with both literal properties and node variables.
 
 **Example 1: Basic OPTIONAL with Relationship**
 
@@ -472,7 +472,20 @@ SELECT ?person ?name ?age ?email WHERE {
 }
 ```
 
-The FILTER is applied on the required pattern before the OPTIONAL MATCH, ensuring only persons under 35 are returned, with their email if available.
+```cypher
+# Generated Cypher:
+MATCH (person:Resource:`http://xmlns.com/foaf/0.1/Person`)
+WHERE person.`http://xmlns.com/foaf/0.1/name` IS NOT NULL
+  AND person.`http://xmlns.com/foaf/0.1/age` IS NOT NULL
+WHERE person.`http://xmlns.com/foaf/0.1/age` < 35
+OPTIONAL MATCH (person)-[:`http://xmlns.com/foaf/0.1/email`]->(email:Resource)
+RETURN person.uri AS person, 
+       person.`http://xmlns.com/foaf/0.1/name` AS name, 
+       person.`http://xmlns.com/foaf/0.1/age` AS age, 
+       email.uri AS email
+```
+
+The FILTER is translated to a Cypher WHERE clause and applied on the required pattern before the OPTIONAL MATCH, ensuring only persons under 35 are returned, with their email if available. This maintains the performance benefits of pushdown while applying the filter at the database level.
 
 **Key Benefits:**
 

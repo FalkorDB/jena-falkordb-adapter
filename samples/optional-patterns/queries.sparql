@@ -123,8 +123,17 @@ SELECT ?person ?name ?age ?email WHERE {
 }
 ORDER BY ?age
 
-# Note: The FILTER is applied after the required pattern match,
-# then OPTIONAL MATCH is applied to the filtered results
+# Generated Cypher:
+# MATCH (person:Resource:`http://xmlns.com/foaf/0.1/Person`)
+# WHERE person.`http://xmlns.com/foaf/0.1/name` IS NOT NULL
+#   AND person.`http://xmlns.com/foaf/0.1/age` IS NOT NULL
+# WHERE person.`http://xmlns.com/foaf/0.1/age` < 35
+# OPTIONAL MATCH (person)-[:`http://xmlns.com/foaf/0.1/email`]->(email:Resource)
+# RETURN person.uri AS person, person.`http://xmlns.com/foaf/0.1/name` AS name,
+#        person.`http://xmlns.com/foaf/0.1/age` AS age, email.uri AS email
+#
+# Note: The FILTER is translated to a WHERE clause and applied after the required
+# pattern match, then OPTIONAL MATCH is applied to the filtered results
 
 
 # Performance Notes:

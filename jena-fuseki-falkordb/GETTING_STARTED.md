@@ -10,6 +10,10 @@ Jena-Fuseki-FalkorDB provides a SPARQL endpoint backed by FalkorDB graph databas
 - **SPARQL Update**: Execute INSERT, DELETE, and other update operations
 - **Graph Store Protocol**: Read and write RDF data via HTTP
 - **Configuration via Assembler**: Use TTL config files or environment variables
+- **Automatic Query Optimization**: SPARQL patterns automatically translated to efficient Cypher queries
+  - OPTIONAL patterns → Cypher OPTIONAL MATCH (N× fewer queries)
+  - Variable objects/predicates → UNION queries for mixed data
+  - Transaction batching for bulk operations
 
 ## Quick Start (3 Steps)
 
@@ -296,6 +300,46 @@ WHERE {
 }" \
      http://localhost:3330/falkor/query
 ```
+
+### Query with OPTIONAL Patterns
+
+OPTIONAL patterns allow retrieving all required data with NULL for missing optional values in a single efficient query. This is automatically optimized to Cypher OPTIONAL MATCH:
+
+```bash
+# Insert test data with some people having emails and some not
+curl -X POST \
+     -H "Content-Type: application/sparql-update" \
+     --data '
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX ex: <http://example.org/>
+INSERT DATA {
+    ex:alice a foaf:Person ;
+        foaf:name "Alice" ;
+        foaf:email <mailto:alice@example.org> .
+    ex:bob a foaf:Person ;
+        foaf:name "Bob" .
+    ex:charlie a foaf:Person ;
+        foaf:name "Charlie" ;
+        foaf:email <mailto:charlie@example.org> .
+}' \
+     http://localhost:3330/falkor/update
+
+# Query all people with optional email addresses
+curl -G --data-urlencode "query=
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+SELECT ?person ?name ?email
+WHERE {
+    ?person a foaf:Person ;
+        foaf:name ?name .
+    OPTIONAL { ?person foaf:email ?email }
+}
+ORDER BY ?name" \
+     http://localhost:3330/falkor/query
+```
+
+**Result:** Returns all three people with their emails where available (Alice and Charlie have emails, Bob shows NULL)
+
+**Performance:** Avoids the N+1 query problem - single query gets all persons with optional emails instead of 1 query for persons + N queries for each email. See [samples/optional-patterns/](../samples/optional-patterns/) for more examples.
 
 ---
 

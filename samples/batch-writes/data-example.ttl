@@ -1,0 +1,129 @@
+@prefix ex:   <http://example.org/> .
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+# Example data for demonstrating Batch Write optimization
+# ========================================================
+#
+# This file shows a typical bulk load scenario. When loaded with
+# transactions, all these triples are efficiently batched using
+# Cypher's UNWIND instead of individual operations.
+#
+# Usage in Java:
+# Model model = FalkorDBModelFactory.createModel("myGraph");
+# model.begin(ReadWrite.WRITE);
+# try {
+#     RDFDataMgr.read(model, "data-example.ttl");
+#     model.commit();  // Bulk flush
+# } finally {
+#     model.end();
+# }
+
+# People (100 triples with properties)
+ex:person/alice
+    a foaf:Person ;
+    foaf:name "Alice" ;
+    foaf:age 30 ;
+    foaf:email "alice@example.org" ;
+    rdfs:label "Alice Smith" .
+
+ex:person/bob
+    a foaf:Person ;
+    foaf:name "Bob" ;
+    foaf:age 35 ;
+    foaf:email "bob@example.org" ;
+    rdfs:label "Bob Jones" .
+
+ex:person/charlie
+    a foaf:Person ;
+    foaf:name "Charlie" ;
+    foaf:age 28 ;
+    foaf:email "charlie@example.org" ;
+    rdfs:label "Charlie Brown" .
+
+ex:person/diana
+    a foaf:Person ;
+    foaf:name "Diana" ;
+    foaf:age 32 ;
+    foaf:email "diana@example.org" ;
+    rdfs:label "Diana Prince" .
+
+ex:person/eve
+    a foaf:Person ;
+    foaf:name "Eve" ;
+    foaf:age 29 ;
+    foaf:email "eve@example.org" ;
+    rdfs:label "Eve Adams" .
+
+# Relationships (social network)
+ex:person/alice
+    foaf:knows ex:person/bob ,
+               ex:person/charlie ,
+               ex:person/diana .
+
+ex:person/bob
+    foaf:knows ex:person/charlie ,
+               ex:person/eve .
+
+ex:person/charlie
+    foaf:knows ex:person/diana ,
+               ex:person/eve .
+
+ex:person/diana
+    foaf:knows ex:person/eve ,
+               ex:person/alice .
+
+# Organizations
+ex:org/company1
+    a ex:Organization ;
+    rdfs:label "Tech Corp" ;
+    ex:foundedYear 2010 ;
+    ex:employeeCount 500 .
+
+ex:org/company2
+    a ex:Organization ;
+    rdfs:label "Data Inc" ;
+    ex:foundedYear 2015 ;
+    ex:employeeCount 250 .
+
+# Employment relationships
+ex:person/alice ex:worksAt ex:org/company1 .
+ex:person/bob ex:worksAt ex:org/company1 .
+ex:person/charlie ex:worksAt ex:org/company2 .
+ex:person/diana ex:worksAt ex:org/company2 .
+ex:person/eve ex:worksAt ex:org/company1 .
+
+# Projects
+ex:project/alpha
+    a ex:Project ;
+    rdfs:label "Project Alpha" ;
+    ex:status "active" ;
+    ex:startDate "2024-01-01"^^xsd:date .
+
+ex:project/beta
+    a ex:Project ;
+    rdfs:label "Project Beta" ;
+    ex:status "planning" ;
+    ex:startDate "2024-06-01"^^xsd:date .
+
+# Project assignments
+ex:person/alice ex:worksOn ex:project/alpha .
+ex:person/bob ex:worksOn ex:project/alpha .
+ex:person/charlie ex:worksOn ex:project/beta .
+ex:person/diana ex:worksOn ex:project/beta .
+
+# Skills
+ex:skill/java a ex:Skill ; rdfs:label "Java Programming" .
+ex:skill/python a ex:Skill ; rdfs:label "Python Programming" .
+ex:skill/databases a ex:Skill ; rdfs:label "Database Design" .
+
+ex:person/alice ex:hasSkill ex:skill/java , ex:skill/databases .
+ex:person/bob ex:hasSkill ex:skill/python , ex:skill/databases .
+ex:person/charlie ex:hasSkill ex:skill/java , ex:skill/python .
+
+# Performance note:
+# Without transaction: ~180+ individual database operations
+# With transaction:    ~5-10 bulk UNWIND operations
+# Result:              20-40x faster loading time

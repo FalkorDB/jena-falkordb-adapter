@@ -1,0 +1,90 @@
+@prefix ex:   <http://example.org/> .
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+# Example data demonstrating Variable Objects optimization
+# =========================================================
+#
+# This dataset contains a mix of:
+# - Literal properties (e.g., foaf:name)
+# - Resource relationships (e.g., foaf:knows)
+# 
+# When querying with variable objects, the FalkorDB adapter uses
+# a UNION query to fetch both types efficiently.
+
+# People with names (literal properties)
+ex:person/alice
+    a foaf:Person ;
+    foaf:name "Alice" ;
+    foaf:age 30 .
+
+ex:person/bob
+    a foaf:Person ;
+    foaf:name "Bob" ;
+    foaf:age 35 .
+
+ex:person/charlie
+    a foaf:Person ;
+    foaf:name "Charlie" ;
+    foaf:age 28 .
+
+# Relationships between people
+ex:person/alice
+    foaf:knows ex:person/bob ,
+               ex:person/charlie .
+
+ex:person/bob
+    foaf:knows ex:person/charlie .
+
+# Mixed data - same predicate with different value types
+ex:item/item1
+    ex:hasValue "literal string" .
+
+ex:item/item2
+    ex:hasValue ex:resource/resource1 .
+
+ex:item/item3
+    ex:hasValue 42 .
+
+# Organization with employees (relationships)
+ex:org/company1
+    a ex:Organization ;
+    rdfs:label "Example Corp" ;
+    ex:employs ex:person/alice ,
+               ex:person/bob .
+
+# Projects with contributors (mixed types)
+ex:project/project1
+    rdfs:label "Project Alpha" ;
+    ex:contributor ex:person/alice ;
+    ex:status "active" .
+
+ex:project/project2
+    rdfs:label "Project Beta" ;
+    ex:contributor ex:person/bob ,
+                   ex:person/charlie ;
+    ex:status "planning" .
+
+# Additional resource for testing
+ex:resource/resource1
+    rdfs:label "Example Resource" ;
+    ex:description "A sample resource used in relationships" .
+
+# Example queries to try with this data:
+#
+# 1. Get all values for a person:
+#    SELECT ?value WHERE { ex:person/alice ?p ?value . }
+#
+# 2. Find all names:
+#    SELECT ?person ?name WHERE { ?person foaf:name ?name . }
+#
+# 3. Find all friendships:
+#    SELECT ?person ?friend WHERE { ?person foaf:knows ?friend . }
+#
+# 4. Get mixed values:
+#    SELECT ?item ?value WHERE { ?item ex:hasValue ?value . }
+#
+# All of these queries will use the Variable Objects optimization
+# when the object is a variable, fetching both properties and
+# relationships in a single UNION query.

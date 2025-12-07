@@ -1,0 +1,93 @@
+# Variable Object Optimization - SPARQL Query Examples
+# ======================================================
+#
+# These queries demonstrate the Variable Object optimization in FalkorDB Jena Adapter.
+# When a variable object could be either a literal (property) or a URI (relationship),
+# the adapter generates an efficient UNION query to fetch both types.
+#
+# For more details, see: OPTIMIZATIONS.md#variable-object-support
+
+# Example 1: Query all values for a specific predicate
+# This retrieves both literal properties and relationship targets
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT ?value WHERE {
+    <http://example.org/person/alice> foaf:knows ?value .
+}
+
+# Generated Cypher (automatically):
+# MATCH (s:Resource {uri: $p0})-[:`http://xmlns.com/foaf/0.1/knows`]->(o:Resource)
+# RETURN s.uri AS _s, o.uri AS value
+# UNION ALL
+# MATCH (s:Resource {uri: $p0})
+# WHERE s.`http://xmlns.com/foaf/0.1/knows` IS NOT NULL
+# RETURN s.uri AS _s, s.`http://xmlns.com/foaf/0.1/knows` AS value
+
+
+# Example 2: Variable subject and object
+# Retrieves all name properties across all subjects
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT ?person ?name WHERE {
+    ?person foaf:name ?name .
+}
+ORDER BY ?name
+
+
+# Example 3: Query relationships only
+# Even though the object is variable, the optimization handles both cases
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT ?person ?friend WHERE {
+    ?person foaf:knows ?friend .
+}
+
+
+# Example 4: Mixed data types - same predicate with different value types
+# Some subjects have literal values, others have resource values
+SELECT ?subject ?value WHERE {
+    ?subject <http://example.org/hasValue> ?value .
+}
+
+
+# Example 5: Combining with FILTER (uses standard evaluation)
+# Complex patterns fall back to standard Jena evaluation
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT ?person ?value WHERE {
+    ?person foaf:knows ?value .
+    FILTER(isLiteral(?value))
+}
+
+
+# Example 6: Multiple predicates (multiple single-triple patterns)
+# Each pattern uses variable object optimization independently
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX ex: <http://example.org/>
+
+SELECT ?person ?name ?friend WHERE {
+    ?person foaf:name ?name .
+    ?person foaf:knows ?friend .
+}
+
+
+# Example 7: Concrete subject with variable object
+# Most common use case - get all values for a specific subject
+PREFIX ex: <http://example.org/>
+
+SELECT ?value WHERE {
+    <http://example.org/person/alice> ex:property ?value .
+}
+
+
+# Example 8: Count results (aggregation over variable objects)
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT (COUNT(?friend) AS ?friendCount) WHERE {
+    <http://example.org/person/alice> foaf:knows ?friend .
+}
+
+
+# Note: Variable object optimization works only for single-triple BGPs.
+# Multi-triple patterns with variable objects require the object to be
+# used as a subject elsewhere (closed-chain pattern) to be optimized.

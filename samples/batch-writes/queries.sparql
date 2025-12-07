@@ -1,0 +1,105 @@
+# Batch Writes via Transactions - SPARQL Update Examples
+# =========================================================
+#
+# These examples show how to efficiently write data to FalkorDB using transactions.
+# The adapter buffers operations and flushes them in bulk using Cypher's UNWIND.
+#
+# For more details, see: OPTIMIZATIONS.md#batch-writes-via-transactions
+
+# Example 1: Insert multiple triples in a transaction
+# In Java code, wrap these in model.begin()/model.commit()
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX ex: <http://example.org/>
+
+INSERT DATA {
+    ex:person1 a foaf:Person ;
+               foaf:name "Alice" ;
+               foaf:age 30 .
+    
+    ex:person2 a foaf:Person ;
+               foaf:name "Bob" ;
+               foaf:age 35 .
+    
+    ex:person3 a foaf:Person ;
+               foaf:name "Charlie" ;
+               foaf:age 28 .
+    
+    ex:person1 foaf:knows ex:person2 , ex:person3 .
+    ex:person2 foaf:knows ex:person3 .
+}
+
+# Generated Cypher (with transaction batching):
+# UNWIND range(0, size($subjects)-1) AS i
+# WITH $subjects[i] AS subj, $objects[i] AS obj
+# MERGE (s:Resource {uri: subj})
+# MERGE (o:Resource {uri: obj})
+# MERGE (s)-[r:`predicate`]->(o)
+
+
+# Example 2: Delete multiple triples in a batch
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX ex: <http://example.org/>
+
+DELETE DATA {
+    ex:person1 foaf:knows ex:person2 .
+    ex:person1 foaf:knows ex:person3 .
+    ex:person1 foaf:name "Alice" .
+}
+
+
+# Example 3: Update operations (delete + insert) in a transaction
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX ex: <http://example.org/>
+
+DELETE {
+    ex:person1 foaf:name ?oldName .
+}
+INSERT {
+    ex:person1 foaf:name "Alice Smith" .
+}
+WHERE {
+    ex:person1 foaf:name ?oldName .
+}
+
+
+# Example 4: Bulk construction query
+# Build many relationships at once
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX ex: <http://example.org/>
+
+INSERT {
+    ?person1 foaf:knows ?person2 .
+}
+WHERE {
+    ?person1 a foaf:Person .
+    ?person2 a foaf:Person .
+    FILTER(?person1 != ?person2)
+}
+
+
+# Note: All SPARQL Update operations should be wrapped in transactions
+# for maximum performance:
+#
+# Java code:
+# model.begin(ReadWrite.WRITE);
+# try {
+#     model.update(updateQuery1);
+#     model.update(updateQuery2);
+#     // ... more updates
+#     model.commit();  // Bulk flush
+# } catch (Exception e) {
+#     model.abort();   // Rollback all buffered operations
+# } finally {
+#     model.end();
+# }
+
+
+# Performance Comparison:
+# -----------------------
+# Without transaction: N operations = N database round-trips
+# With transaction:    N operations = ~1 database round-trip (batched by type)
+#
+# For 1000 triples:
+# - Without: 1000+ individual Cypher queries
+# - With:    ~3-5 bulk UNWIND operations
+# - Speedup: 100-1000x faster

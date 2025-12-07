@@ -428,4 +428,197 @@ public class FalkorDBQueryPushdownTest {
             assertTrue(pairs.size() >= 2, "Should find mutual friendship pairs");
         }
     }
+
+    @Test
+    @DisplayName("Test variable object optimization - query both properties and relationships")
+    public void testVariableObjectOptimizationBothTypes() {
+        // Add test data with both properties and relationships
+        var alice = model.createResource("http://example.org/person/alice");
+        var bob = model.createResource("http://example.org/person/bob");
+        var knows = model.createProperty("http://xmlns.com/foaf/0.1/knows");
+        var name = model.createProperty("http://xmlns.com/foaf/0.1/name");
+        
+        // Alice has a name property
+        alice.addProperty(name, "Alice");
+        // Alice knows Bob (relationship)
+        alice.addProperty(knows, bob);
+        
+        Dataset dataset = DatasetFactory.create(model);
+        
+        // Query for all values of a specific predicate (should get both property and relationship)
+        String sparql = """
+            SELECT ?value WHERE {
+                <http://example.org/person/alice> <http://xmlns.com/foaf/0.1/knows> ?value .
+            }
+            """;
+        
+        Query query = QueryFactory.create(sparql);
+        try (QueryExecution qexec = QueryExecutionFactory.create(query, dataset)) {
+            ResultSet results = qexec.execSelect();
+            
+            // Should find Bob (relationship target)
+            assertTrue(results.hasNext(), "Should have at least one result");
+            QuerySolution solution = results.nextSolution();
+            assertEquals("http://example.org/person/bob", 
+                solution.getResource("value").getURI(),
+                "Should find Bob through relationship");
+        }
+    }
+
+    @Test
+    @DisplayName("Test variable object optimization - mixed results")
+    public void testVariableObjectOptimizationMixedResults() {
+        // Add test data where the same predicate has both literal and resource values
+        var person1 = model.createResource("http://example.org/person/person1");
+        var person2 = model.createResource("http://example.org/person/person2");
+        var prop = model.createProperty("http://example.org/value");
+        
+        // Person1 has literal value
+        person1.addProperty(prop, "literal value");
+        // Person2 has resource value  
+        var resource = model.createResource("http://example.org/resource1");
+        person2.addProperty(prop, resource);
+        
+        Dataset dataset = DatasetFactory.create(model);
+        
+        // Query all values - should get both literal and resource
+        String sparql = """
+            SELECT ?s ?o WHERE {
+                ?s <http://example.org/value> ?o .
+            }
+            """;
+        
+        Query query = QueryFactory.create(sparql);
+        try (QueryExecution qexec = QueryExecutionFactory.create(query, dataset)) {
+            ResultSet results = qexec.execSelect();
+            
+            List<QuerySolution> solutions = new ArrayList<>();
+            while (results.hasNext()) {
+                solutions.add(results.nextSolution());
+            }
+            
+            // Should find both subjects
+            assertEquals(2, solutions.size(), "Should find both subjects");
+            
+            // Verify we got both types of values
+            boolean foundLiteral = false;
+            boolean foundResource = false;
+            
+            for (QuerySolution solution : solutions) {
+                if (solution.get("o").isLiteral()) {
+                    foundLiteral = true;
+                    assertEquals("literal value", 
+                        solution.getLiteral("o").getString());
+                } else if (solution.get("o").isResource()) {
+                    foundResource = true;
+                    assertEquals("http://example.org/resource1",
+                        solution.getResource("o").getURI());
+                }
+            }
+            
+            assertTrue(foundLiteral, "Should find literal value");
+            assertTrue(foundResource, "Should find resource value");
+        }
+    }
+
+    @Test
+    @DisplayName("Test variable object optimization - variable subject")
+    public void testVariableObjectOptimizationVariableSubject() {
+        // Add test data
+        var alice = model.createResource("http://example.org/person/alice");
+        var bob = model.createResource("http://example.org/person/bob");
+        var name = model.createProperty("http://xmlns.com/foaf/0.1/name");
+        
+        alice.addProperty(name, "Alice");
+        bob.addProperty(name, "Bob");
+        
+        Dataset dataset = DatasetFactory.create(model);
+        
+        // Query with both subject and object as variables
+        String sparql = """
+            SELECT ?person ?name WHERE {
+                ?person <http://xmlns.com/foaf/0.1/name> ?name .
+            }
+            """;
+        
+        Query query = QueryFactory.create(sparql);
+        try (QueryExecution qexec = QueryExecutionFactory.create(query, dataset)) {
+            ResultSet results = qexec.execSelect();
+            
+            Set<String> names = new HashSet<>();
+            while (results.hasNext()) {
+                QuerySolution solution = results.nextSolution();
+                names.add(solution.getLiteral("name").getString());
+            }
+            
+            // Should find both names
+            assertTrue(names.contains("Alice"), "Should find Alice");
+            assertTrue(names.contains("Bob"), "Should find Bob");
+        }
+    }
+
+    @Test
+    @DisplayName("Test variable object optimization - only relationships")
+    public void testVariableObjectOptimizationOnlyRelationships() {
+        // Add test data with only relationships (no properties)
+        var alice = model.createResource("http://example.org/person/alice");
+        var bob = model.createResource("http://example.org/person/bob");
+        var charlie = model.createResource("http://example.org/person/charlie");
+        var knows = model.createProperty("http://xmlns.com/foaf/0.1/knows");
+        
+        alice.addProperty(knows, bob);
+        alice.addProperty(knows, charlie);
+        
+        Dataset dataset = DatasetFactory.create(model);
+        
+        // Query should use pushdown and return all relationships
+        String sparql = """
+            SELECT ?friend WHERE {
+                <http://example.org/person/alice> <http://xmlns.com/foaf/0.1/knows> ?friend .
+            }
+            """;
+        
+        Query query = QueryFactory.create(sparql);
+        try (QueryExecution qexec = QueryExecutionFactory.create(query, dataset)) {
+            ResultSet results = qexec.execSelect();
+            
+            Set<String> friends = new HashSet<>();
+            while (results.hasNext()) {
+                QuerySolution solution = results.nextSolution();
+                friends.add(solution.getResource("friend").getURI());
+            }
+            
+            assertEquals(2, friends.size(), "Should find both friends");
+            assertTrue(friends.contains("http://example.org/person/bob"));
+            assertTrue(friends.contains("http://example.org/person/charlie"));
+        }
+    }
+
+    @Test
+    @DisplayName("Test variable object optimization - only properties")
+    public void testVariableObjectOptimizationOnlyProperties() {
+        // Add test data with only literal properties
+        var alice = model.createResource("http://example.org/person/alice");
+        var name = model.createProperty("http://xmlns.com/foaf/0.1/name");
+        
+        alice.addProperty(name, "Alice");
+        
+        Dataset dataset = DatasetFactory.create(model);
+        
+        // Query should use pushdown and return the property value
+        String sparql = """
+            SELECT ?name WHERE {
+                <http://example.org/person/alice> <http://xmlns.com/foaf/0.1/name> ?name .
+            }
+            """;
+        
+        Query query = QueryFactory.create(sparql);
+        try (QueryExecution qexec = QueryExecutionFactory.create(query, dataset)) {
+            ResultSet results = qexec.execSelect();
+            
+            assertTrue(results.hasNext(), "Should have at least one result");
+            QuerySolution solution = results.nextSolution();
+            assertEquals("Alice", solution.getLiteral("name").getString());
+        }
+    }
 }

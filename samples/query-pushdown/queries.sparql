@@ -1,0 +1,72 @@
+# Query Pushdown - SPARQL Query Examples
+# =======================================
+#
+# These queries demonstrate various patterns that benefit from query pushdown.
+# The adapter translates SPARQL BGPs to efficient Cypher queries.
+#
+# For more details, see: OPTIMIZATIONS.md#query-pushdown-sparql-to-cypher
+
+# Example 1: Variable Predicate - Get all properties
+# Generates UNION query for relationships, properties, and types
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT ?p ?o WHERE {
+    <http://example.org/person/alice> ?p ?o .
+}
+
+# Generated Cypher (triple UNION):
+# Part 1: MATCH (s)-[r]->(o) RETURN type(r) AS p, o.uri AS o
+# Part 2: UNWIND keys(s) ... RETURN propKey AS p, s[propKey] AS o
+# Part 3: UNWIND labels(s) ... RETURN 'rdf:type' AS p, label AS o
+
+
+# Example 2: Closed-Chain Pattern - Mutual friendships
+SELECT ?a ?b WHERE {
+    ?a foaf:knows ?b .
+    ?b foaf:knows ?a .
+}
+
+# Generated Cypher:
+# MATCH (a:Resource)-[:knows]->(b:Resource)
+# MATCH (b)-[:knows]->(a)
+# RETURN a.uri, b.uri
+
+
+# Example 3: Friends of Friends
+SELECT ?fof WHERE {
+    <http://example.org/person/alice> foaf:knows ?friend .
+    ?friend foaf:knows ?fof .
+}
+
+# Generated Cypher (2-hop pattern):
+# MATCH (alice:Resource {uri: $p0})-[:knows]->(:Resource)-[:knows]->(fof:Resource)
+# RETURN fof.uri
+
+
+# Example 4: Type-based query with properties
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+
+SELECT ?person ?name WHERE {
+    ?person rdf:type foaf:Person .
+    ?person foaf:name ?name .
+}
+
+# Generated Cypher:
+# MATCH (person:Resource:Person)
+# WHERE person.`foaf:name` IS NOT NULL
+# RETURN person.uri, person.`foaf:name` AS name
+
+
+# Example 5: Multiple relationships
+SELECT ?person ?friend ?colleague WHERE {
+    ?person foaf:knows ?friend .
+    ?person <http://example.org/worksW
+ith> ?colleague .
+}
+
+
+# Performance Notes:
+# - Variable predicates: Single UNION query vs multiple separate queries
+# - Closed chains: Native Cypher bidirectional match
+# - Multi-hop: Single query vs N+1 queries
+# - Type queries: Native label matching (fast)

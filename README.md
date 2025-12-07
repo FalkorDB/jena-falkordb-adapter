@@ -32,6 +32,9 @@ This is a multi-module Maven project consisting of:
 - ✅ **Automatic URI indexing** for optimal query performance
 - ✅ **Custom driver support** for advanced configuration
 - ✅ **Automatic query pushdown** - SPARQL to Cypher translation enabled by default
+  - Variable objects (queries both properties and relationships with UNION)
+  - Variable predicates (queries all properties, relationships, and types)
+  - Closed-chain patterns (mutual references)
 - ✅ **Magic property (falkor:cypher)** for direct Cypher execution within SPARQL
 - ✅ **Fuseki SPARQL server** with FalkorDB backend
 - ✅ **Inference support** with rule-based reasoning (RDFS/OWL rules)
@@ -556,13 +559,30 @@ Run tests:
 mvn test
 ```
 
+## Examples and Samples
+
+Comprehensive examples for all optimizations are available in the [`samples/`](samples/) directory:
+
+- **[Batch Writes](samples/batch-writes/)**: Transaction batching for bulk operations (100-1000x faster)
+- **[Query Pushdown](samples/query-pushdown/)**: SPARQL to Cypher translation (Nx-N²x improvement)
+- **[Variable Objects](samples/variable-objects/)**: Query both properties and relationships (2x fewer round trips)
+- **[Magic Property](samples/magic-property/)**: Direct Cypher execution for maximum control
+
+Each example includes:
+- ✅ Complete Java code with multiple use cases
+- ✅ SPARQL query patterns and syntax
+- ✅ Sample RDF data in Turtle format
+- ✅ Detailed README with explanations
+
+See [`samples/README.md`](samples/README.md) for quick start guide.
+
 ## Performance Tips
 
 1. **Automatic Query Pushdown**: SPARQL queries are automatically compiled to efficient Cypher - no configuration needed!
 2. **Automatic Indexing**: The adapter automatically creates an index on `Resource.uri` for optimal performance
 3. **Efficient Literal Storage**: Literals are stored as node properties, not separate nodes, reducing graph traversal
 4. **Use Connection Pooling**: Already configured by default with JFalkorDB driver
-5. **Batch Operations**: Group multiple adds together when possible
+5. **Batch Operations**: Use transactions for bulk loads (see [batch-writes examples](samples/batch-writes/))
 6. **Type-Based Queries**: Leverage `rdf:type` labels for efficient filtering (automatically used by query pushdown)
 7. **Limit Result Sets**: Use LIMIT in SPARQL queries to reduce data transfer
 8. **Close Resources**: Always close models, query executions, and custom drivers

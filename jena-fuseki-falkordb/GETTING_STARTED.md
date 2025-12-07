@@ -11,7 +11,7 @@ Jena-Fuseki-FalkorDB provides a SPARQL endpoint backed by FalkorDB graph databas
 - **Graph Store Protocol**: Read and write RDF data via HTTP
 - **Configuration via Assembler**: Use TTL config files or environment variables
 - **Automatic Query Optimization**: SPARQL patterns automatically translated to efficient Cypher queries
-  - OPTIONAL patterns → Cypher OPTIONAL MATCH (Nx fewer queries)
+  - OPTIONAL patterns → Cypher OPTIONAL MATCH (N× fewer queries)
   - Variable objects/predicates → UNION queries for mixed data
   - Transaction batching for bulk operations
 
@@ -339,7 +339,7 @@ ORDER BY ?name" \
 
 **Result:** Returns all three people with their emails where available (Alice and Charlie have emails, Bob shows NULL)
 
-**Performance:** Single query instead of N+1 queries (1 for persons + N for optional emails). See [samples/optional-patterns/](../samples/optional-patterns/) for more examples.
+**Performance:** Single query instead of N+1 queries - one query gets all persons with their optional emails instead of 1 query for persons followed by N separate queries for each person's email. See [samples/optional-patterns/](../samples/optional-patterns/) for more examples.
 
 ---
 

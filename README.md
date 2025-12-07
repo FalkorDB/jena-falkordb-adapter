@@ -581,7 +581,7 @@ See [`samples/README.md`](samples/README.md) for quick start guide.
 ## Performance Tips
 
 1. **Automatic Query Pushdown**: SPARQL queries are automatically compiled to efficient Cypher - no configuration needed!
-2. **OPTIONAL Patterns**: Use `OPTIONAL { }` for partial data - automatically translated to Cypher OPTIONAL MATCH (Nx fewer queries)
+2. **OPTIONAL Patterns**: Use `OPTIONAL { }` for partial data - automatically translated to Cypher OPTIONAL MATCH (N× fewer queries)
 3. **Automatic Indexing**: The adapter automatically creates an index on `Resource.uri` for optimal performance
 4. **Efficient Literal Storage**: Literals are stored as node properties, not separate nodes, reducing graph traversal
 5. **Use Connection Pooling**: Already configured by default with JFalkorDB driver

@@ -809,11 +809,43 @@ See [MAGIC_PROPERTY.md](MAGIC_PROPERTY.md) for detailed documentation.
 
 ## OpenTelemetry Tracing
 
-All optimization components are instrumented with OpenTelemetry:
+All optimization components are fully instrumented with comprehensive OpenTelemetry tracing:
 
-- **Transaction spans**: Track buffering and flush operations
-- **Query pushdown spans**: Show compiled Cypher queries and fallback decisions
-- **Result counts**: Monitor query efficiency
+### Traced Components
+
+1. **SparqlToCypherCompiler** - Compilation operations
+   - Span: `SparqlToCypherCompiler.translate` - Basic BGP compilation
+   - Span: `SparqlToCypherCompiler.translateWithFilter` - FILTER compilation
+   - Span: `SparqlToCypherCompiler.translateWithOptional` - OPTIONAL compilation
+   - Shows: Input SPARQL patterns, output Cypher queries, optimization type, parameters
+
+2. **FalkorDBOpExecutor** - Query execution
+   - Span: `FalkorDBOpExecutor.execute` - BGP execution
+   - Span: `FalkorDBOpExecutor.executeFilter` - FILTER execution
+   - Span: `FalkorDBOpExecutor.executeOptional` - OPTIONAL execution
+   - Shows: Triple counts, Cypher queries, fallback decisions, result counts
+
+3. **FalkorDBTransactionHandler** - Batch write operations
+   - Span: `FalkorDBTransaction.commit` - Transaction commit with bulk flush
+   - Span: `FalkorDBTransaction.flushLiteralBatch` - Literal property batching
+   - Span: `FalkorDBTransaction.flushTypeBatch` - Type label batching
+   - Span: `FalkorDBTransaction.flushRelationshipBatch` - Relationship batching
+   - Shows: Batch sizes, Cypher UNWIND queries, triple counts
+
+4. **CypherQueryFunc** - Magic property execution
+   - Span: `CypherQueryFunc.execute` - Direct Cypher query execution
+   - Shows: Cypher queries, result counts, variable mappings
+
+### Trace Attributes
+
+Each optimization span includes:
+- **Input**: SPARQL patterns (truncated for readability)
+- **Output**: Complete Cypher queries
+- **Type**: Optimization type (BGP_PUSHDOWN, FILTER_PUSHDOWN, OPTIONAL_PUSHDOWN, etc.)
+- **Timing**: Automatic duration tracking via span lifecycle
+- **Metadata**: Triple counts, parameter counts, variable counts, batch sizes
+
+### Enabling Tracing
 
 Enable tracing to visualize performance in Jaeger:
 
@@ -822,6 +854,8 @@ docker-compose -f docker-compose-tracing.yaml up -d
 ```
 
 Then view traces at `http://localhost:16686`.
+
+See [TRACING.md](TRACING.md) for complete documentation on trace attributes and visualization.
 
 ## Optimizations with Inference Models (InfGraph)
 

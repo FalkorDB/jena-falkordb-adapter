@@ -609,7 +609,7 @@ public final class SparqlToCypherCompiler {
      * <p>This method handles SPARQL UNION patterns by translating them to Cypher
      * UNION queries. Each branch is compiled separately and combined with UNION.</p>
      *
-     * <h3>Example:</h3>
+     * <p><b>Example:</b></p>
      * <pre>{@code
      * // SPARQL:
      * // SELECT ?person WHERE {

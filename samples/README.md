@@ -11,6 +11,7 @@ samples/
 ├── query-pushdown/        # SPARQL to Cypher translation
 ├── variable-objects/      # Query both properties and relationships
 ├── optional-patterns/     # Efficient optional data retrieval
+├── union-patterns/        # Alternative query patterns with UNION
 ├── filter-expressions/    # FILTER expression optimization
 └── magic-property/        # Direct Cypher execution
 ```
@@ -71,7 +72,22 @@ Translates SPARQL OPTIONAL patterns to Cypher OPTIONAL MATCH, returning all requ
 - Concrete subjects with OPTIONAL
 - OPTIONAL with FILTER
 
-### 5. FILTER Expressions
+### 5. UNION Patterns
+**Location:** [`union-patterns/`](union-patterns/)
+
+Translates SPARQL UNION patterns to Cypher UNION queries, combining results from alternative query patterns in a single database call.
+
+**Performance:** Nx fewer round trips (avoids N separate queries)
+
+**Examples:**
+- Type unions (students or teachers)
+- Relationship alternatives (friends or colleagues)
+- Property alternatives (email or phone)
+- Concrete subjects with UNION
+- Multi-triple patterns with UNION
+- Nested UNION patterns
+
+### 6. FILTER Expressions
 **Location:** [`filter-expressions/`](filter-expressions/)
 
 Automatically pushes FILTER expressions down to Cypher WHERE clauses, eliminating client-side filtering.
@@ -86,7 +102,7 @@ Automatically pushes FILTER expressions down to Cypher WHERE clauses, eliminatin
 - Complex combined expressions
 - FILTER with UNION queries
 
-### 6. Magic Property (Direct Cypher)
+### 7. Magic Property (Direct Cypher)
 **Location:** [`magic-property/`](magic-property/)
 
 Allows direct Cypher execution within SPARQL for maximum control and performance.
@@ -134,6 +150,9 @@ Each subdirectory contains:
    # OPTIONAL Patterns
    mvn exec:java -Dexec.mainClass="com.falkordb.samples.OptionalPatternsExample"
    
+   # UNION Patterns
+   mvn exec:java -Dexec.mainClass="com.falkordb.samples.UnionPatternsExample"
+   
    # Magic Property
    mvn exec:java -Dexec.mainClass="com.falkordb.samples.MagicPropertyExample"
    ```
@@ -158,6 +177,7 @@ Each subdirectory contains:
 | **Query Pushdown** | Nx-N²x | Multi-hop queries, graph traversal |
 | **Variable Objects** | 2x | Mixed property/relationship queries |
 | **OPTIONAL Patterns** | Nx | Partial data retrieval |
+| **UNION Patterns** | Nx | Alternative query patterns |
 | **FILTER Expressions** | Reduces data transfer | Filtering, range queries, complex conditions |
 | **Magic Property** | Maximum | Complex Cypher patterns |
 

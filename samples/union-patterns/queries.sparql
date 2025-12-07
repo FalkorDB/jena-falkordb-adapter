@@ -1,0 +1,138 @@
+# UNION Patterns - SPARQL Query Examples
+# ========================================
+#
+# These queries demonstrate UNION patterns that are translated to
+# Cypher UNION queries for efficient execution.
+#
+# For more details, see: OPTIMIZATIONS.md#union-patterns
+
+# Example 1: Basic UNION - Find all students or teachers
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX ex: <http://example.org/>
+
+SELECT ?person ?name WHERE {
+    { ?person rdf:type ex:Student }
+    UNION
+    { ?person rdf:type ex:Teacher }
+    ?person foaf:name ?name .
+}
+ORDER BY ?name
+
+# Generated Cypher:
+# MATCH (person:Resource:`http://example.org/Student`)
+# RETURN person.uri AS person
+# UNION
+# MATCH (person:Resource:`http://example.org/Teacher`)
+# RETURN person.uri AS person
+
+
+# Example 2: UNION with relationships - Find all connections
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX ex: <http://example.org/>
+
+SELECT ?person ?connection WHERE {
+    { ?person foaf:knows ?connection }
+    UNION
+    { ?person ex:worksWith ?connection }
+}
+ORDER BY ?person
+
+# Generated Cypher:
+# MATCH (person:Resource)-[:`http://xmlns.com/foaf/0.1/knows`]->(connection:Resource)
+# RETURN person.uri AS person, connection.uri AS connection
+# UNION
+# MATCH (person:Resource)-[:`http://example.org/worksWith`]->(connection:Resource)
+# RETURN person.uri AS person, connection.uri AS connection
+
+
+# Example 3: UNION with concrete subjects - Friends of specific people
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT ?friend WHERE {
+    { <http://example.org/alice> foaf:knows ?friend }
+    UNION
+    { <http://example.org/bob> foaf:knows ?friend }
+}
+
+# Generated Cypher (parameterized):
+# MATCH (s:Resource {uri: $p0})-[:`http://xmlns.com/foaf/0.1/knows`]->(friend:Resource)
+# RETURN friend.uri AS friend
+# UNION
+# MATCH (s:Resource {uri: $p1})-[:`http://xmlns.com/foaf/0.1/knows`]->(friend:Resource)
+# RETURN friend.uri AS friend
+
+
+# Example 4: UNION with properties - Any contact method
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT ?person ?contact WHERE {
+    { ?person foaf:email ?contact }
+    UNION
+    { ?person foaf:phone ?contact }
+}
+ORDER BY ?person
+
+# Generated Cypher:
+# MATCH (person:Resource)
+# WHERE person.`http://xmlns.com/foaf/0.1/email` IS NOT NULL
+# RETURN person.uri AS person, person.`http://xmlns.com/foaf/0.1/email` AS contact
+# UNION
+# MATCH (person:Resource)
+# WHERE person.`http://xmlns.com/foaf/0.1/phone` IS NOT NULL
+# RETURN person.uri AS person, person.`http://xmlns.com/foaf/0.1/phone` AS contact
+
+
+# Example 5: UNION with multi-triple patterns - Age-specific queries
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX ex: <http://example.org/>
+
+SELECT ?person WHERE {
+    { ?person rdf:type ex:Student . ?person foaf:age 20 }
+    UNION
+    { ?person rdf:type ex:Teacher . ?person foaf:age 35 }
+}
+
+# Generated Cypher (parameterized):
+# MATCH (person:Resource:`http://example.org/Student`)
+# WHERE person.`http://xmlns.com/foaf/0.1/age` IS NOT NULL
+#   AND person.`http://xmlns.com/foaf/0.1/age` = $p0
+# RETURN person.uri AS person
+# UNION
+# MATCH (person:Resource:`http://example.org/Teacher`)
+# WHERE person.`http://xmlns.com/foaf/0.1/age` IS NOT NULL
+#   AND person.`http://xmlns.com/foaf/0.1/age` = $p1
+# RETURN person.uri AS person
+
+
+# Example 6: Three-way UNION - All academic personnel
+PREFIX ex: <http://example.org/>
+
+SELECT ?person WHERE {
+    { ?person rdf:type ex:Student }
+    UNION
+    { ?person rdf:type ex:Teacher }
+    UNION
+    { ?person rdf:type ex:Staff }
+}
+
+# Generated Cypher:
+# MATCH (person:Resource:`http://example.org/Student`)
+# RETURN person.uri AS person
+# UNION
+# MATCH (person:Resource:`http://example.org/Teacher`)
+# RETURN person.uri AS person
+# UNION
+# MATCH (person:Resource:`http://example.org/Staff`)
+# RETURN person.uri AS person
+
+
+# Example 7: UNION with DISTINCT - Remove duplicates
+PREFIX ex: <http://example.org/>
+
+SELECT DISTINCT ?person WHERE {
+    { ?person rdf:type ex:Student }
+    UNION
+    { ?person rdf:type ex:Teacher }
+}
+
+# Note: DISTINCT is applied by Jena after receiving results from Cypher UNION

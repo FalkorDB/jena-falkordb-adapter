@@ -36,6 +36,7 @@ This is a multi-module Maven project consisting of:
   - Variable predicates (queries all properties, relationships, and types)
   - Closed-chain patterns (mutual references)
   - OPTIONAL patterns (returns all required matches with NULL for missing optional data)
+  - UNION patterns (alternative query patterns in single database call)
 - ✅ **Magic property (falkor:cypher)** for direct Cypher execution within SPARQL
 - ✅ **Fuseki SPARQL server** with FalkorDB backend
 - ✅ **Inference support** with rule-based reasoning (RDFS/OWL rules)
@@ -374,7 +375,12 @@ This is a basic implementation with some limitations:
 
 1. **Query Translation**: Not all SPARQL features are fully translated to Cypher
 2. **Performance**: Translation overhead may impact performance for large datasets
-3. **Complex Queries**: Some advanced SPARQL features (UNION, deeply nested queries) may not work as expected. OPTIONAL patterns are supported.
+3. **Complex Queries**: Some advanced SPARQL features may not work as expected or will fall back to standard evaluation:
+   - ✅ OPTIONAL patterns are supported and optimized
+   - ✅ UNION patterns are supported and optimized
+   - ❌ MINUS (set difference) not yet optimized
+   - ❌ Variable predicates in UNION branches not supported
+   - ❌ Some deeply nested or complex query patterns may fall back
 
 **Note on Inference/Reasoning**: Inference is supported via Jena's rule-based reasoning. When using `InfModel` (inference models), query pushdown is intentionally disabled to preserve inference semantics, but transaction batching and magic property optimizations remain available. See [OPTIMIZATIONS.md](OPTIMIZATIONS.md#optimizations-with-inference-models-infgraph) for details.
 

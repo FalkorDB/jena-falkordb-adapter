@@ -263,6 +263,119 @@ SELECT ?friend WHERE {
 3. Look for spans named `CypherQueryFunc.execute`
 4. Expand the span to see the Cypher query and result count
 
+## Query Optimization Tracing
+
+All query optimization components are instrumented with comprehensive OpenTelemetry tracing. This allows you to visualize how SPARQL queries are transformed into efficient Cypher queries.
+
+### Query Pushdown Compilation Traces
+
+The `SparqlToCypherCompiler` creates detailed spans for each compilation operation:
+
+**Span: `SparqlToCypherCompiler.translate`** (Basic BGP pushdown)
+
+| Attribute | Description |
+|-----------|-------------|
+| `falkordb.optimization.type` | Type of optimization (`BGP_PUSHDOWN`) |
+| `falkordb.optimization.input_bgp` | Input SPARQL pattern (truncated for readability) |
+| `falkordb.cypher.query` | Generated Cypher query |
+| `sparql.bgp.triple_count` | Number of triples in the BGP |
+| `falkordb.optimization.param_count` | Number of Cypher query parameters |
+| `sparql.bgp.variable_count` | Number of variables mapped |
+
+**Span: `SparqlToCypherCompiler.translateWithFilter`** (FILTER pushdown)
+
+| Attribute | Description |
+|-----------|-------------|
+| `falkordb.optimization.type` | Type of optimization (`FILTER_PUSHDOWN`) |
+| `falkordb.optimization.input_bgp` | Input SPARQL pattern with FILTER |
+| `falkordb.cypher.query` | Generated Cypher query with WHERE clause |
+| `sparql.bgp.triple_count` | Number of triples in the BGP |
+| `falkordb.optimization.param_count` | Number of Cypher query parameters |
+| `sparql.bgp.variable_count` | Number of variables mapped |
+
+**Span: `SparqlToCypherCompiler.translateWithOptional`** (OPTIONAL pushdown)
+
+| Attribute | Description |
+|-----------|-------------|
+| `falkordb.optimization.type` | Type of optimization (`OPTIONAL_PUSHDOWN`) |
+| `falkordb.optimization.input_bgp` | Input SPARQL pattern with OPTIONAL |
+| `falkordb.cypher.query` | Generated Cypher query with OPTIONAL MATCH |
+| `sparql.bgp.triple_count` | Total triples (required + optional) |
+| `falkordb.optimization.param_count` | Number of Cypher query parameters |
+| `sparql.bgp.variable_count` | Number of variables mapped |
+
+### Query Execution Traces
+
+The `FalkorDBOpExecutor` creates spans when executing optimized queries:
+
+**Span: `FalkorDBOpExecutor.execute`** (BGP execution)
+
+| Attribute | Description |
+|-----------|-------------|
+| `sparql.bgp.triple_count` | Number of triples in BGP |
+| `falkordb.cypher.query` | Compiled Cypher query |
+| `falkordb.fallback` | Whether optimization fell back to standard evaluation |
+| `falkordb.result_count` | Number of results returned |
+
+**Span: `FalkorDBOpExecutor.executeFilter`** (FILTER execution)
+
+| Attribute | Description |
+|-----------|-------------|
+| `sparql.bgp.triple_count` | Number of triples in BGP |
+| `falkordb.cypher.query` | Compiled Cypher query with WHERE |
+| `falkordb.fallback` | Whether optimization fell back to standard evaluation |
+| `falkordb.result_count` | Number of results returned |
+
+**Span: `FalkorDBOpExecutor.executeOptional`** (OPTIONAL execution)
+
+| Attribute | Description |
+|-----------|-------------|
+| `sparql.bgp.triple_count` | Total triples (required + optional) |
+| `falkordb.cypher.query` | Compiled Cypher query with OPTIONAL MATCH |
+| `falkordb.fallback` | Whether optimization fell back to standard evaluation |
+| `falkordb.result_count` | Number of results returned |
+
+### Transaction Batching Traces
+
+The `FalkorDBTransactionHandler` creates spans for batch write operations:
+
+**Span: `FalkorDBTransaction.commit`**
+
+| Attribute | Description |
+|-----------|-------------|
+| `falkordb.operation` | Operation type (`commit`) |
+| `falkordb.graph_name` | Graph name |
+| `rdf.triple_count` | Total triples committed |
+
+**Span: `FalkorDBTransaction.flushLiteralBatch`**
+
+| Attribute | Description |
+|-----------|-------------|
+| `falkordb.operation` | Operation type (`batch_literal_add`) |
+| `falkordb.batch_size` | Number of triples in batch |
+
+### Example: Viewing Optimization Traces
+
+1. Run a query with optimizations enabled
+2. Open Jaeger UI at `http://localhost:16686`
+3. Look for a trace containing the query
+4. Expand the trace to see the hierarchy:
+   - Top-level: HTTP request span
+   - Mid-level: Query execution spans (`FalkorDBOpExecutor.*`)
+   - Low-level: Compilation spans (`SparqlToCypherCompiler.*`)
+   - Bottom-level: Cypher execution spans (`TracedGraph.query`)
+
+Each span shows:
+- **Duration**: Time taken for that operation
+- **Attributes**: Input patterns, output Cypher, parameters, etc.
+- **Events**: Fallback decisions or errors
+
+This visualization helps identify:
+- Which optimizations are being applied
+- Whether queries fall back to standard evaluation
+- Performance bottlenecks in query compilation or execution
+- The actual Cypher queries generated for each SPARQL pattern
+
 ## Disabling Tracing
 
 To disable tracing, set the environment variable:

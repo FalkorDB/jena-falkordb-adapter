@@ -1,5 +1,12 @@
 package com.falkordb.jena.query;
 
+import com.falkordb.jena.tracing.TracingUtil;
+import io.opentelemetry.api.common.AttributeKey;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.api.trace.StatusCode;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Scope;
 import org.apache.jena.graph.Node;
 import org.apache.jena.graph.Triple;
 import org.apache.jena.sparql.core.BasicPattern;
@@ -67,8 +74,39 @@ public final class SparqlToCypherCompiler {
     private static final Logger LOGGER = LoggerFactory.getLogger(
         SparqlToCypherCompiler.class);
 
+    /** Instrumentation scope name. */
+    public static final String SCOPE_COMPILER =
+        "com.falkordb.jena.query.SparqlToCypherCompiler";
+
+    /** Tracer for compiler operations. */
+    private static final Tracer TRACER = TracingUtil.getTracer(SCOPE_COMPILER);
+
     /** RDF type URI for special handling. */
     private static final String RDF_TYPE_URI = RDF.type.getURI();
+
+    /** Attribute key for optimization type. */
+    private static final AttributeKey<String> ATTR_OPTIMIZATION_TYPE =
+        AttributeKey.stringKey("falkordb.optimization.type");
+
+    /** Attribute key for input BGP (SPARQL pattern). */
+    private static final AttributeKey<String> ATTR_INPUT_BGP =
+        AttributeKey.stringKey("falkordb.optimization.input_bgp");
+
+    /** Attribute key for output Cypher query. */
+    private static final AttributeKey<String> ATTR_OUTPUT_CYPHER =
+        AttributeKey.stringKey("falkordb.cypher.query");
+
+    /** Attribute key for triple count. */
+    private static final AttributeKey<Long> ATTR_TRIPLE_COUNT =
+        AttributeKey.longKey("sparql.bgp.triple_count");
+
+    /** Attribute key for parameter count. */
+    private static final AttributeKey<Long> ATTR_PARAM_COUNT =
+        AttributeKey.longKey("falkordb.optimization.param_count");
+
+    /** Attribute key for variable count. */
+    private static final AttributeKey<Long> ATTR_VAR_COUNT =
+        AttributeKey.longKey("sparql.bgp.variable_count");
 
     /**
      * Result of compiling a BGP to Cypher.
@@ -167,6 +205,49 @@ public final class SparqlToCypherCompiler {
             throw new CannotCompileException(
                 "Optional BGP cannot be empty");
         }
+        
+        String inputPattern = formatBGP(requiredBGP) + " OPTIONAL { " + formatBGP(optionalBGP) + " }";
+        if (filterExpr != null) {
+            inputPattern += " FILTER(" + filterExpr.toString() + ")";
+        }
+        
+        Span span = TRACER.spanBuilder("SparqlToCypherCompiler.translateWithOptional")
+            .setSpanKind(SpanKind.INTERNAL)
+            .setAttribute(ATTR_OPTIMIZATION_TYPE, "OPTIONAL_PUSHDOWN")
+            .setAttribute(ATTR_TRIPLE_COUNT, (long) (requiredBGP.size() + optionalBGP.size()))
+            .setAttribute(ATTR_INPUT_BGP, inputPattern)
+            .startSpan();
+
+        try (Scope scope = span.makeCurrent()) {
+            CompilationResult result = translateWithOptionalInternal(requiredBGP, optionalBGP, filterExpr);
+            
+            span.setAttribute(ATTR_OUTPUT_CYPHER, result.cypherQuery());
+            span.setAttribute(ATTR_PARAM_COUNT, (long) result.parameters().size());
+            span.setAttribute(ATTR_VAR_COUNT, (long) result.variableMapping().size());
+            span.setStatus(StatusCode.OK);
+            
+            return result;
+        } catch (CannotCompileException e) {
+            span.setStatus(StatusCode.ERROR, e.getMessage());
+            span.recordException(e);
+            throw e;
+        } catch (Exception e) {
+            span.setStatus(StatusCode.ERROR, e.getMessage());
+            span.recordException(e);
+            throw e;
+        } finally {
+            span.end();
+        }
+    }
+    
+    /**
+     * Internal translation method for OPTIONAL without tracing.
+     */
+    private static CompilationResult translateWithOptionalInternal(
+            final BasicPattern requiredBGP,
+            final BasicPattern optionalBGP,
+            final Expr filterExpr)
+            throws CannotCompileException {
         
         // Compile the required pattern first
         // Use special handling that treats variable objects as literal properties
@@ -537,6 +618,42 @@ public final class SparqlToCypherCompiler {
 
         List<Triple> triples = bgp.getList();
         
+        Span span = TRACER.spanBuilder("SparqlToCypherCompiler.translate")
+            .setSpanKind(SpanKind.INTERNAL)
+            .setAttribute(ATTR_OPTIMIZATION_TYPE, "BGP_PUSHDOWN")
+            .setAttribute(ATTR_TRIPLE_COUNT, (long) triples.size())
+            .setAttribute(ATTR_INPUT_BGP, formatBGP(bgp))
+            .startSpan();
+
+        try (Scope scope = span.makeCurrent()) {
+            CompilationResult result = translateInternal(bgp);
+            
+            span.setAttribute(ATTR_OUTPUT_CYPHER, result.cypherQuery());
+            span.setAttribute(ATTR_PARAM_COUNT, (long) result.parameters().size());
+            span.setAttribute(ATTR_VAR_COUNT, (long) result.variableMapping().size());
+            span.setStatus(StatusCode.OK);
+            
+            return result;
+        } catch (CannotCompileException e) {
+            span.setStatus(StatusCode.ERROR, e.getMessage());
+            span.recordException(e);
+            throw e;
+        } catch (Exception e) {
+            span.setStatus(StatusCode.ERROR, e.getMessage());
+            span.recordException(e);
+            throw e;
+        } finally {
+            span.end();
+        }
+    }
+
+    /**
+     * Internal translation method without tracing.
+     */
+    private static CompilationResult translateInternal(final BasicPattern bgp)
+            throws CannotCompileException {
+        List<Triple> triples = bgp.getList();
+        
         // Check if we have variable predicates - handle with special logic
         boolean hasVariablePredicate = triples.stream()
             .anyMatch(t -> t.getPredicate().isVariable());
@@ -872,8 +989,45 @@ public final class SparqlToCypherCompiler {
             return translate(bgp);
         }
         
+        Span span = TRACER.spanBuilder("SparqlToCypherCompiler.translateWithFilter")
+            .setSpanKind(SpanKind.INTERNAL)
+            .setAttribute(ATTR_OPTIMIZATION_TYPE, "FILTER_PUSHDOWN")
+            .setAttribute(ATTR_TRIPLE_COUNT, (long) bgp.size())
+            .setAttribute(ATTR_INPUT_BGP, formatBGP(bgp) + " FILTER(" + filterExpr.toString() + ")")
+            .startSpan();
+
+        try (Scope scope = span.makeCurrent()) {
+            CompilationResult result = translateWithFilterInternal(bgp, filterExpr);
+            
+            span.setAttribute(ATTR_OUTPUT_CYPHER, result.cypherQuery());
+            span.setAttribute(ATTR_PARAM_COUNT, (long) result.parameters().size());
+            span.setAttribute(ATTR_VAR_COUNT, (long) result.variableMapping().size());
+            span.setStatus(StatusCode.OK);
+            
+            return result;
+        } catch (CannotCompileException e) {
+            span.setStatus(StatusCode.ERROR, e.getMessage());
+            span.recordException(e);
+            throw e;
+        } catch (Exception e) {
+            span.setStatus(StatusCode.ERROR, e.getMessage());
+            span.recordException(e);
+            throw e;
+        } finally {
+            span.end();
+        }
+    }
+    
+    /**
+     * Internal translation method with filter without tracing.
+     */
+    private static CompilationResult translateWithFilterInternal(
+            final BasicPattern bgp,
+            final Expr filterExpr)
+            throws CannotCompileException {
+        
         // First, compile the BGP without filter
-        CompilationResult bgpResult = translate(bgp);
+        CompilationResult bgpResult = translateInternal(bgp);
         
         // Extract the components from the BGP result
         String bgpQuery = bgpResult.cypherQuery();
@@ -1565,5 +1719,67 @@ public final class SparqlToCypherCompiler {
         }
         // Escape backticks by doubling them
         return value.replace("`", "``").replace("\0", "");
+    }
+
+    /**
+     * Format a BasicPattern for tracing (truncated for readability).
+     */
+    private static String formatBGP(final BasicPattern bgp) {
+        if (bgp == null || bgp.isEmpty()) {
+            return "(empty)";
+        }
+        
+        StringBuilder sb = new StringBuilder();
+        List<Triple> triples = bgp.getList();
+        int count = 0;
+        for (Triple triple : triples) {
+            if (count > 0) {
+                sb.append(" . ");
+            }
+            sb.append(formatTriple(triple));
+            count++;
+            // Limit to 3 triples for readability
+            if (count >= 3 && triples.size() > 3) {
+                sb.append(" ... (").append(triples.size() - 3).append(" more)");
+                break;
+            }
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Format a single triple for tracing.
+     */
+    private static String formatTriple(final Triple triple) {
+        return formatNode(triple.getSubject()) + " " +
+               formatNode(triple.getPredicate()) + " " +
+               formatNode(triple.getObject());
+    }
+
+    /**
+     * Format a node for tracing (shortened URIs).
+     */
+    private static String formatNode(final Node node) {
+        if (node.isVariable()) {
+            return "?" + node.getName();
+        } else if (node.isURI()) {
+            String uri = node.getURI();
+            // Shorten common prefixes
+            if (uri.startsWith("http://www.w3.org/1999/02/22-rdf-syntax-ns#")) {
+                return "rdf:" + uri.substring("http://www.w3.org/1999/02/22-rdf-syntax-ns#".length());
+            } else if (uri.startsWith("http://xmlns.com/foaf/0.1/")) {
+                return "foaf:" + uri.substring("http://xmlns.com/foaf/0.1/".length());
+            } else if (uri.length() > 50) {
+                return "<..." + uri.substring(uri.length() - 30) + ">";
+            }
+            return "<" + uri + ">";
+        } else if (node.isLiteral()) {
+            String lex = node.getLiteralLexicalForm();
+            if (lex.length() > 20) {
+                return "\"" + lex.substring(0, 20) + "...\"";
+            }
+            return "\"" + lex + "\"";
+        }
+        return node.toString();
     }
 }

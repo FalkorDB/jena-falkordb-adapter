@@ -99,6 +99,10 @@ public final class FalkorDBOpExecutor extends OpExecutor {
     private static final AttributeKey<Long> ATTR_TRIPLE_COUNT =
         AttributeKey.longKey("sparql.bgp.triple_count");
 
+    /** Attribute key for optimization type. */
+    private static final AttributeKey<String> ATTR_OPTIMIZATION_TYPE =
+        AttributeKey.stringKey("falkordb.optimization.type");
+
     /**
      * Factory for creating FalkorDBOpExecutor instances.
      */
@@ -150,6 +154,7 @@ public final class FalkorDBOpExecutor extends OpExecutor {
         
         Span span = tracer.spanBuilder("FalkorDBOpExecutor.execute")
             .setSpanKind(SpanKind.INTERNAL)
+            .setAttribute(ATTR_OPTIMIZATION_TYPE, "BGP_EXECUTION")
             .setAttribute(ATTR_TRIPLE_COUNT, (long) tripleCount)
             .startSpan();
 
@@ -239,6 +244,7 @@ public final class FalkorDBOpExecutor extends OpExecutor {
 
         Span span = tracer.spanBuilder("FalkorDBOpExecutor.executeFilter")
             .setSpanKind(SpanKind.INTERNAL)
+            .setAttribute(ATTR_OPTIMIZATION_TYPE, "FILTER_EXECUTION")
             .startSpan();
 
         try (Scope scope = span.makeCurrent()) {
@@ -363,6 +369,7 @@ public final class FalkorDBOpExecutor extends OpExecutor {
 
         Span span = tracer.spanBuilder("FalkorDBOpExecutor.executeOptional")
             .setSpanKind(SpanKind.INTERNAL)
+            .setAttribute(ATTR_OPTIMIZATION_TYPE, "OPTIONAL_EXECUTION")
             .startSpan();
 
         try (Scope scope = span.makeCurrent()) {

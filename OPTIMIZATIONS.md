@@ -975,30 +975,24 @@ The query pushdown can be extended to support additional SPARQL patterns. Below 
 
 ### OPTIONAL Patterns
 
-**Challenge**: SPARQL `OPTIONAL { ... }` returns bindings even when the optional part doesn't match.
+> **Status**: ✅ **IMPLEMENTED**  
+> **Tests**: See [SparqlToCypherCompilerTest.java](jena-falkordb-adapter/src/test/java/com/falkordb/jena/query/SparqlToCypherCompilerTest.java) (`testOptional*` methods) and [FalkorDBQueryPushdownTest.java](jena-falkordb-adapter/src/test/java/com/falkordb/jena/query/FalkorDBQueryPushdownTest.java) (`testOptional*` methods)  
+> **Examples**: See [samples/optional-patterns/](samples/optional-patterns/)  
+> **Documentation**: See [OPTIONAL Patterns section](#optional-patterns) above for complete documentation
 
-**Implementation Strategy**:
-1. In `FalkorDBOpExecutor`, intercept `OpLeftJoin` (which represents OPTIONAL)
-2. Translate to Cypher `OPTIONAL MATCH`:
+SPARQL `OPTIONAL` patterns are now automatically translated to Cypher `OPTIONAL MATCH` clauses. This allows returning all matches from the required pattern with NULL values for optional data, all in a single database query.
 
-```sparql
-# SPARQL
-SELECT ?person ?email WHERE {
-    ?person rdf:type <Person> .
-    OPTIONAL { ?person <email> ?email }
-}
-```
+**Key Features:**
+- ✅ Single query execution (no N+1 queries)
+- ✅ NULL handling for missing optional data
+- ✅ Multiple OPTIONAL clauses supported
+- ✅ FILTER expressions in required patterns
+- ✅ Literal properties and relationships
+- ✅ Complete test coverage
 
-```cypher
-# Cypher
-MATCH (person:Resource:`Person`)
-OPTIONAL MATCH (person)-[:`email`]->(email:Resource)
-RETURN person.uri AS person, email.uri AS email
-```
-
-**Files to modify**:
-- `FalkorDBOpExecutor.java`: Override `execute(OpLeftJoin, QueryIterator)` method
-- `SparqlToCypherCompiler.java`: Add `translateOptionalPattern()` that generates `OPTIONAL MATCH`
+**Implementation:**
+- `FalkorDBOpExecutor.java`: `execute(OpLeftJoin, QueryIterator)` method intercepts OPTIONAL operations
+- `SparqlToCypherCompiler.java`: `translateWithOptional()` method generates `OPTIONAL MATCH` clauses
 
 ### FILTER Expressions
 

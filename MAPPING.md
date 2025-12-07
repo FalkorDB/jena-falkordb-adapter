@@ -198,6 +198,8 @@ MERGE (s:Resource:`http://example.org/Person` {uri: "http://example.org/person1"
 })
 ```
 
+> **Query Pushdown Note**: When query pushdown is enabled (automatic by default), SPARQL queries with variable predicates (`?s ?p ?o`) retrieve `rdf:type` triples from node labels using Cypher's `labels()` function, ensuring all type information is included in query results.
+
 ### Fuseki curl Expression
 
 **Insert data:**

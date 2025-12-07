@@ -128,23 +128,22 @@ This executes as a single database operation.
 
 ### Registration
 
-To enable query pushdown, register the factory at application startup:
+Query pushdown is **automatically enabled** when the adapter is loaded via Jena's SPI subsystem. The `FalkorDBQueryEngineFactory` is registered during initialization, so all SPARQL queries against FalkorDB models use pushdown by default:
 
 ```java
-// Enable query pushdown globally
-FalkorDBQueryEngineFactory.register();
-
-// Now all SPARQL queries against FalkorDB models use pushdown
+// Query pushdown is automatically enabled - no registration needed!
 Model model = FalkorDBModelFactory.createModel("myGraph");
 Query query = QueryFactory.create("SELECT ...");
 try (QueryExecution qexec = QueryExecutionFactory.create(query, model)) {
     ResultSet results = qexec.execSelect();
-    // ...
+    // Automatically uses query pushdown for supported patterns
 }
 
-// Optionally disable
+// Optionally disable if needed
 FalkorDBQueryEngineFactory.unregister();
 ```
+
+**Note**: In prior versions, explicit registration via `FalkorDBQueryEngineFactory.register()` was required. This is no longer necessary as registration happens automatically during adapter initialization.
 
 ### Supported Patterns
 
@@ -163,7 +162,7 @@ Currently, the pushdown optimizer supports:
 #### Variable Predicate Support
 
 Variable predicates are supported for single-triple patterns. The compiler generates a UNION query
-that fetches both relationships and node properties:
+that fetches relationships, node properties, **and types from labels**:
 
 ```sparql
 # SPARQL: Get all properties of a resource
@@ -173,15 +172,28 @@ SELECT ?p ?o WHERE {
 ```
 
 ```cypher
-# Compiled Cypher (using UNION):
-MATCH (_n...:Resource {uri: $p0})-[_r]->(_o:Resource)
-RETURN _n....uri AS _s, type(_r) AS p, _o.uri AS o
+# Compiled Cypher (using triple UNION):
+# Part 1: Relationships (edges)
+MATCH (s:Resource {uri: $p0})-[_r]->(o:Resource)
+RETURN s.uri AS s, type(_r) AS p, o.uri AS o
 UNION ALL
-MATCH (_n...:Resource {uri: $p0})
-UNWIND keys(_n...) AS _propKey
-WITH _n..., _propKey WHERE _propKey <> 'uri'
-RETURN _n....uri AS _s, _propKey AS p, _n...[_propKey] AS o
+# Part 2: Properties (node attributes)
+MATCH (s:Resource {uri: $p0})
+UNWIND keys(s) AS _propKey
+WITH s, _propKey WHERE _propKey <> 'uri'
+RETURN s.uri AS s, _propKey AS p, s[_propKey] AS o
+UNION ALL
+# Part 3: Types (node labels as rdf:type)
+MATCH (s:Resource {uri: $p0})
+UNWIND labels(s) AS _label
+WITH s, _label WHERE _label <> 'Resource'
+RETURN s.uri AS s, 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type' AS p, _label AS o
 ```
+
+This three-part UNION ensures that all triple patterns are retrieved, including:
+- Relationships between resources (Part 1)
+- Literal properties on nodes (Part 2)
+- `rdf:type` triples derived from node labels (Part 3)
 
 #### Closed-Chain Variable Objects
 
@@ -250,6 +262,95 @@ docker-compose -f docker-compose-tracing.yaml up -d
 
 Then view traces at `http://localhost:16686`.
 
+## Optimizations with Inference Models (InfGraph)
+
+When using Jena's inference/reasoning capabilities with `InfModel` (which wraps the base model in an `InfGraph`), optimization behavior is different to preserve inference semantics:
+
+### Query Pushdown with InfGraph
+
+Query pushdown is **intentionally disabled** for inference models. When you create an `InfModel`:
+
+```java
+// Create base FalkorDB model
+Model baseModel = FalkorDBModelFactory.createModel("myGraph");
+
+// Create inference model with rules
+Reasoner reasoner = new GenericRuleReasoner(rules);
+InfModel infModel = ModelFactory.createInfModel(reasoner, baseModel);
+
+// Queries against infModel use standard Jena evaluation (no pushdown)
+```
+
+**Why disabled?** Query pushdown would bypass the inference layer, causing incorrect results. Inference requires:
+1. Access to all base triples
+2. Application of forward/backward chaining rules
+3. Generation of inferred triples
+
+Query pushdown operates directly on the graph database, which only contains base triples, not inferred ones.
+
+### Available Optimizations for InfGraph
+
+Even with query pushdown disabled, these optimizations **still work**:
+
+| Optimization | InfGraph Support | Notes |
+|-------------|------------------|-------|
+| **Transaction Batching** | ✅ Enabled | Bulk writes to base model use `UNWIND` |
+| **Magic Property (`falkor:cypher`)** | ✅ Enabled | Unwraps InfGraph to access raw FalkorDB graph |
+| **Query Pushdown** | ❌ Disabled | Would bypass inference layer |
+| **Automatic Indexing** | ✅ Enabled | Base graph maintains URI index |
+
+### Example: Optimized Writes with Inference
+
+```java
+// Transaction batching still works with InfModel
+InfModel infModel = ModelFactory.createInfModel(reasoner, baseModel);
+
+infModel.begin(ReadWrite.WRITE);
+try {
+    // These writes are batched and flushed efficiently
+    for (int i = 0; i < 1000; i++) {
+        Resource person = infModel.createResource("http://example.org/person" + i);
+        person.addProperty(RDF.type, personType);
+        person.addProperty(name, "Person " + i);
+    }
+    infModel.commit();  // Single bulk operation to base graph
+} finally {
+    infModel.end();
+}
+```
+
+### Example: Direct Cypher with Inference
+
+For performance-critical queries on the base data, use the magic property:
+
+```sparql
+PREFIX falkor: <http://falkordb.com/jena#>
+
+# This works with InfModel - accesses raw FalkorDB graph
+SELECT ?person (COUNT(?friend) AS ?friendCount) WHERE {
+    (?person ?friendCount) falkor:cypher '''
+        MATCH (p:Resource)-[:`http://example.org/knows`]->(:Resource)
+        RETURN p.uri AS person, count(*) AS friendCount
+    '''
+}
+```
+
+The magic property unwraps the InfGraph to access the underlying FalkorDB graph, allowing direct Cypher execution.
+
+### Performance Recommendations for Inference
+
+1. **Use selective inference**: Apply rules only to relevant subsets of data
+2. **Cache inferred models**: Inference is compute-intensive; cache results when possible
+3. **Use magic property for base data**: When you need raw performance on base triples
+4. **Separate base and inferred queries**: Query base data with magic property, inferred data with SPARQL
+5. **Monitor with tracing**: Use OpenTelemetry to identify slow inference operations
+
+### Testing
+
+Inference integration is tested in:
+- [FusekiInferenceIntegrationTest.java](jena-fuseki-falkordb/src/test/java/com/falkordb/FusekiInferenceIntegrationTest.java)
+- [FusekiLazyInferenceIntegrationTest.java](jena-fuseki-falkordb/src/test/java/com/falkordb/FusekiLazyInferenceIntegrationTest.java)
+
 ## Best Practices
 
 ### For Writes
@@ -285,8 +386,7 @@ try {
 ### Example: Optimal Query
 
 ```java
-// Register pushdown engine
-FalkorDBQueryEngineFactory.register();
+// Query pushdown is automatically enabled - no registration needed!
 
 // For complex graph traversals, use magic property
 String sparql = """

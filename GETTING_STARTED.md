@@ -262,6 +262,62 @@ try (var qexec = QueryExecutionFactory.create(sparql, model)) {
 }
 ```
 
+### Use Case 4: OPTIONAL Patterns for Partial Data
+
+```java
+// OPTIONAL patterns automatically push down to Cypher OPTIONAL MATCH
+// This retrieves all persons with optional email addresses in a single query
+var model = FalkorDBModelFactory.createModel("social_network");
+
+// Add some test data - not everyone has an email
+var alice = model.createResource("http://example.org/alice");
+alice.addProperty(RDF.type, model.createResource("http://xmlns.com/foaf/0.1/Person"));
+alice.addProperty(model.createProperty("http://xmlns.com/foaf/0.1/name"), "Alice");
+alice.addProperty(model.createProperty("http://xmlns.com/foaf/0.1/email"), 
+    model.createResource("mailto:alice@example.org"));
+
+var bob = model.createResource("http://example.org/bob");
+bob.addProperty(RDF.type, model.createResource("http://xmlns.com/foaf/0.1/Person"));
+bob.addProperty(model.createProperty("http://xmlns.com/foaf/0.1/name"), "Bob");
+// Bob has no email
+
+// Query with OPTIONAL pattern - automatically optimized to single Cypher query
+var sparql = """
+    PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+    SELECT ?person ?name ?email
+    WHERE {
+      ?person a foaf:Person .
+      ?person foaf:name ?name .
+      OPTIONAL { ?person foaf:email ?email }
+    }
+    ORDER BY ?name""";
+
+try (var qexec = QueryExecutionFactory.create(sparql, model)) {
+    var results = qexec.execSelect();
+    while (results.hasNext()) {
+        var soln = results.nextSolution();
+        var name = soln.getLiteral("name").getString();
+        // Check if optional email is present
+        if (soln.contains("email")) {
+            var email = soln.getResource("email").getURI();
+            System.out.println(name + " - " + email);
+        } else {
+            System.out.println(name + " - (no email)");
+        }
+    }
+}
+// Output:
+// Alice - mailto:alice@example.org
+// Bob - (no email)
+```
+
+**Benefits of OPTIONAL patterns:**
+- ✅ Single database query instead of N+1 queries
+- ✅ Automatic translation to Cypher OPTIONAL MATCH
+- ✅ Returns NULL for missing optional data (not empty result set)
+- ✅ Works with multiple OPTIONAL clauses and FILTER expressions
+- ✅ See [samples/optional-patterns/](samples/optional-patterns/) for more examples
+
 ---
 
 ## Configuration

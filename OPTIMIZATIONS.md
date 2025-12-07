@@ -262,6 +262,95 @@ docker-compose -f docker-compose-tracing.yaml up -d
 
 Then view traces at `http://localhost:16686`.
 
+## Optimizations with Inference Models (InfGraph)
+
+When using Jena's inference/reasoning capabilities with `InfModel` (which wraps the base model in an `InfGraph`), optimization behavior is different to preserve inference semantics:
+
+### Query Pushdown with InfGraph
+
+Query pushdown is **intentionally disabled** for inference models. When you create an `InfModel`:
+
+```java
+// Create base FalkorDB model
+Model baseModel = FalkorDBModelFactory.createModel("myGraph");
+
+// Create inference model with rules
+Reasoner reasoner = new GenericRuleReasoner(rules);
+InfModel infModel = ModelFactory.createInfModel(reasoner, baseModel);
+
+// Queries against infModel use standard Jena evaluation (no pushdown)
+```
+
+**Why disabled?** Query pushdown would bypass the inference layer, causing incorrect results. Inference requires:
+1. Access to all base triples
+2. Application of forward/backward chaining rules
+3. Generation of inferred triples
+
+Query pushdown operates directly on the graph database, which only contains base triples, not inferred ones.
+
+### Available Optimizations for InfGraph
+
+Even with query pushdown disabled, these optimizations **still work**:
+
+| Optimization | InfGraph Support | Notes |
+|-------------|------------------|-------|
+| **Transaction Batching** | ✅ Enabled | Bulk writes to base model use `UNWIND` |
+| **Magic Property (`falkor:cypher`)** | ✅ Enabled | Unwraps InfGraph to access raw FalkorDB graph |
+| **Query Pushdown** | ❌ Disabled | Would bypass inference layer |
+| **Automatic Indexing** | ✅ Enabled | Base graph maintains URI index |
+
+### Example: Optimized Writes with Inference
+
+```java
+// Transaction batching still works with InfModel
+InfModel infModel = ModelFactory.createInfModel(reasoner, baseModel);
+
+infModel.begin(ReadWrite.WRITE);
+try {
+    // These writes are batched and flushed efficiently
+    for (int i = 0; i < 1000; i++) {
+        Resource person = infModel.createResource("http://example.org/person" + i);
+        person.addProperty(RDF.type, personType);
+        person.addProperty(name, "Person " + i);
+    }
+    infModel.commit();  // Single bulk operation to base graph
+} finally {
+    infModel.end();
+}
+```
+
+### Example: Direct Cypher with Inference
+
+For performance-critical queries on the base data, use the magic property:
+
+```sparql
+PREFIX falkor: <http://falkordb.com/jena#>
+
+# This works with InfModel - accesses raw FalkorDB graph
+SELECT ?person (COUNT(?friend) AS ?friendCount) WHERE {
+    (?person ?friendCount) falkor:cypher '''
+        MATCH (p:Resource)-[:`http://example.org/knows`]->(:Resource)
+        RETURN p.uri AS person, count(*) AS friendCount
+    '''
+}
+```
+
+The magic property unwraps the InfGraph to access the underlying FalkorDB graph, allowing direct Cypher execution.
+
+### Performance Recommendations for Inference
+
+1. **Use selective inference**: Apply rules only to relevant subsets of data
+2. **Cache inferred models**: Inference is compute-intensive; cache results when possible
+3. **Use magic property for base data**: When you need raw performance on base triples
+4. **Separate base and inferred queries**: Query base data with magic property, inferred data with SPARQL
+5. **Monitor with tracing**: Use OpenTelemetry to identify slow inference operations
+
+### Testing
+
+Inference integration is tested in:
+- [FusekiInferenceIntegrationTest.java](jena-fuseki-falkordb/src/test/java/com/falkordb/FusekiInferenceIntegrationTest.java)
+- [FusekiLazyInferenceIntegrationTest.java](jena-fuseki-falkordb/src/test/java/com/falkordb/FusekiLazyInferenceIntegrationTest.java)
+
 ## Best Practices
 
 ### For Writes

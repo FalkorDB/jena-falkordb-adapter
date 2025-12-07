@@ -372,7 +372,7 @@ This is a basic implementation with some limitations:
 2. **Performance**: Translation overhead may impact performance for large datasets
 3. **Complex Queries**: Advanced SPARQL features (OPTIONAL, UNION, nested queries) may not work as expected
 
-Note: Inference/reasoning is now supported via Jena's rule-based reasoning when using the Fuseki server with appropriate configuration. See the [Fuseki GETTING_STARTED.md](jena-fuseki-falkordb/GETTING_STARTED.md) for details.
+**Note on Inference/Reasoning**: Inference is supported via Jena's rule-based reasoning. When using `InfModel` (inference models), query pushdown is intentionally disabled to preserve inference semantics, but transaction batching and magic property optimizations remain available. See [OPTIMIZATIONS.md](OPTIMIZATIONS.md#optimizations-with-inference-models-infgraph) for details.
 
 ## Architecture
 

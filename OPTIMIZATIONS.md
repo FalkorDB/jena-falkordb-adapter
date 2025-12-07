@@ -171,7 +171,8 @@ Currently, the pushdown optimizer supports:
 | Variable objects (single triple) | ✅ | `?s <pred> ?o` (uses UNION for properties + relationships) |
 | Closed-chain variable objects | ✅ | `?a <pred> ?b . ?b <pred> ?a` (mutual references) |
 | OPTIONAL patterns | ✅ | `OPTIONAL { ?s ?p ?o }` (uses Cypher OPTIONAL MATCH) |
-| FILTER, UNION | ❌ (fallback) | Complex patterns |
+| FILTER expressions | ✅ | `FILTER(?age < 30)` (translates to Cypher WHERE clause) |
+| UNION patterns | ❌ (fallback) | Complex alternative patterns |
 
 #### Variable Predicate Support
 
@@ -1001,37 +1002,76 @@ RETURN person.uri AS person, email.uri AS email
 
 ### FILTER Expressions
 
-**Challenge**: SPARQL `FILTER` expressions need to be translated to Cypher `WHERE` clauses.
+> **Status**: ✅ **IMPLEMENTED**  
+> **Tests**: See [SparqlToCypherCompilerTest.java](jena-falkordb-adapter/src/test/java/com/falkordb/jena/query/SparqlToCypherCompilerTest.java) (`testFilterWith*` methods) and [FalkorDBQueryPushdownTest.java](jena-falkordb-adapter/src/test/java/com/falkordb/jena/query/FalkorDBQueryPushdownTest.java) (`testFilterWith*` methods)  
+> **Examples**: See [samples/filter-expressions/](samples/filter-expressions/)
 
-**Implementation Strategy**:
-1. In `FalkorDBOpExecutor`, intercept `OpFilter`
-2. Create a `FilterToCypherTranslator` to map SPARQL expressions to Cypher:
+SPARQL `FILTER` expressions are now automatically translated to Cypher `WHERE` clauses, eliminating client-side filtering and reducing data transfer.
 
-| SPARQL | Cypher |
-|--------|--------|
-| `FILTER(?x > 10)` | `WHERE x > 10` |
-| `FILTER(regex(?name, "^A"))` | `WHERE name =~ "^A.*"` |
-| `FILTER(bound(?x))` | `WHERE x IS NOT NULL` |
-| `FILTER(isURI(?x))` | `WHERE x STARTS WITH "http"` |
-| `FILTER(?x = "value")` | `WHERE x = "value"` |
+**Supported Operators:**
 
-```java
-public class FilterToCypherTranslator extends ExprVisitorBase {
-    @Override
-    public void visit(E_Equals expr) {
-        // Translate = to Cypher =
-    }
-    
-    @Override
-    public void visit(E_Regex expr) {
-        // Translate regex() to Cypher =~
-    }
+| SPARQL | Cypher | Example |
+|--------|--------|---------|
+| `FILTER(?x < 10)` | `WHERE x < 10` | Less than |
+| `FILTER(?x <= 10)` | `WHERE x <= 10` | Less than or equal |
+| `FILTER(?x > 10)` | `WHERE x > 10` | Greater than |
+| `FILTER(?x >= 10)` | `WHERE x >= 10` | Greater than or equal |
+| `FILTER(?x = "value")` | `WHERE x = 'value'` | Equals |
+| `FILTER(?x != "value")` | `WHERE x <> 'value'` | Not equals |
+| `FILTER(?x > 10 && ?x < 20)` | `WHERE (x > 10 AND x < 20)` | Logical AND |
+| `FILTER(?x < 10 \|\| ?x > 20)` | `WHERE (x < 10 OR x > 20)` | Logical OR |
+| `FILTER(! (?x < 10))` | `WHERE NOT (x < 10)` | Logical NOT |
+
+**Example:**
+
+```sparql
+# SPARQL with FILTER
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+SELECT ?person ?age WHERE {
+    ?person foaf:age ?age .
+    FILTER(?age >= 18 && ?age < 65)
 }
 ```
 
-**Files to modify**:
-- Create new `FilterToCypherTranslator.java` in `com.falkordb.jena.query` package
-- `FalkorDBOpExecutor.java`: Override `execute(OpFilter, QueryIterator)` method
+```cypher
+# Generated Cypher with WHERE clause
+MATCH (person:Resource)
+WHERE person.`http://xmlns.com/foaf/0.1/age` IS NOT NULL
+WHERE (person.`http://xmlns.com/foaf/0.1/age` >= 18 
+   AND person.`http://xmlns.com/foaf/0.1/age` < 65)
+RETURN person.uri AS person, 
+       person.`http://xmlns.com/foaf/0.1/age` AS age
+```
+
+**FILTER with UNION Queries:**
+
+When a BGP uses variable object optimization (resulting in UNION), FILTER is automatically applied to each UNION branch:
+
+```cypher
+# UNION query with FILTER on each branch
+MATCH (person:Resource)-[:`foaf:age`]->(age:Resource)
+WHERE age.uri >= 18 AND age.uri < 65
+RETURN person.uri AS person, age.uri AS age
+UNION ALL
+MATCH (person:Resource)
+WHERE person.`foaf:age` IS NOT NULL
+  AND person.`foaf:age` >= 18 AND person.`foaf:age` < 65
+RETURN person.uri AS person, person.`foaf:age` AS age
+```
+
+**Performance Benefits:**
+- ✅ Eliminates client-side filtering
+- ✅ Reduces data transfer (only matching rows returned)
+- ✅ Enables use of database indexes
+- ✅ Single query execution (no post-processing)
+
+**Limitations:**
+- Some SPARQL filter functions (`regex()`, `str()`, `bound()`, `isURI()`) not yet supported
+- Complex nested filters may fall back to standard evaluation
+
+**Implementation:**
+- `FalkorDBOpExecutor.java`: Intercepts `OpFilter` operations
+- `SparqlToCypherCompiler.java`: `translateWithFilter()` method converts expressions to Cypher WHERE
 
 ### UNION Patterns
 

@@ -11,6 +11,7 @@ samples/
 ├── query-pushdown/        # SPARQL to Cypher translation
 ├── variable-objects/      # Query both properties and relationships
 ├── optional-patterns/     # Efficient optional data retrieval
+├── filter-expressions/    # FILTER expression optimization
 └── magic-property/        # Direct Cypher execution
 ```
 
@@ -70,7 +71,22 @@ Translates SPARQL OPTIONAL patterns to Cypher OPTIONAL MATCH, returning all requ
 - Concrete subjects with OPTIONAL
 - OPTIONAL with FILTER
 
-### 5. Magic Property (Direct Cypher)
+### 5. FILTER Expressions
+**Location:** [`filter-expressions/`](filter-expressions/)
+
+Automatically pushes FILTER expressions down to Cypher WHERE clauses, eliminating client-side filtering.
+
+**Performance:** Reduces data transfer, enables database indexes, eliminates client-side filtering
+
+**Examples:**
+- Numeric comparisons (`<`, `<=`, `>`, `>=`, `=`, `!=`)
+- Logical operators (`AND`, `OR`, `NOT`)
+- String equality and inequality
+- Numeric range filters
+- Complex combined expressions
+- FILTER with UNION queries
+
+### 6. Magic Property (Direct Cypher)
 **Location:** [`magic-property/`](magic-property/)
 
 Allows direct Cypher execution within SPARQL for maximum control and performance.
@@ -142,6 +158,7 @@ Each subdirectory contains:
 | **Query Pushdown** | Nx-N²x | Multi-hop queries, graph traversal |
 | **Variable Objects** | 2x | Mixed property/relationship queries |
 | **OPTIONAL Patterns** | Nx | Partial data retrieval |
+| **FILTER Expressions** | Reduces data transfer | Filtering, range queries, complex conditions |
 | **Magic Property** | Maximum | Complex Cypher patterns |
 
 ## File Formats

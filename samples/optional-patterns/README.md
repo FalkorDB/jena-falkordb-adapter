@@ -141,19 +141,40 @@ SELECT ?person ?fof WHERE {
 }
 ```
 
+## FILTER Support
+
+FILTER expressions in the required pattern work seamlessly with OPTIONAL patterns:
+
+```sparql
+# Filter on required data before OPTIONAL
+SELECT ?person ?name ?email WHERE {
+    ?person foaf:name ?name .
+    ?person foaf:age ?age .
+    FILTER(?age >= 18 AND ?age < 65)
+    OPTIONAL { ?person foaf:email ?email }
+}
+```
+
+**Supported FILTER Operators:**
+- Comparisons: `<`, `<=`, `>`, `>=`, `=`, `<>` 
+- Logical: `AND`, `OR`, `NOT`
+- Works with: literal properties, variables, numeric/string/boolean constants
+
+The FILTER is translated to a Cypher WHERE clause and executed at the database level for optimal performance.
+
 ## Best Practices
 
 1. **Use OPTIONAL for truly optional data**: Don't use OPTIONAL if the data is required
 2. **Order matters**: Put required patterns first, OPTIONAL patterns after
 3. **Multiple OPTIONALs are independent**: Each OPTIONAL is evaluated separately
-4. **FILTER before OPTIONAL**: Apply filters on required data before OPTIONAL patterns
+4. **FILTER before OPTIONAL**: Apply filters on required data before OPTIONAL patterns for best performance
 5. **Check for NULL**: Always check if optional variables are bound before using them
 
 ## Limitations
 
 - Variable predicates in OPTIONAL patterns not yet supported
 - Very deeply nested OPTIONAL patterns may fall back to standard evaluation
-- Complex filters within OPTIONAL blocks may not push down
+- FILTER clauses within OPTIONAL blocks (not in required part) may not fully push down
 
 ## See Also
 

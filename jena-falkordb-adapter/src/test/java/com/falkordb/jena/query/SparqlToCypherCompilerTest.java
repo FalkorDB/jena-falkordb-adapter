@@ -698,4 +698,152 @@ public class SparqlToCypherCompilerTest {
         assertTrue(hasOptionalMatch, "Should have OPTIONAL MATCH clause");
         assertTrue(hasReturn, "Should have RETURN clause");
     }
+
+    @Test
+    @DisplayName("Test OPTIONAL with FILTER less than")
+    public void testOptionalWithFilterLessThan() throws SparqlToCypherCompiler.CannotCompileException {
+        // Required: ?person foaf:name ?name, ?person foaf:age ?age
+        // Filter: ?age < 30
+        // Optional: ?person foaf:email ?email
+        BasicPattern required = new BasicPattern();
+        required.add(Triple.create(
+            NodeFactory.createVariable("person"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/name"),
+            NodeFactory.createVariable("name")
+        ));
+        required.add(Triple.create(
+            NodeFactory.createVariable("person"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/age"),
+            NodeFactory.createVariable("age")
+        ));
+
+        BasicPattern optional = new BasicPattern();
+        optional.add(Triple.create(
+            NodeFactory.createVariable("person"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/email"),
+            NodeFactory.createVariable("email")
+        ));
+
+        // Create filter expression: ?age < 30
+        org.apache.jena.sparql.expr.Expr filterExpr = 
+            new org.apache.jena.sparql.expr.E_LessThan(
+                new org.apache.jena.sparql.expr.ExprVar("age"),
+                org.apache.jena.sparql.expr.NodeValue.makeInteger(30)
+            );
+
+        SparqlToCypherCompiler.CompilationResult result = 
+            SparqlToCypherCompiler.translateWithOptional(required, optional, filterExpr);
+
+        assertNotNull(result);
+        String cypher = result.cypherQuery();
+        
+        // Should have WHERE clause with filter
+        assertTrue(cypher.contains("WHERE"), "Should have WHERE clause");
+        assertTrue(cypher.contains("<"), "Should have < operator");
+        assertTrue(cypher.contains("30"), "Should have value 30");
+        
+        // Should have OPTIONAL MATCH after WHERE
+        assertTrue(cypher.contains("OPTIONAL MATCH"), "Should have OPTIONAL MATCH");
+        
+        // WHERE should come before OPTIONAL MATCH
+        int whereIdx = cypher.indexOf("WHERE");
+        int optionalIdx = cypher.indexOf("OPTIONAL MATCH");
+        assertTrue(whereIdx < optionalIdx && whereIdx > 0, 
+            "WHERE should come before OPTIONAL MATCH");
+    }
+
+    @Test
+    @DisplayName("Test OPTIONAL with FILTER equals")
+    public void testOptionalWithFilterEquals() throws SparqlToCypherCompiler.CannotCompileException {
+        // Required: ?person foaf:name ?name
+        // Filter: ?name = "Alice"
+        // Optional: ?person foaf:email ?email
+        BasicPattern required = new BasicPattern();
+        required.add(Triple.create(
+            NodeFactory.createVariable("person"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/name"),
+            NodeFactory.createVariable("name")
+        ));
+
+        BasicPattern optional = new BasicPattern();
+        optional.add(Triple.create(
+            NodeFactory.createVariable("person"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/email"),
+            NodeFactory.createVariable("email")
+        ));
+
+        // Create filter: ?name = "Alice"
+        org.apache.jena.sparql.expr.Expr filterExpr = 
+            new org.apache.jena.sparql.expr.E_Equals(
+                new org.apache.jena.sparql.expr.ExprVar("name"),
+                org.apache.jena.sparql.expr.NodeValue.makeString("Alice")
+            );
+
+        SparqlToCypherCompiler.CompilationResult result = 
+            SparqlToCypherCompiler.translateWithOptional(required, optional, filterExpr);
+
+        assertNotNull(result);
+        String cypher = result.cypherQuery();
+        
+        // Should have WHERE with equals
+        assertTrue(cypher.contains("WHERE"), "Should have WHERE clause");
+        assertTrue(cypher.contains("="), "Should have = operator");
+        assertTrue(cypher.contains("Alice"), "Should have Alice value");
+        
+        // Should have OPTIONAL MATCH
+        assertTrue(cypher.contains("OPTIONAL MATCH"), "Should have OPTIONAL MATCH");
+    }
+
+    @Test
+    @DisplayName("Test OPTIONAL with FILTER AND condition")
+    public void testOptionalWithFilterAnd() throws SparqlToCypherCompiler.CannotCompileException {
+        // Required: ?person foaf:name ?name, ?person foaf:age ?age
+        // Filter: ?age > 20 AND ?age < 30
+        // Optional: ?person foaf:email ?email
+        BasicPattern required = new BasicPattern();
+        required.add(Triple.create(
+            NodeFactory.createVariable("person"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/name"),
+            NodeFactory.createVariable("name")
+        ));
+        required.add(Triple.create(
+            NodeFactory.createVariable("person"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/age"),
+            NodeFactory.createVariable("age")
+        ));
+
+        BasicPattern optional = new BasicPattern();
+        optional.add(Triple.create(
+            NodeFactory.createVariable("person"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/email"),
+            NodeFactory.createVariable("email")
+        ));
+
+        // Create filter: ?age > 20 AND ?age < 30
+        org.apache.jena.sparql.expr.Expr filterExpr = 
+            new org.apache.jena.sparql.expr.E_LogicalAnd(
+                new org.apache.jena.sparql.expr.E_GreaterThan(
+                    new org.apache.jena.sparql.expr.ExprVar("age"),
+                    org.apache.jena.sparql.expr.NodeValue.makeInteger(20)
+                ),
+                new org.apache.jena.sparql.expr.E_LessThan(
+                    new org.apache.jena.sparql.expr.ExprVar("age"),
+                    org.apache.jena.sparql.expr.NodeValue.makeInteger(30)
+                )
+            );
+
+        SparqlToCypherCompiler.CompilationResult result = 
+            SparqlToCypherCompiler.translateWithOptional(required, optional, filterExpr);
+
+        assertNotNull(result);
+        String cypher = result.cypherQuery();
+        
+        // Should have WHERE with AND
+        assertTrue(cypher.contains("WHERE"), "Should have WHERE clause");
+        assertTrue(cypher.contains("AND"), "Should have AND operator");
+        assertTrue(cypher.contains(">"), "Should have > operator");
+        assertTrue(cypher.contains("<"), "Should have < operator");
+        assertTrue(cypher.contains("20"), "Should have value 20");
+        assertTrue(cypher.contains("30"), "Should have value 30");
+    }
 }

@@ -239,8 +239,17 @@ public final class FalkorDBOpExecutor extends OpExecutor {
             Op left = opLeftJoin.getLeft();
             Op right = opLeftJoin.getRight();
             
-            // Check if both sides are BGPs
-            // NOTE: FILTER support with OPTIONAL is not yet fully implemented
+            // Handle OpFilter wrapping OpBGP on the left side
+            Expr filterExpr = null;
+            if (left instanceof OpFilter) {
+                OpFilter opFilter = (OpFilter) left;
+                filterExpr = opFilter.getExprs().getList().isEmpty() 
+                    ? null 
+                    : opFilter.getExprs().getList().get(0);
+                left = opFilter.getSubOp();
+            }
+            
+            // Check if both sides are BGPs (after unwrapping filter)
             if (!(left instanceof OpBGP) || !(right instanceof OpBGP)) {
                 span.setAttribute(ATTR_FALLBACK, true);
                 span.addEvent("Left or right is not BGP, falling back");
@@ -254,9 +263,9 @@ public final class FalkorDBOpExecutor extends OpExecutor {
             int totalTriples = leftBGP.size() + rightBGP.size();
             span.setAttribute(ATTR_TRIPLE_COUNT, (long) totalTriples);
             
-            // Try to compile with OPTIONAL support (without FILTER for now)
+            // Try to compile with OPTIONAL support (with FILTER if present)
             SparqlToCypherCompiler.CompilationResult compilation =
-                SparqlToCypherCompiler.translateWithOptional(leftBGP, rightBGP, null);
+                SparqlToCypherCompiler.translateWithOptional(leftBGP, rightBGP, filterExpr);
 
             String cypherQuery = compilation.cypherQuery();
             Map<String, Object> parameters = compilation.parameters();

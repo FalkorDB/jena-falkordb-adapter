@@ -553,11 +553,41 @@ try (QueryExecution qexec = QueryExecutionFactory.create(query, model)) {
 | Multiple OPTIONAL fields (3) | N * 3 queries | 1 query | 3Nx fewer calls |
 | Nested OPTIONAL | N * M queries | 1 query | NMx fewer calls |
 
+**FILTER Support with OPTIONAL:**
+
+FILTER expressions in the required pattern before OPTIONAL clauses are fully supported and translated to Cypher WHERE clauses. Supported operators include:
+
+- **Comparison operators**: `<`, `<=`, `>`, `>=`, `=`, `<>` (not equal)
+- **Logical operators**: `AND`, `OR`, `NOT`
+- **Operands**: Variables (from literal properties), numeric literals, string literals, boolean literals
+
+The FILTER is applied at the database level before the OPTIONAL MATCH, ensuring optimal performance:
+
+```sparql
+# SPARQL with FILTER
+SELECT ?person ?name ?email WHERE {
+    ?person foaf:name ?name .
+    ?person foaf:age ?age .
+    FILTER(?age >= 18 AND ?age < 65)
+    OPTIONAL { ?person foaf:email ?email }
+}
+```
+
+```cypher
+# Generated Cypher with WHERE clause
+MATCH (person:Resource)
+WHERE person.`foaf:name` IS NOT NULL 
+  AND person.`foaf:age` IS NOT NULL
+WHERE (person.`foaf:age` >= 18 AND person.`foaf:age` < 65)
+OPTIONAL MATCH (person)-[:email]->(email:Resource)
+RETURN person.uri AS person, person.`foaf:name` AS name, email.uri AS email
+```
+
 **Limitations:**
 
 - Variable predicates in OPTIONAL patterns not yet supported (will fall back)
 - Complex nested OPTIONAL patterns may fall back to standard evaluation
-- FILTER clauses within OPTIONAL blocks may not fully push down
+- FILTER clauses within OPTIONAL blocks (not the required part) may not fully push down
 
 **Complete Working Examples:**
 

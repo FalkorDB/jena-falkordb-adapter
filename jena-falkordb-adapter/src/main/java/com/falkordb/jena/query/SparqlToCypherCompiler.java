@@ -575,21 +575,13 @@ public final class SparqlToCypherCompiler {
                     // Used as subject in another triple - treat as relationship
                     variableObjectRelTriples.add(triple);
                 } else {
-                    // Variable object that might be either a relationship or property
-                    // These will be handled with UNION queries
-                    variableObjectTriples.add(triple);
+                    // Variable object not used as subject - treat as literal property
+                    // This allows multi-triple patterns like ?person foaf:name ?name
+                    literalTriples.add(triple);
                 }
             } else {
                 relationshipTriples.add(triple);
             }
-        }
-
-        // Variable object patterns can only be handled for single-triple BGPs
-        // (already handled above in the single-triple check)
-        // Multi-triple patterns with variable objects need standard evaluation
-        if (!variableObjectTriples.isEmpty()) {
-            throw new CannotCompileException(
-                "Multi-triple patterns with variable objects not yet supported for pushdown");
         }
 
         // Build the Cypher query

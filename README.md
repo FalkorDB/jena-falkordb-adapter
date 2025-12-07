@@ -31,7 +31,8 @@ This is a multi-module Maven project consisting of:
 - ✅ **rdf:type support with native graph labels**
 - ✅ **Automatic URI indexing** for optimal query performance
 - ✅ **Custom driver support** for advanced configuration
-- ✅ **Magic property (falkor:cypher)** for native Cypher query pushdown
+- ✅ **Automatic query pushdown** - SPARQL to Cypher translation enabled by default
+- ✅ **Magic property (falkor:cypher)** for direct Cypher execution within SPARQL
 - ✅ **Fuseki SPARQL server** with FalkorDB backend
 - ✅ **Inference support** with rule-based reasoning (RDFS/OWL rules)
 - ✅ Connection pooling for better performance
@@ -240,6 +241,7 @@ person.addProperty(RDF.type, personType);
 // MERGE (s:Resource:`http://xmlns.com/foaf/0.1/Person` {uri: "http://example.org/alice"})
 
 // You can then query by type efficiently
+// Query pushdown automatically retrieves rdf:type from node labels
 ```
 
 #### Resources as Relationships
@@ -256,6 +258,7 @@ alice.addProperty(knows, bob);
 This storage model provides:
 - ✅ **Better Performance**: Literals stored as properties reduce graph complexity
 - ✅ **Efficient Queries**: Labels enable fast type-based filtering
+- ✅ **Automatic Query Pushdown**: SPARQL patterns automatically compiled to Cypher
 - ✅ **Readable URIs**: Backtick notation preserves URIs without encoding
 - ✅ **Automatic Indexing**: `Resource.uri` is indexed automatically
 
@@ -555,14 +558,15 @@ mvn test
 
 ## Performance Tips
 
-1. **Automatic Indexing**: The adapter automatically creates an index on `Resource.uri` for optimal performance
-2. **Efficient Literal Storage**: Literals are stored as node properties, not separate nodes, reducing graph traversal
-3. **Use Connection Pooling**: Already configured by default with JFalkorDB driver
-4. **Batch Operations**: Group multiple adds together when possible
-5. **Type-Based Queries**: Leverage `rdf:type` labels for efficient filtering
-6. **Limit Result Sets**: Use LIMIT in SPARQL queries to reduce data transfer
-7. **Close Resources**: Always close models, query executions, and custom drivers
-8. **Parameterized Queries**: All queries use parameters internally for better performance and security
+1. **Automatic Query Pushdown**: SPARQL queries are automatically compiled to efficient Cypher - no configuration needed!
+2. **Automatic Indexing**: The adapter automatically creates an index on `Resource.uri` for optimal performance
+3. **Efficient Literal Storage**: Literals are stored as node properties, not separate nodes, reducing graph traversal
+4. **Use Connection Pooling**: Already configured by default with JFalkorDB driver
+5. **Batch Operations**: Group multiple adds together when possible
+6. **Type-Based Queries**: Leverage `rdf:type` labels for efficient filtering (automatically used by query pushdown)
+7. **Limit Result Sets**: Use LIMIT in SPARQL queries to reduce data transfer
+8. **Close Resources**: Always close models, query executions, and custom drivers
+9. **Parameterized Queries**: All queries use parameters internally for better performance and security
 
 ## Docker Compose Setup
 

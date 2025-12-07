@@ -1,10 +1,24 @@
-# FalkorDB Magic Property (Cypher Query Pushdown)
+# FalkorDB Magic Property (Direct Cypher Execution)
 
-The FalkorDB Jena adapter provides a "magic property" that allows you to execute native Cypher queries directly from within SPARQL queries. This feature provides a query pushdown mechanism that can significantly improve performance by bypassing the slower triple-by-triple matching engine.
+The FalkorDB Jena adapter provides a "magic property" that allows you to execute native Cypher queries directly from within SPARQL queries. This feature complements the automatic query pushdown by giving you direct control over Cypher query generation for complex patterns.
+
+## Query Pushdown vs. Magic Property
+
+The adapter provides **two** optimization mechanisms:
+
+1. **Automatic Query Pushdown** (Enabled by Default): The adapter automatically translates supported SPARQL Basic Graph Patterns (BGPs) to efficient Cypher queries. This works transparently for common patterns like relationships, properties, and type queries.
+
+2. **Magic Property** (`falkor:cypher`): For advanced use cases requiring aggregations, path patterns, or complex Cypher features not yet supported by automatic pushdown, you can write Cypher directly within your SPARQL query.
 
 ## Why Use Magic Property?
 
-By default, Jena translates SPARQL queries into many individual graph pattern matching operations. For example, a "Friends of Friends" query like:
+While automatic query pushdown handles most common SPARQL patterns, the magic property is useful when you need:
+- Complex path traversals with variable length paths
+- Cypher-specific aggregations (e.g., `count()`, `collect()`)
+- Advanced graph algorithms
+- Fine-tuned performance for specific query patterns
+
+For example, a "Friends of Friends" query:
 
 ```sparql
 SELECT ?friend WHERE {

@@ -128,23 +128,22 @@ This executes as a single database operation.
 
 ### Registration
 
-To enable query pushdown, register the factory at application startup:
+Query pushdown is **automatically enabled** when the adapter is loaded via Jena's SPI subsystem. The `FalkorDBQueryEngineFactory` is registered during initialization, so all SPARQL queries against FalkorDB models use pushdown by default:
 
 ```java
-// Enable query pushdown globally
-FalkorDBQueryEngineFactory.register();
-
-// Now all SPARQL queries against FalkorDB models use pushdown
+// Query pushdown is automatically enabled - no registration needed!
 Model model = FalkorDBModelFactory.createModel("myGraph");
 Query query = QueryFactory.create("SELECT ...");
 try (QueryExecution qexec = QueryExecutionFactory.create(query, model)) {
     ResultSet results = qexec.execSelect();
-    // ...
+    // Automatically uses query pushdown for supported patterns
 }
 
-// Optionally disable
+// Optionally disable if needed
 FalkorDBQueryEngineFactory.unregister();
 ```
+
+**Note**: In prior versions, explicit registration via `FalkorDBQueryEngineFactory.register()` was required. This is no longer necessary as registration happens automatically during adapter initialization.
 
 ### Supported Patterns
 
@@ -163,7 +162,7 @@ Currently, the pushdown optimizer supports:
 #### Variable Predicate Support
 
 Variable predicates are supported for single-triple patterns. The compiler generates a UNION query
-that fetches both relationships and node properties:
+that fetches relationships, node properties, **and types from labels**:
 
 ```sparql
 # SPARQL: Get all properties of a resource
@@ -173,15 +172,28 @@ SELECT ?p ?o WHERE {
 ```
 
 ```cypher
-# Compiled Cypher (using UNION):
-MATCH (_n...:Resource {uri: $p0})-[_r]->(_o:Resource)
-RETURN _n....uri AS _s, type(_r) AS p, _o.uri AS o
+# Compiled Cypher (using triple UNION):
+# Part 1: Relationships (edges)
+MATCH (s:Resource {uri: $p0})-[_r]->(o:Resource)
+RETURN s.uri AS s, type(_r) AS p, o.uri AS o
 UNION ALL
-MATCH (_n...:Resource {uri: $p0})
-UNWIND keys(_n...) AS _propKey
-WITH _n..., _propKey WHERE _propKey <> 'uri'
-RETURN _n....uri AS _s, _propKey AS p, _n...[_propKey] AS o
+# Part 2: Properties (node attributes)
+MATCH (s:Resource {uri: $p0})
+UNWIND keys(s) AS _propKey
+WITH s, _propKey WHERE _propKey <> 'uri'
+RETURN s.uri AS s, _propKey AS p, s[_propKey] AS o
+UNION ALL
+# Part 3: Types (node labels as rdf:type)
+MATCH (s:Resource {uri: $p0})
+UNWIND labels(s) AS _label
+WITH s, _label WHERE _label <> 'Resource'
+RETURN s.uri AS s, 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type' AS p, _label AS o
 ```
+
+This three-part UNION ensures that all triple patterns are retrieved, including:
+- Relationships between resources (Part 1)
+- Literal properties on nodes (Part 2)
+- `rdf:type` triples derived from node labels (Part 3)
 
 #### Closed-Chain Variable Objects
 
@@ -285,8 +297,7 @@ try {
 ### Example: Optimal Query
 
 ```java
-// Register pushdown engine
-FalkorDBQueryEngineFactory.register();
+// Query pushdown is automatically enabled - no registration needed!
 
 // For complex graph traversals, use magic property
 String sparql = """

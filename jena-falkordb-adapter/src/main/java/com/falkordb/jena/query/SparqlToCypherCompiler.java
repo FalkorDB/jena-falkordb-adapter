@@ -826,6 +826,168 @@ public final class SparqlToCypherCompiler {
     }
 
     /**
+     * Translate a SPARQL Basic Graph Pattern with FILTER expression to Cypher.
+     * 
+     * <p>This method extends the standard BGP translation by adding a WHERE clause
+     * for the FILTER expression. The FILTER is translated to Cypher WHERE conditions
+     * and applied after the MATCH clauses.</p>
+     * 
+     * <p><b>Supported FILTER Operators:</b></p>
+     * <ul>
+     *   <li>Comparison: {@code <}, {@code <=}, {@code >}, {@code >=}, {@code =}, {@code <>}</li>
+     *   <li>Logical: {@code AND}, {@code OR}, {@code NOT}</li>
+     *   <li>Operands: Variables (from literal properties or nodes), numeric literals, 
+     *       string literals, boolean literals</li>
+     * </ul>
+     * 
+     * <p><b>Example:</b></p>
+     * <pre>{@code
+     * // SPARQL:
+     * // SELECT ?person ?age WHERE {
+     * //   ?person foaf:age ?age .
+     * //   FILTER(?age >= 18 AND ?age < 65)
+     * // }
+     * 
+     * // Compiled Cypher:
+     * // MATCH (person:Resource)
+     * // WHERE person.`http://xmlns.com/foaf/0.1/age` IS NOT NULL
+     * // WHERE (person.`http://xmlns.com/foaf/0.1/age` >= 18 AND 
+     * //        person.`http://xmlns.com/foaf/0.1/age` < 65)
+     * // RETURN person.uri AS person, 
+     * //        person.`http://xmlns.com/foaf/0.1/age` AS age
+     * }</pre>
+     * 
+     * @param bgp the Basic Graph Pattern
+     * @param filterExpr the FILTER expression to apply
+     * @return the compilation result with Cypher query and parameters
+     * @throws CannotCompileException if the BGP or FILTER cannot be compiled
+     */
+    public static CompilationResult translateWithFilter(
+            final BasicPattern bgp,
+            final Expr filterExpr)
+            throws CannotCompileException {
+        
+        if (filterExpr == null) {
+            // No filter - just translate the BGP normally
+            return translate(bgp);
+        }
+        
+        // First, compile the BGP without filter
+        CompilationResult bgpResult = translate(bgp);
+        
+        // Extract the components from the BGP result
+        String bgpQuery = bgpResult.cypherQuery();
+        Map<String, Object> parameters = new HashMap<>(bgpResult.parameters());
+        Map<String, String> variableMapping = bgpResult.variableMapping();
+        
+        // Identify node variables from the BGP
+        Set<String> nodeVariables = new HashSet<>();
+        for (Triple triple : bgp.getList()) {
+            if (triple.getSubject().isVariable()) {
+                nodeVariables.add(triple.getSubject().getName());
+            }
+            if (triple.getObject().isVariable() && !triple.getObject().isLiteral()) {
+                // Only add object variables that aren't in variableMapping
+                // (those in variableMapping are literal properties)
+                String objVar = triple.getObject().getName();
+                if (!variableMapping.containsKey(objVar)) {
+                    nodeVariables.add(objVar);
+                }
+            }
+        }
+        
+        // Translate the filter expression to Cypher WHERE clause
+        int paramCounter = parameters.size();
+        String filterCypher = translateFilterExpr(
+            filterExpr, variableMapping, nodeVariables, parameters, paramCounter);
+        
+        // Check if this is a UNION query (contains "UNION ALL")
+        if (bgpQuery.contains("UNION ALL")) {
+            // For UNION queries, we need to add the filter to each branch
+            String[] unionParts = bgpQuery.split("UNION ALL");
+            StringBuilder finalQuery = new StringBuilder();
+            
+            for (int i = 0; i < unionParts.length; i++) {
+                String part = unionParts[i].trim();
+                
+                // Find the RETURN clause in this part
+                int returnIndex = part.lastIndexOf("\nRETURN");
+                if (returnIndex < 0) {
+                    returnIndex = part.lastIndexOf("RETURN");
+                }
+                
+                if (returnIndex >= 0) {
+                    String matchPart = part.substring(0, returnIndex);
+                    String returnPart = part.substring(returnIndex);
+                    
+                    if (i > 0) {
+                        finalQuery.append("\nUNION ALL\n");
+                    }
+                    
+                    // Add WHERE clause for filter
+                    String finalMatchPart;
+                    if (matchPart.contains("\nWHERE ")) {
+                        // Append to existing WHERE clause with AND
+                        finalMatchPart = matchPart + "\n  AND " + filterCypher;
+                    } else {
+                        // Add new WHERE clause
+                        finalMatchPart = matchPart + "\nWHERE " + filterCypher;
+                    }
+                    
+                    finalQuery.append(finalMatchPart);
+                    finalQuery.append(returnPart);
+                } else {
+                    // No RETURN found - shouldn't happen, but handle gracefully
+                    if (i > 0) {
+                        finalQuery.append("\nUNION ALL\n");
+                    }
+                    finalQuery.append(part);
+                }
+            }
+            
+            String finalQueryStr = finalQuery.toString();
+            if (LOGGER.isDebugEnabled()) {
+                LOGGER.debug("Compiled BGP with FILTER (UNION) to Cypher:\n{}", finalQueryStr);
+            }
+            
+            return new CompilationResult(finalQueryStr, parameters, variableMapping);
+        } else {
+            // Non-UNION query - simple case
+            int returnIndex = bgpQuery.lastIndexOf("\nRETURN");
+            if (returnIndex < 0) {
+                throw new CannotCompileException(
+                    "Could not find RETURN clause in compiled BGP");
+            }
+            
+            // Split the query into MATCH/WHERE part and RETURN part
+            String matchPart = bgpQuery.substring(0, returnIndex);
+            String returnPart = bgpQuery.substring(returnIndex);
+            
+            // Combine: MATCH part + additional WHERE for filter + RETURN part
+            String finalMatchPart;
+            
+            // Check if there's already a WHERE clause
+            if (matchPart.contains("\nWHERE ")) {
+                // Append to existing WHERE clause with AND
+                finalMatchPart = matchPart + "\n  AND " + filterCypher;
+            } else {
+                // Add new WHERE clause
+                finalMatchPart = matchPart + "\nWHERE " + filterCypher;
+            }
+            
+            StringBuilder finalQuery = new StringBuilder(finalMatchPart);
+            finalQuery.append(returnPart);
+            
+            String finalQueryStr = finalQuery.toString();
+            if (LOGGER.isDebugEnabled()) {
+                LOGGER.debug("Compiled BGP with FILTER to Cypher:\n{}", finalQueryStr);
+            }
+            
+            return new CompilationResult(finalQueryStr, parameters, variableMapping);
+        }
+    }
+
+    /**
      * Translate a BGP for use in OPTIONAL patterns.
      * 
      * <p>This method treats variable objects that aren't used as subjects

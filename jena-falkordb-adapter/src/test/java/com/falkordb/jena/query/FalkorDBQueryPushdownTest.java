@@ -989,4 +989,345 @@ public class FalkorDBQueryPushdownTest {
             assertTrue(names.contains("Charlie"), "Should have Charlie");
         }
     }
+
+    // ==================== FILTER Expression Integration Tests ====================
+
+    @Test
+    @DisplayName("Test FILTER with less than comparison")
+    public void testFilterWithLessThan() {
+        // Add test data
+        var alice = model.createResource("http://example.org/person/alice");
+        var bob = model.createResource("http://example.org/person/bob");
+        var charlie = model.createResource("http://example.org/person/charlie");
+        
+        var name = model.createProperty("http://xmlns.com/foaf/0.1/name");
+        var age = model.createProperty("http://xmlns.com/foaf/0.1/age");
+        
+        alice.addProperty(name, "Alice");
+        alice.addProperty(age, model.createTypedLiteral(25));
+        
+        bob.addProperty(name, "Bob");
+        bob.addProperty(age, model.createTypedLiteral(35));
+        
+        charlie.addProperty(name, "Charlie");
+        charlie.addProperty(age, model.createTypedLiteral(45));
+
+        Dataset dataset = DatasetFactory.create(model);
+
+        // Query with FILTER for age < 30
+        String sparql = """
+            PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+            SELECT ?name ?age WHERE {
+                ?person foaf:name ?name .
+                ?person foaf:age ?age .
+                FILTER(?age < 30)
+            }
+            """;
+
+        Query query = QueryFactory.create(sparql);
+        try (QueryExecution qexec = QueryExecutionFactory.create(query, dataset)) {
+            ResultSet results = qexec.execSelect();
+            List<QuerySolution> solutions = new ArrayList<>();
+            while (results.hasNext()) {
+                solutions.add(results.nextSolution());
+            }
+
+            // Only Alice (age 25) should be returned
+            assertEquals(1, solutions.size(), "Should have exactly 1 result");
+            
+            QuerySolution solution = solutions.get(0);
+            assertEquals("Alice", solution.getLiteral("name").getString());
+            assertEquals(25, solution.getLiteral("age").getInt());
+        }
+    }
+
+    @Test
+    @DisplayName("Test FILTER with greater than or equal comparison")
+    public void testFilterWithGreaterThanOrEqual() {
+        // Add test data
+        var alice = model.createResource("http://example.org/person/alice");
+        var bob = model.createResource("http://example.org/person/bob");
+        var charlie = model.createResource("http://example.org/person/charlie");
+        
+        var age = model.createProperty("http://xmlns.com/foaf/0.1/age");
+        
+        alice.addProperty(age, model.createTypedLiteral(25));
+        bob.addProperty(age, model.createTypedLiteral(35));
+        charlie.addProperty(age, model.createTypedLiteral(45));
+
+        Dataset dataset = DatasetFactory.create(model);
+
+        // Query with FILTER for age >= 35
+        String sparql = """
+            PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+            SELECT ?person ?age WHERE {
+                ?person foaf:age ?age .
+                FILTER(?age >= 35)
+            }
+            ORDER BY ?age
+            """;
+
+        Query query = QueryFactory.create(sparql);
+        try (QueryExecution qexec = QueryExecutionFactory.create(query, dataset)) {
+            ResultSet results = qexec.execSelect();
+            List<QuerySolution> solutions = new ArrayList<>();
+            while (results.hasNext()) {
+                solutions.add(results.nextSolution());
+            }
+
+            // Bob (35) and Charlie (45) should be returned
+            assertEquals(2, solutions.size(), "Should have exactly 2 results");
+            assertEquals(35, solutions.get(0).getLiteral("age").getInt());
+            assertEquals(45, solutions.get(1).getLiteral("age").getInt());
+        }
+    }
+
+    @Test
+    @DisplayName("Test FILTER with string equals comparison")
+    public void testFilterWithStringEquals() {
+        // Add test data
+        var alice = model.createResource("http://example.org/person/alice");
+        var bob = model.createResource("http://example.org/person/bob");
+        
+        var name = model.createProperty("http://xmlns.com/foaf/0.1/name");
+        
+        alice.addProperty(name, "Alice");
+        bob.addProperty(name, "Bob");
+
+        Dataset dataset = DatasetFactory.create(model);
+
+        // Query with FILTER for name = "Alice"
+        String sparql = """
+            PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+            SELECT ?person ?name WHERE {
+                ?person foaf:name ?name .
+                FILTER(?name = "Alice")
+            }
+            """;
+
+        Query query = QueryFactory.create(sparql);
+        try (QueryExecution qexec = QueryExecutionFactory.create(query, dataset)) {
+            ResultSet results = qexec.execSelect();
+            assertTrue(results.hasNext(), "Should have at least one result");
+
+            QuerySolution solution = results.nextSolution();
+            assertEquals("Alice", solution.getLiteral("name").getString());
+            
+            assertFalse(results.hasNext(), "Should have exactly one result");
+        }
+    }
+
+    @Test
+    @DisplayName("Test FILTER with AND logical operator")
+    public void testFilterWithAnd() {
+        // Add test data
+        var alice = model.createResource("http://example.org/person/alice");
+        var bob = model.createResource("http://example.org/person/bob");
+        var charlie = model.createResource("http://example.org/person/charlie");
+        var david = model.createResource("http://example.org/person/david");
+        
+        var age = model.createProperty("http://xmlns.com/foaf/0.1/age");
+        
+        alice.addProperty(age, model.createTypedLiteral(17));  // Too young
+        bob.addProperty(age, model.createTypedLiteral(25));    // In range
+        charlie.addProperty(age, model.createTypedLiteral(45)); // In range
+        david.addProperty(age, model.createTypedLiteral(70));   // Too old
+
+        Dataset dataset = DatasetFactory.create(model);
+
+        // Query with FILTER for age >= 18 AND age < 65 (working age)
+        String sparql = """
+            PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+            SELECT ?person ?age WHERE {
+                ?person foaf:age ?age .
+                FILTER(?age >= 18 && ?age < 65)
+            }
+            ORDER BY ?age
+            """;
+
+        Query query = QueryFactory.create(sparql);
+        try (QueryExecution qexec = QueryExecutionFactory.create(query, dataset)) {
+            ResultSet results = qexec.execSelect();
+            List<QuerySolution> solutions = new ArrayList<>();
+            while (results.hasNext()) {
+                solutions.add(results.nextSolution());
+            }
+
+            // Only Bob (25) and Charlie (45) should be returned
+            assertEquals(2, solutions.size(), "Should have exactly 2 results");
+            assertEquals(25, solutions.get(0).getLiteral("age").getInt());
+            assertEquals(45, solutions.get(1).getLiteral("age").getInt());
+        }
+    }
+
+    @Test
+    @DisplayName("Test FILTER with OR logical operator")
+    public void testFilterWithOr() {
+        // Add test data
+        var alice = model.createResource("http://example.org/person/alice");
+        var bob = model.createResource("http://example.org/person/bob");
+        var charlie = model.createResource("http://example.org/person/charlie");
+        
+        var age = model.createProperty("http://xmlns.com/foaf/0.1/age");
+        
+        alice.addProperty(age, model.createTypedLiteral(15));  // Young
+        bob.addProperty(age, model.createTypedLiteral(35));    // Middle age
+        charlie.addProperty(age, model.createTypedLiteral(70)); // Senior
+
+        Dataset dataset = DatasetFactory.create(model);
+
+        // Query with FILTER for age < 18 OR age > 65 (non-working age)
+        String sparql = """
+            PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+            SELECT ?person ?age WHERE {
+                ?person foaf:age ?age .
+                FILTER(?age < 18 || ?age > 65)
+            }
+            ORDER BY ?age
+            """;
+
+        Query query = QueryFactory.create(sparql);
+        try (QueryExecution qexec = QueryExecutionFactory.create(query, dataset)) {
+            ResultSet results = qexec.execSelect();
+            List<QuerySolution> solutions = new ArrayList<>();
+            while (results.hasNext()) {
+                solutions.add(results.nextSolution());
+            }
+
+            // Alice (15) and Charlie (70) should be returned
+            assertEquals(2, solutions.size(), "Should have exactly 2 results");
+            assertEquals(15, solutions.get(0).getLiteral("age").getInt());
+            assertEquals(70, solutions.get(1).getLiteral("age").getInt());
+        }
+    }
+
+    @Test
+    @DisplayName("Test FILTER with NOT logical operator")
+    public void testFilterWithNot() {
+        // Add test data
+        var alice = model.createResource("http://example.org/person/alice");
+        var bob = model.createResource("http://example.org/person/bob");
+        
+        var age = model.createProperty("http://xmlns.com/foaf/0.1/age");
+        
+        alice.addProperty(age, model.createTypedLiteral(15));  // Minor
+        bob.addProperty(age, model.createTypedLiteral(25));    // Adult
+
+        Dataset dataset = DatasetFactory.create(model);
+
+        // Query with FILTER for NOT(?age < 18) - equivalent to ?age >= 18
+        String sparql = """
+            PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+            SELECT ?person ?age WHERE {
+                ?person foaf:age ?age .
+                FILTER(! (?age < 18))
+            }
+            """;
+
+        Query query = QueryFactory.create(sparql);
+        try (QueryExecution qexec = QueryExecutionFactory.create(query, dataset)) {
+            ResultSet results = qexec.execSelect();
+            List<QuerySolution> solutions = new ArrayList<>();
+            while (results.hasNext()) {
+                solutions.add(results.nextSolution());
+            }
+
+            // Only Bob (25) should be returned
+            assertEquals(1, solutions.size(), "Should have exactly 1 result");
+            assertEquals(25, solutions.get(0).getLiteral("age").getInt());
+        }
+    }
+
+    @Test
+    @DisplayName("Test FILTER with complex expression (AND + OR)")
+    public void testFilterWithComplexExpression() {
+        // Add test data
+        var alice = model.createResource("http://example.org/person/alice");
+        var bob = model.createResource("http://example.org/person/bob");
+        var charlie = model.createResource("http://example.org/person/charlie");
+        var david = model.createResource("http://example.org/person/david");
+        
+        var name = model.createProperty("http://xmlns.com/foaf/0.1/name");
+        var age = model.createProperty("http://xmlns.com/foaf/0.1/age");
+        
+        alice.addProperty(name, "Alice");
+        alice.addProperty(age, model.createTypedLiteral(25));
+        
+        bob.addProperty(name, "Bob");
+        bob.addProperty(age, model.createTypedLiteral(20));
+        
+        charlie.addProperty(name, "Charlie");
+        charlie.addProperty(age, model.createTypedLiteral(30));
+        
+        david.addProperty(name, "David");
+        david.addProperty(age, model.createTypedLiteral(25));
+
+        Dataset dataset = DatasetFactory.create(model);
+
+        // Query with FILTER for (name = "Alice" OR name = "David") AND age > 21
+        String sparql = """
+            PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+            SELECT ?name ?age WHERE {
+                ?person foaf:name ?name .
+                ?person foaf:age ?age .
+                FILTER((?name = "Alice" || ?name = "David") && ?age > 21)
+            }
+            ORDER BY ?name
+            """;
+
+        Query query = QueryFactory.create(sparql);
+        try (QueryExecution qexec = QueryExecutionFactory.create(query, dataset)) {
+            ResultSet results = qexec.execSelect();
+            List<QuerySolution> solutions = new ArrayList<>();
+            while (results.hasNext()) {
+                solutions.add(results.nextSolution());
+            }
+
+            // Alice (25) and David (25) should be returned, Bob (20) excluded by age
+            assertEquals(2, solutions.size(), "Should have exactly 2 results");
+            assertEquals("Alice", solutions.get(0).getLiteral("name").getString());
+            assertEquals("David", solutions.get(1).getLiteral("name").getString());
+        }
+    }
+
+    @Test
+    @DisplayName("Test FILTER with not equals")
+    public void testFilterWithNotEquals() {
+        // Add test data
+        var alice = model.createResource("http://example.org/person/alice");
+        var bob = model.createResource("http://example.org/person/bob");
+        var charlie = model.createResource("http://example.org/person/charlie");
+        
+        var name = model.createProperty("http://xmlns.com/foaf/0.1/name");
+        
+        alice.addProperty(name, "Alice");
+        bob.addProperty(name, "Bob");
+        charlie.addProperty(name, "Charlie");
+
+        Dataset dataset = DatasetFactory.create(model);
+
+        // Query with FILTER for name != "Bob"
+        String sparql = """
+            PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+            SELECT ?name WHERE {
+                ?person foaf:name ?name .
+                FILTER(?name != "Bob")
+            }
+            ORDER BY ?name
+            """;
+
+        Query query = QueryFactory.create(sparql);
+        try (QueryExecution qexec = QueryExecutionFactory.create(query, dataset)) {
+            ResultSet results = qexec.execSelect();
+            List<QuerySolution> solutions = new ArrayList<>();
+            while (results.hasNext()) {
+                solutions.add(results.nextSolution());
+            }
+
+            // Alice and Charlie should be returned (not Bob)
+            assertEquals(2, solutions.size(), "Should have exactly 2 results");
+            assertEquals("Alice", solutions.get(0).getLiteral("name").getString());
+            assertEquals("Charlie", solutions.get(1).getLiteral("name").getString());
+        }
+    }
 }

@@ -103,6 +103,13 @@ public final class FalkorDBOpExecutor extends OpExecutor {
      * Factory for creating FalkorDBOpExecutor instances.
      */
     public static class Factory implements OpExecutorFactory {
+        /**
+         * Constructs a new Factory.
+         */
+        public Factory() {
+            // Default constructor
+        }
+        
         @Override
         public OpExecutor create(final ExecutionContext execCxt) {
             return new FalkorDBOpExecutor(execCxt);
@@ -205,6 +212,130 @@ public final class FalkorDBOpExecutor extends OpExecutor {
 
             // Fall back to standard execution on any error
             return super.execute(opBGP, input);
+
+        } finally {
+            span.end();
+        }
+    }
+
+    /**
+     * Execute a FILTER operation.
+     *
+     * <p>This method attempts to compile the underlying BGP with the FILTER
+     * expression and execute them natively on FalkorDB using Cypher WHERE clauses.
+     * If compilation fails, it falls back to the standard Jena evaluation.</p>
+     *
+     * @param opFilter the filter operation
+     * @param input the input query iterator
+     * @return the result query iterator
+     */
+    @Override
+    protected QueryIterator execute(final OpFilter opFilter,
+                                    final QueryIterator input) {
+        // If we don't have a FalkorDB graph, fall back to standard execution
+        if (falkorGraph == null) {
+            return super.execute(opFilter, input);
+        }
+
+        Span span = tracer.spanBuilder("FalkorDBOpExecutor.executeFilter")
+            .setSpanKind(SpanKind.INTERNAL)
+            .startSpan();
+
+        try (Scope scope = span.makeCurrent()) {
+            // Extract the sub-operation and filter expressions
+            Op subOp = opFilter.getSubOp();
+            List<Expr> filters = opFilter.getExprs().getList();
+            
+            // Only handle single FILTER expression for now
+            if (filters.isEmpty()) {
+                // No filter expressions - fall back to standard execution
+                span.setAttribute(ATTR_FALLBACK, true);
+                span.addEvent("No filter expressions, falling back");
+                span.setStatus(StatusCode.OK);
+                return super.execute(opFilter, input);
+            }
+            
+            if (filters.size() > 1) {
+                // Multiple filter expressions - combine with AND
+                // For now, fall back to standard execution
+                span.setAttribute(ATTR_FALLBACK, true);
+                span.addEvent("Multiple filter expressions not yet optimized");
+                span.setStatus(StatusCode.OK);
+                return super.execute(opFilter, input);
+            }
+            
+            // Check if sub-operation is a BGP
+            if (!(subOp instanceof OpBGP)) {
+                span.setAttribute(ATTR_FALLBACK, true);
+                span.addEvent("Sub-operation is not BGP, falling back");
+                span.setStatus(StatusCode.OK);
+                return super.execute(opFilter, input);
+            }
+            
+            BasicPattern bgp = ((OpBGP) subOp).getPattern();
+            Expr filterExpr = filters.get(0);
+            
+            int tripleCount = bgp.size();
+            span.setAttribute(ATTR_TRIPLE_COUNT, (long) tripleCount);
+            
+            // Try to compile the BGP with FILTER to Cypher
+            SparqlToCypherCompiler.CompilationResult compilation =
+                SparqlToCypherCompiler.translateWithFilter(bgp, filterExpr);
+
+            String cypherQuery = compilation.cypherQuery();
+            Map<String, Object> parameters = compilation.parameters();
+
+            span.setAttribute(ATTR_CYPHER_QUERY, cypherQuery);
+            span.setAttribute(ATTR_FALLBACK, false);
+
+            if (LOGGER.isDebugEnabled()) {
+                LOGGER.debug("FILTER pushdown: executing Cypher query:\n{}",
+                    cypherQuery);
+            }
+
+            // Execute on FalkorDB
+            ResultSet resultSet = falkorGraph.getTracedGraph()
+                .query(cypherQuery, parameters);
+
+            // Convert results to bindings
+            List<Binding> bindings = convertResultsToBindings(
+                resultSet, input);
+
+            span.setAttribute(ATTR_RESULT_COUNT, (long) bindings.size());
+            span.setStatus(StatusCode.OK);
+
+            if (LOGGER.isDebugEnabled()) {
+                LOGGER.debug("FILTER pushdown: returned {} results",
+                    bindings.size());
+            }
+
+            return QueryIterPlainWrapper.create(bindings.iterator(), execCxt);
+
+        } catch (SparqlToCypherCompiler.CannotCompileException e) {
+            // Fall back to standard Jena execution
+            span.setAttribute(ATTR_FALLBACK, true);
+            span.addEvent("Falling back to standard execution: " 
+                + e.getMessage());
+
+            if (LOGGER.isDebugEnabled()) {
+                LOGGER.debug("FILTER pushdown failed, falling back: {}",
+                    e.getMessage());
+            }
+
+            span.setStatus(StatusCode.OK);
+            return super.execute(opFilter, input);
+
+        } catch (Exception e) {
+            span.setStatus(StatusCode.ERROR, e.getMessage());
+            span.recordException(e);
+
+            if (LOGGER.isWarnEnabled()) {
+                LOGGER.warn("Error during FILTER pushdown, falling back: {}",
+                    e.getMessage());
+            }
+
+            // Fall back to standard execution on any error
+            return super.execute(opFilter, input);
 
         } finally {
             span.end();

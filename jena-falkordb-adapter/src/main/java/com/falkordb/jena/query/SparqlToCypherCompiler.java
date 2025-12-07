@@ -832,7 +832,7 @@ public final class SparqlToCypherCompiler {
      * for the FILTER expression. The FILTER is translated to Cypher WHERE conditions
      * and applied after the MATCH clauses.</p>
      * 
-     * <h3>Supported FILTER Operators:</h3>
+     * <p><b>Supported FILTER Operators:</b></p>
      * <ul>
      *   <li>Comparison: {@code <}, {@code <=}, {@code >}, {@code >=}, {@code =}, {@code <>}</li>
      *   <li>Logical: {@code AND}, {@code OR}, {@code NOT}</li>
@@ -840,7 +840,7 @@ public final class SparqlToCypherCompiler {
      *       string literals, boolean literals</li>
      * </ul>
      * 
-     * <h3>Example:</h3>
+     * <p><b>Example:</b></p>
      * <pre>{@code
      * // SPARQL:
      * // SELECT ?person ?age WHERE {

@@ -103,6 +103,13 @@ public final class FalkorDBOpExecutor extends OpExecutor {
      * Factory for creating FalkorDBOpExecutor instances.
      */
     public static class Factory implements OpExecutorFactory {
+        /**
+         * Constructs a new Factory.
+         */
+        public Factory() {
+            // Default constructor
+        }
+        
         @Override
         public OpExecutor create(final ExecutionContext execCxt) {
             return new FalkorDBOpExecutor(execCxt);

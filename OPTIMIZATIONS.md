@@ -170,7 +170,8 @@ Currently, the pushdown optimizer supports:
 | Variable predicates (single triple) | ✅ | `<uri> ?p ?o` (uses UNION for properties + relationships) |
 | Variable objects (single triple) | ✅ | `?s <pred> ?o` (uses UNION for properties + relationships) |
 | Closed-chain variable objects | ✅ | `?a <pred> ?b . ?b <pred> ?a` (mutual references) |
-| OPTIONAL, FILTER, UNION | ❌ (fallback) | Complex patterns |
+| OPTIONAL patterns | ✅ | `OPTIONAL { ?s ?p ?o }` (uses Cypher OPTIONAL MATCH) |
+| FILTER, UNION | ❌ (fallback) | Complex patterns |
 
 #### Variable Predicate Support
 
@@ -300,6 +301,256 @@ RETURN a.uri AS a, b.uri AS b
 ```
 
 When a pattern cannot be pushed down, the optimizer automatically falls back to standard Jena evaluation.
+
+#### OPTIONAL Patterns
+
+> **Tests**: See [SparqlToCypherCompilerTest.java](jena-falkordb-adapter/src/test/java/com/falkordb/jena/query/SparqlToCypherCompilerTest.java) (unit tests for OPTIONAL pattern compilation) and [FalkorDBQueryPushdownTest.java](jena-falkordb-adapter/src/test/java/com/falkordb/jena/query/FalkorDBQueryPushdownTest.java) (integration tests for OPTIONAL execution)  
+> **Examples**: See [samples/optional-patterns/](samples/optional-patterns/)
+
+OPTIONAL patterns are supported and translated to Cypher OPTIONAL MATCH clauses. This allows returning all matches from the required pattern with NULL values for optional data that doesn't exist, all in a single query.
+
+**The Problem:**
+
+Without OPTIONAL pattern pushdown, SPARQL OPTIONAL requires multiple database queries:
+
+```sparql
+# SPARQL: Find all persons with optional email
+SELECT ?person ?email WHERE {
+    ?person a foaf:Person .
+    OPTIONAL { ?person foaf:email ?email }
+}
+```
+
+Gets executed as:
+1. Query 1: `find all persons of type Person` → Returns N persons
+2. For each person, Query 2: `find(?person, email, ?email)` → N more queries
+
+This results in N+1 database round trips.
+
+**The Solution:**
+
+The query pushdown mechanism translates SPARQL OPTIONAL patterns to Cypher OPTIONAL MATCH:
+
+```cypher
+# Compiled Cypher:
+MATCH (person:Resource:`http://xmlns.com/foaf/0.1/Person`)
+OPTIONAL MATCH (person)-[:`http://xmlns.com/foaf/0.1/email`]->(email:Resource)
+RETURN person.uri AS person, email.uri AS email
+```
+
+This executes as a single database operation, with NULL returned for persons without email.
+
+**Supported OPTIONAL Patterns:**
+
+| Pattern Type | Supported | Example |
+|-------------|-----------|---------|
+| Basic OPTIONAL relationship | ✅ | `OPTIONAL { ?s foaf:email ?email }` |
+| OPTIONAL literal property | ✅ | `OPTIONAL { ?s foaf:age ?age }` |
+| Multiple OPTIONAL clauses | ✅ | Multiple separate OPTIONAL blocks |
+| OPTIONAL with multiple triples | ✅ | `OPTIONAL { ?s foaf:knows ?f . ?f foaf:name ?n }` |
+| Concrete subjects | ✅ | `OPTIONAL { <alice> foaf:email ?email }` |
+| OPTIONAL with FILTER in required part | ✅ | Filter before OPTIONAL |
+| Variable predicates in OPTIONAL | ❌ (fallback) | Not yet supported |
+
+**Example 1: Basic OPTIONAL with Relationship**
+
+```sparql
+# SPARQL: All persons with optional email
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT ?person ?name ?email WHERE {
+    ?person a foaf:Person .
+    ?person foaf:name ?name .
+    OPTIONAL { ?person foaf:email ?email }
+}
+```
+
+```cypher
+# Generated Cypher:
+MATCH (person:Resource:`http://xmlns.com/foaf/0.1/Person`)
+WHERE person.`http://xmlns.com/foaf/0.1/name` IS NOT NULL
+OPTIONAL MATCH (person)-[:`http://xmlns.com/foaf/0.1/email`]->(email:Resource)
+RETURN person.uri AS person, 
+       person.`http://xmlns.com/foaf/0.1/name` AS name, 
+       email.uri AS email
+```
+
+**Example 2: Multiple OPTIONAL Clauses**
+
+```sparql
+# SPARQL: All persons with any available contact info
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT ?person ?name ?email ?phone WHERE {
+    ?person a foaf:Person .
+    ?person foaf:name ?name .
+    OPTIONAL { ?person foaf:email ?email }
+    OPTIONAL { ?person foaf:phone ?phone }
+}
+```
+
+```cypher
+# Generated Cypher:
+MATCH (person:Resource:`http://xmlns.com/foaf/0.1/Person`)
+WHERE person.`http://xmlns.com/foaf/0.1/name` IS NOT NULL
+OPTIONAL MATCH (person)-[:`http://xmlns.com/foaf/0.1/email`]->(email:Resource)
+OPTIONAL MATCH (person)
+WHERE person.`http://xmlns.com/foaf/0.1/phone` IS NOT NULL
+RETURN person.uri AS person, 
+       person.`http://xmlns.com/foaf/0.1/name` AS name, 
+       email.uri AS email, 
+       person.`http://xmlns.com/foaf/0.1/phone` AS phone
+```
+
+**Example 3: OPTIONAL with Literal Property**
+
+```sparql
+# SPARQL: All persons with optional age
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT ?person ?name ?age WHERE {
+    ?person a foaf:Person .
+    ?person foaf:name ?name .
+    OPTIONAL { ?person foaf:age ?age }
+}
+```
+
+```cypher
+# Generated Cypher:
+MATCH (person:Resource:`http://xmlns.com/foaf/0.1/Person`)
+WHERE person.`http://xmlns.com/foaf/0.1/name` IS NOT NULL
+OPTIONAL MATCH (person)
+WHERE person.`http://xmlns.com/foaf/0.1/age` IS NOT NULL
+RETURN person.uri AS person, 
+       person.`http://xmlns.com/foaf/0.1/name` AS name, 
+       person.`http://xmlns.com/foaf/0.1/age` AS age
+```
+
+**Example 4: OPTIONAL with Multiple Triples**
+
+```sparql
+# SPARQL: All persons with optional friend information
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT ?person ?name ?friend ?friendName WHERE {
+    ?person a foaf:Person .
+    ?person foaf:name ?name .
+    OPTIONAL { 
+        ?person foaf:knows ?friend .
+        ?friend foaf:name ?friendName .
+    }
+}
+```
+
+```cypher
+# Generated Cypher:
+MATCH (person:Resource:`http://xmlns.com/foaf/0.1/Person`)
+WHERE person.`http://xmlns.com/foaf/0.1/name` IS NOT NULL
+OPTIONAL MATCH (person)-[:`http://xmlns.com/foaf/0.1/knows`]->(friend:Resource)
+OPTIONAL MATCH (friend)
+WHERE friend.`http://xmlns.com/foaf/0.1/name` IS NOT NULL
+RETURN person.uri AS person, 
+       person.`http://xmlns.com/foaf/0.1/name` AS name, 
+       friend.uri AS friend, 
+       friend.`http://xmlns.com/foaf/0.1/name` AS friendName
+```
+
+**Example 5: OPTIONAL with FILTER**
+
+```sparql
+# SPARQL: Young persons (age < 35) with optional email
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT ?person ?name ?age ?email WHERE {
+    ?person a foaf:Person .
+    ?person foaf:name ?name .
+    ?person foaf:age ?age .
+    FILTER(?age < 35)
+    OPTIONAL { ?person foaf:email ?email }
+}
+```
+
+The FILTER is applied on the required pattern before the OPTIONAL MATCH, ensuring only persons under 35 are returned, with their email if available.
+
+**Key Benefits:**
+
+- ✅ **Single query execution**: One database round-trip for all data
+- ✅ **NULL handling**: Returns NULL for missing optional data (not empty result set)
+- ✅ **Native optimization**: Uses Cypher's built-in OPTIONAL MATCH
+- ✅ **Transparent**: Works automatically for supported OPTIONAL patterns
+- ✅ **Efficient**: Maintains index usage on required patterns
+
+**Java Usage Example:**
+
+```java
+// Setup: Create persons with partial information
+Model model = FalkorDBModelFactory.createModel("myGraph");
+
+var alice = model.createResource("http://example.org/person/alice");
+var bob = model.createResource("http://example.org/person/bob");
+var email = model.createProperty("http://xmlns.com/foaf/0.1/email");
+
+alice.addProperty(RDF.type, model.createResource("http://xmlns.com/foaf/0.1/Person"));
+alice.addProperty(FOAF.name, "Alice");
+alice.addProperty(email, model.createResource("mailto:alice@example.org"));
+
+bob.addProperty(RDF.type, model.createResource("http://xmlns.com/foaf/0.1/Person"));
+bob.addProperty(FOAF.name, "Bob");
+// Bob has no email
+
+// Query with OPTIONAL - automatically uses pushdown
+String sparql = """
+    PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+    SELECT ?person ?name ?email WHERE {
+        ?person a foaf:Person .
+        ?person foaf:name ?name .
+        OPTIONAL { ?person foaf:email ?email }
+    }
+    ORDER BY ?name
+    """;
+
+Query query = QueryFactory.create(sparql);
+try (QueryExecution qexec = QueryExecutionFactory.create(query, model)) {
+    ResultSet results = qexec.execSelect();
+    while (results.hasNext()) {
+        QuerySolution solution = results.nextSolution();
+        String name = solution.getLiteral("name").getString();
+        // Check if email is bound (not NULL)
+        if (solution.contains("email")) {
+            String emailValue = solution.getResource("email").getURI();
+            System.out.println(name + " - " + emailValue);
+        } else {
+            System.out.println(name + " - (no email)");
+        }
+    }
+}
+
+// Output:
+// Alice - mailto:alice@example.org
+// Bob - (no email)
+```
+
+**Performance Comparison:**
+
+| Scenario | Without OPTIONAL Pushdown | With OPTIONAL Pushdown | Improvement |
+|----------|--------------------------|----------------------|-------------|
+| 100 persons, 50 with email | 101 queries (1 + 100) | 1 query | 100x fewer calls |
+| Multiple OPTIONAL fields (3) | N * 3 queries | 1 query | 3Nx fewer calls |
+| Nested OPTIONAL | N * M queries | 1 query | NMx fewer calls |
+
+**Limitations:**
+
+- Variable predicates in OPTIONAL patterns not yet supported (will fall back)
+- Complex nested OPTIONAL patterns may fall back to standard evaluation
+- FILTER clauses within OPTIONAL blocks may not fully push down
+
+**Complete Working Examples:**
+
+See [samples/optional-patterns/](samples/optional-patterns/) for:
+- Full Java code with 6 use cases
+- SPARQL query patterns with generated Cypher
+- Sample data with partial information
+- Detailed README with best practices
 
 ### Complete Examples
 
@@ -484,6 +735,8 @@ try (QueryExecution qexec = QueryExecutionFactory.create(query, model)) {
 | 3-hop traversal | ~N² round trips | 1 round trip | N²x fewer calls |
 | Type queries | Multiple queries | 1 query | Significant |
 | Mixed data retrieval | Separate queries for each type | Single UNION query | 2x-3x fewer calls |
+| OPTIONAL patterns | N+1 queries (required + N optional) | 1 query | Nx fewer calls |
+| Multiple OPTIONAL fields | N * M queries | 1 query | NMx fewer calls |
 
 ## 3. Magic Property (Direct Cypher Execution)
 

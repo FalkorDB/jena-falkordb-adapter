@@ -10,6 +10,7 @@ samples/
 ├── batch-writes/          # Transaction batching for bulk operations
 ├── query-pushdown/        # SPARQL to Cypher translation
 ├── variable-objects/      # Query both properties and relationships
+├── optional-patterns/     # Efficient optional data retrieval
 └── magic-property/        # Direct Cypher execution
 ```
 
@@ -54,7 +55,22 @@ When a variable object could be either a literal or URI, generates a UNION query
 - Mixed data type retrieval
 - Variable subject and object patterns
 
-### 4. Magic Property (Direct Cypher)
+### 4. OPTIONAL Patterns
+**Location:** [`optional-patterns/`](optional-patterns/)
+
+Translates SPARQL OPTIONAL patterns to Cypher OPTIONAL MATCH, returning all required matches with NULL for missing optional data in a single query.
+
+**Performance:** Nx fewer round trips (avoids N+1 queries)
+
+**Examples:**
+- Basic OPTIONAL with relationships
+- Multiple OPTIONAL clauses
+- OPTIONAL with literal properties
+- OPTIONAL with multiple triples
+- Concrete subjects with OPTIONAL
+- OPTIONAL with FILTER
+
+### 5. Magic Property (Direct Cypher)
 **Location:** [`magic-property/`](magic-property/)
 
 Allows direct Cypher execution within SPARQL for maximum control and performance.
@@ -99,6 +115,9 @@ Each subdirectory contains:
    # Variable Objects
    mvn exec:java -Dexec.mainClass="com.falkordb.samples.VariableObjectExample"
    
+   # OPTIONAL Patterns
+   mvn exec:java -Dexec.mainClass="com.falkordb.samples.OptionalPatternsExample"
+   
    # Magic Property
    mvn exec:java -Dexec.mainClass="com.falkordb.samples.MagicPropertyExample"
    ```
@@ -122,6 +141,7 @@ Each subdirectory contains:
 | **Batch Writes** | 100-1000x | Bulk loading, data import |
 | **Query Pushdown** | Nx-N²x | Multi-hop queries, graph traversal |
 | **Variable Objects** | 2x | Mixed property/relationship queries |
+| **OPTIONAL Patterns** | Nx | Partial data retrieval |
 | **Magic Property** | Maximum | Complex Cypher patterns |
 
 ## File Formats

@@ -475,20 +475,38 @@ public final class SparqlToCypherCompiler {
                 "Unknown variable in FILTER: " + varName);
         } else if (expr instanceof NodeValue) {
             NodeValue nodeVal = (NodeValue) expr;
-            Node node = nodeVal.getNode();
             
-            if (node.isLiteral()) {
-                Object value = node.getLiteralValue();
-                if (value instanceof Number) {
-                    return value.toString();
-                } else if (value instanceof String) {
-                    return "'" + value.toString().replace("'", "\\'") + "'";
-                } else if (value instanceof Boolean) {
-                    return value.toString();
+            // NodeValue for constants may not have a node - use direct accessors
+            if (nodeVal.isInteger()) {
+                return String.valueOf(nodeVal.getInteger().longValue());
+            } else if (nodeVal.isDecimal()) {
+                return nodeVal.getDecimal().toString();
+            } else if (nodeVal.isDouble()) {
+                return String.valueOf(nodeVal.getDouble());
+            } else if (nodeVal.isFloat()) {
+                return String.valueOf(nodeVal.getFloat());
+            } else if (nodeVal.isBoolean()) {
+                return String.valueOf(nodeVal.getBoolean());
+            } else if (nodeVal.isString()) {
+                return "'" + nodeVal.getString().replace("'", "\\'") + "'";
+            }
+            
+            // For other node values, try to get the node
+            Node node = nodeVal.getNode();
+            if (node != null) {
+                if (node.isLiteral()) {
+                    Object value = node.getLiteralValue();
+                    if (value instanceof Number) {
+                        return value.toString();
+                    } else if (value instanceof String) {
+                        return "'" + value.toString().replace("'", "\\'") + "'";
+                    } else if (value instanceof Boolean) {
+                        return value.toString();
+                    }
+                    return "'" + node.getLiteralLexicalForm().replace("'", "\\'") + "'";
+                } else if (node.isURI()) {
+                    return "'" + node.getURI().replace("'", "\\'") + "'";
                 }
-                return "'" + node.getLiteralLexicalForm().replace("'", "\\'") + "'";
-            } else if (node.isURI()) {
-                return "'" + node.getURI().replace("'", "\\'") + "'";
             }
         }
         

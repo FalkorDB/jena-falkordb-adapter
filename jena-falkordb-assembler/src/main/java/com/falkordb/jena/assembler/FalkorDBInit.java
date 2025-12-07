@@ -18,14 +18,11 @@ import org.slf4j.LoggerFactory;
  * Fuseki to create FalkorDB-backed models from configuration files.</p>
  *
  * <p>It also registers the {@link CypherQueryFunc} magic property function
- * that allows executing native Cypher queries from SPARQL.</p>
+ * that allows executing native Cypher queries from SPARQL, and the
+ * {@link FalkorDBQueryEngineFactory} to enable query pushdown optimization.</p>
  *
  * <p>The registration is performed when Jena initializes, typically at
  * application startup.</p>
- *
- * <p><strong>Note:</strong> Query pushdown optimization is available via
- * {@link FalkorDBQueryEngineFactory} but must be explicitly enabled by
- * calling {@code FalkorDBQueryEngineFactory.register()} if desired.</p>
  *
  * @see FalkorDBAssembler
  * @see FalkorDBVocab
@@ -58,12 +55,9 @@ public class FalkorDBInit implements JenaSubsystemLifecycle {
 
     /**
      * Initialize the FalkorDB assembler module.
-     * This method registers the FalkorDB assembler with Jena's registry
-     * and the falkor:cypher magic property function.
-     *
-     * <p>Note: Query pushdown optimization via {@link FalkorDBQueryEngineFactory}
-     * is NOT automatically enabled. Applications that want query pushdown
-     * must explicitly call {@code FalkorDBQueryEngineFactory.register()}.</p>
+     * This method registers the FalkorDB assembler with Jena's registry,
+     * the falkor:cypher magic property function, and the query engine
+     * factory for query pushdown optimization.
      */
     @Override
     public void start() {
@@ -88,6 +82,9 @@ public class FalkorDBInit implements JenaSubsystemLifecycle {
             CypherQueryFunc.URI,
             CypherQueryFunc.class
         );
+
+        // Register the query engine factory to enable query pushdown optimization
+        FalkorDBQueryEngineFactory.register();
 
         if (LOGGER.isInfoEnabled()) {
             LOGGER.info("FalkorDB Jena Assembler registered for type: {}",

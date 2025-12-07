@@ -462,6 +462,37 @@ public final class SparqlToCypherCompiler {
         cypher.append(", ").append(subjectVar).append("[_propKey] AS ").append(
             triple.getObject().isVariable() ? triple.getObject().getName() : "_o");
 
+        // Part 3: Query rdf:type from labels (using UNION ALL)
+        cypher.append("\nUNION ALL\n");
+        cypher.append("MATCH ");
+        
+        // Subject for types
+        if (triple.getSubject().isVariable()) {
+            cypher.append("(").append(subjectVar).append(":Resource)");
+        } else {
+            // Reuse the parameter from above
+            cypher.append("(").append(subjectVar)
+                  .append(":Resource {uri: $p0})");
+        }
+        
+        cypher.append("\nUNWIND labels(").append(subjectVar).append(") AS _label");
+        cypher.append("\nWITH ").append(subjectVar)
+              .append(", _label WHERE _label <> 'Resource'");
+        
+        // Filter by object value (type) if concrete
+        if (triple.getObject().isURI()) {
+            String paramName = "p" + paramCounter++;
+            parameters.put(paramName, triple.getObject().getURI());
+            cypher.append(" AND _label = $").append(paramName);
+        }
+        
+        cypher.append("\nRETURN ");
+        cypher.append(subjectVar).append(".uri AS ").append(
+            triple.getSubject().isVariable() ? triple.getSubject().getName() : "_s");
+        cypher.append(", '").append(RDF_TYPE_URI).append("' AS ").append(predicateVar);
+        cypher.append(", _label AS ").append(
+            triple.getObject().isVariable() ? triple.getObject().getName() : "_o");
+
         String query = cypher.toString();
         if (LOGGER.isDebugEnabled()) {
             LOGGER.debug("Compiled BGP with variable predicate to Cypher:\n{}", 

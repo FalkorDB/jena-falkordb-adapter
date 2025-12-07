@@ -261,7 +261,17 @@ public final class FalkorDBGraph extends GraphBase {
         if (triple.getObject().isLiteral()) {
             // Store literal as a property on the subject node
             // Use backticks to allow URIs as property names directly
-            var objectValue = triple.getObject().getLiteralLexicalForm();
+            // Store the actual typed value, not just the lexical form
+            Object objectValue;
+            var literal = triple.getObject().getLiteral();
+            var literalValue = literal.getValue();
+            
+            // Use the typed value if available, otherwise use lexical form
+            if (literalValue instanceof Number || literalValue instanceof Boolean) {
+                objectValue = literalValue;
+            } else {
+                objectValue = triple.getObject().getLiteralLexicalForm();
+            }
 
             params.put("subjectUri", subject);
             params.put("objectValue", objectValue);
@@ -546,21 +556,41 @@ public final class FalkorDBGraph extends GraphBase {
                     }
                 }
 
-                var literalValue = entry.getValue().toString();
+                var rawValue = entry.getValue();
+                var predicateNode = NodeFactory.createURI(predicateUri);
+                
+                // Create properly typed literal based on value type from FalkorDB
+                org.apache.jena.graph.Node object;
+                if (rawValue instanceof Long) {
+                    // FalkorDB returns integers as Long
+                    object = NodeFactory.createLiteralByValue(((Long) rawValue).intValue(), 
+                        org.apache.jena.datatypes.xsd.XSDDatatype.XSDint);
+                } else if (rawValue instanceof Integer) {
+                    object = NodeFactory.createLiteralByValue(rawValue, 
+                        org.apache.jena.datatypes.xsd.XSDDatatype.XSDint);
+                } else if (rawValue instanceof Double) {
+                    object = NodeFactory.createLiteralByValue(rawValue, 
+                        org.apache.jena.datatypes.xsd.XSDDatatype.XSDdouble);
+                } else if (rawValue instanceof Float) {
+                    object = NodeFactory.createLiteralByValue(rawValue, 
+                        org.apache.jena.datatypes.xsd.XSDDatatype.XSDfloat);
+                } else if (rawValue instanceof Boolean) {
+                    object = NodeFactory.createLiteralByValue(rawValue, 
+                        org.apache.jena.datatypes.xsd.XSDDatatype.XSDboolean);
+                } else {
+                    // String or other types - store as string literal
+                    object = NodeFactory.createLiteralString(rawValue.toString());
+                }
 
                 // Check if object matches pattern
                 if (pattern.getObject().isConcrete()) {
-                    var patternObject = pattern.getObject()
-                        .getLiteralLexicalForm();
-                    if (!literalValue.equals(patternObject)) {
+                    // Compare using sameValueAs which handles typed literal comparison
+                    if (!object.sameValueAs(pattern.getObject())) {
                         continue;
                     }
                 }
 
-                var predicate = NodeFactory.createURI(predicateUri);
-                var object = NodeFactory.createLiteralString(literalValue);
-
-                triples.add(Triple.create(subject, predicate, object));
+                triples.add(Triple.create(subject, predicateNode, object));
             }
         }
 

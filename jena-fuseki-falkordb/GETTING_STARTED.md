@@ -339,7 +339,7 @@ ORDER BY ?name" \
 
 **Result:** Returns all three people with their emails where available (Alice and Charlie have emails, Bob shows NULL)
 
-**Performance:** Single query replaces N+1 queries - gets all persons with optional emails instead of separate queries per person. See [samples/optional-patterns/](../samples/optional-patterns/) for more examples.
+**Performance:** Avoids the N+1 query problem - single query gets all persons with optional emails instead of 1 query for persons + N queries for each email. See [samples/optional-patterns/](../samples/optional-patterns/) for more examples.
 
 ---
 

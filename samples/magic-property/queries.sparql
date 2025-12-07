@@ -1,0 +1,43 @@
+# Magic Property - Direct Cypher Execution Examples
+# ==================================================
+# Use falkor:cypher for patterns not supported by pushdown
+
+PREFIX falkor: <http://falkordb.com/jena#>
+
+# Example 1: Variable length paths
+SELECT ?connected WHERE {
+    (?connected) falkor:cypher '''
+        MATCH (start {uri: "http://example.org/person/alice"})
+              -[:knows*1..3]->(end:Resource)
+        RETURN end.uri AS connected
+    '''
+}
+
+# Example 2: Aggregations
+SELECT ?person ?friendCount WHERE {
+    (?person ?friendCount) falkor:cypher '''
+        MATCH (p:Resource)-[r:knows]->()
+        RETURN p.uri AS person, count(r) AS friendCount
+        ORDER BY friendCount DESC
+    '''
+}
+
+# Example 3: Complex WHERE conditions
+SELECT ?person WHERE {
+    (?person) falkor:cypher '''
+        MATCH (p:Resource)
+        WHERE p.age > 25 AND p.age < 40
+        RETURN p.uri AS person
+    '''
+}
+
+# Example 4: OPTIONAL MATCH patterns
+SELECT ?person ?manager WHERE {
+    (?person ?manager) falkor:cypher '''
+        MATCH (p:Resource)
+        OPTIONAL MATCH (p)-[:managedBy]->(m:Resource)
+        RETURN p.uri AS person, m.uri AS manager
+    '''
+}
+
+# See MAGIC_PROPERTY.md for complete documentation

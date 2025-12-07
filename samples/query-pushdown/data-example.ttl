@@ -1,0 +1,15 @@
+@prefix ex:   <http://example.org/> .
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+
+# Social network for demonstrating query pushdown
+
+ex:person/alice a foaf:Person ; foaf:name "Alice" ; foaf:age 30 .
+ex:person/bob a foaf:Person ; foaf:name "Bob" ; foaf:age 35 .
+ex:person/charlie a foaf:Person ; foaf:name "Charlie" ; foaf:age 28 .
+ex:person/diana a foaf:Person ; foaf:name "Diana" ; foaf:age 32 .
+
+ex:person/alice foaf:knows ex:person/bob, ex:person/charlie .
+ex:person/bob foaf:knows ex:person/charlie, ex:person/diana .
+ex:person/charlie foaf:knows ex:person/diana .
+ex:person/diana foaf:knows ex:person/alice .

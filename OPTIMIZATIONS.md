@@ -4,15 +4,27 @@ This document describes the performance optimizations implemented in the FalkorD
 
 ## Overview
 
-The adapter implements two major optimization strategies:
+The adapter implements three major optimization strategies:
 
 1. **Batch Writes via Transactions** - Buffers multiple triple operations and flushes them in bulk using Cypher's `UNWIND`
 2. **Query Pushdown** - Translates SPARQL Basic Graph Patterns (BGPs) to native Cypher queries
 3. **Magic Property** - Allows direct execution of Cypher queries within SPARQL
 
+## Complete Examples
+
+Comprehensive code examples for all optimizations are available in the [`samples/`](samples/) directory:
+
+- **[Batch Writes Examples](samples/batch-writes/)**: Java code, SPARQL queries, sample data, and README
+- **[Query Pushdown Examples](samples/query-pushdown/)**: Variable predicates, closed-chain, multi-hop patterns
+- **[Variable Objects Examples](samples/variable-objects/)**: Query both properties and relationships
+- **[Magic Property Examples](samples/magic-property/)**: Direct Cypher execution patterns
+
+Each example includes complete working code in multiple formats. See [`samples/README.md`](samples/README.md) for details.
+
 ## 1. Batch Writes via Transactions
 
-> **Tests**: See [FalkorDBTransactionHandlerTest.java](jena-falkordb-adapter/src/test/java/com/falkordb/jena/FalkorDBTransactionHandlerTest.java)
+> **Tests**: See [FalkorDBTransactionHandlerTest.java](jena-falkordb-adapter/src/test/java/com/falkordb/jena/FalkorDBTransactionHandlerTest.java)  
+> **Examples**: See [samples/batch-writes/](samples/batch-writes/)
 
 ### The Problem
 
@@ -88,7 +100,8 @@ try {
 
 ## 2. Query Pushdown (SPARQL to Cypher)
 
-> **Tests**: See [SparqlToCypherCompilerTest.java](jena-falkordb-adapter/src/test/java/com/falkordb/jena/query/SparqlToCypherCompilerTest.java) and [FalkorDBQueryPushdownTest.java](jena-falkordb-adapter/src/test/java/com/falkordb/jena/query/FalkorDBQueryPushdownTest.java)
+> **Tests**: See [SparqlToCypherCompilerTest.java](jena-falkordb-adapter/src/test/java/com/falkordb/jena/query/SparqlToCypherCompilerTest.java) and [FalkorDBQueryPushdownTest.java](jena-falkordb-adapter/src/test/java/com/falkordb/jena/query/FalkorDBQueryPushdownTest.java)  
+> **Examples**: See [samples/query-pushdown/](samples/query-pushdown/) and [samples/variable-objects/](samples/variable-objects/)
 
 ### The Problem
 
@@ -474,7 +487,9 @@ try (QueryExecution qexec = QueryExecutionFactory.create(query, model)) {
 
 ## 3. Magic Property (Direct Cypher Execution)
 
-> **Tests**: See [CypherQueryFuncTest.java](jena-falkordb-adapter/src/test/java/com/falkordb/jena/pfunction/CypherQueryFuncTest.java) and [MagicPropertyDocExamplesTest.java](jena-falkordb-adapter/src/test/java/com/falkordb/jena/pfunction/MagicPropertyDocExamplesTest.java)
+> **Tests**: See [CypherQueryFuncTest.java](jena-falkordb-adapter/src/test/java/com/falkordb/jena/pfunction/CypherQueryFuncTest.java) and [MagicPropertyDocExamplesTest.java](jena-falkordb-adapter/src/test/java/com/falkordb/jena/pfunction/MagicPropertyDocExamplesTest.java)  
+> **Examples**: See [samples/magic-property/](samples/magic-property/)  
+> **Full Documentation**: See [MAGIC_PROPERTY.md](MAGIC_PROPERTY.md)
 
 For maximum control, you can execute native Cypher queries directly within SPARQL using the magic property `falkor:cypher`:
 

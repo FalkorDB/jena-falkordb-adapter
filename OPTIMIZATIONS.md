@@ -349,8 +349,10 @@ This executes as a single database operation, with NULL returned for persons wit
 | Multiple OPTIONAL clauses | ✅ | Multiple separate OPTIONAL blocks |
 | OPTIONAL with multiple triples | ✅ | `OPTIONAL { ?s foaf:knows ?f . ?f foaf:name ?n }` |
 | Concrete subjects | ✅ | `OPTIONAL { <alice> foaf:email ?email }` |
-| OPTIONAL with FILTER in required part | ✅ | Filter before OPTIONAL |
+| FILTER in required part | ⚠️ (fallback) | Falls back to Jena evaluation |
 | Variable predicates in OPTIONAL | ❌ (fallback) | Not yet supported |
+
+**Note on FILTER**: When FILTER appears in the required pattern before OPTIONAL, the query automatically falls back to standard Jena evaluation. This ensures correct results while maintaining compatibility. The fallback is transparent and produces the expected results.
 
 **Example 1: Basic OPTIONAL with Relationship**
 

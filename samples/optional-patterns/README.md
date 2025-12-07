@@ -38,8 +38,10 @@ RETURN person.uri AS person, email.uri AS email
 | Multiple OPTIONAL clauses | ✅ | Multiple OPTIONAL blocks |
 | OPTIONAL with multiple triples | ✅ | `OPTIONAL { ?s foaf:knows ?f . ?f foaf:name ?n }` |
 | Concrete subjects | ✅ | `OPTIONAL { <alice> foaf:email ?email }` |
-| OPTIONAL with FILTER | ✅ | Filter in required pattern before OPTIONAL |
+| FILTER in required part | ⚠️ | Falls back to Jena (correct results) |
 | Variable predicates in OPTIONAL | ❌ | Not yet supported |
+
+**Note**: When FILTER appears in the required pattern, the query falls back to standard Jena evaluation to ensure correctness.
 
 ## Example Use Cases
 

@@ -17,8 +17,10 @@ import org.apache.jena.graph.NodeFactory;
 import org.apache.jena.reasoner.InfGraph;
 import org.apache.jena.sparql.algebra.Op;
 import org.apache.jena.sparql.algebra.op.OpBGP;
+import org.apache.jena.sparql.algebra.op.OpFilter;
 import org.apache.jena.sparql.algebra.op.OpLeftJoin;
 import org.apache.jena.sparql.core.BasicPattern;
+import org.apache.jena.sparql.expr.Expr;
 import org.apache.jena.sparql.core.Var;
 import org.apache.jena.sparql.engine.ExecutionContext;
 import org.apache.jena.sparql.engine.QueryIterator;
@@ -237,7 +239,17 @@ public final class FalkorDBOpExecutor extends OpExecutor {
             Op left = opLeftJoin.getLeft();
             Op right = opLeftJoin.getRight();
             
-            // Check if both sides are BGPs
+            // Handle OpFilter wrapping OpBGP on the left side
+            Expr filterExpr = null;
+            if (left instanceof OpFilter) {
+                OpFilter opFilter = (OpFilter) left;
+                filterExpr = opFilter.getExprs().getList().isEmpty() 
+                    ? null 
+                    : opFilter.getExprs().getList().get(0);
+                left = opFilter.getSubOp();
+            }
+            
+            // Check if both sides are BGPs (after unwrapping filter)
             if (!(left instanceof OpBGP) || !(right instanceof OpBGP)) {
                 span.setAttribute(ATTR_FALLBACK, true);
                 span.addEvent("Left or right is not BGP, falling back");
@@ -253,7 +265,7 @@ public final class FalkorDBOpExecutor extends OpExecutor {
             
             // Try to compile with OPTIONAL support
             SparqlToCypherCompiler.CompilationResult compilation =
-                SparqlToCypherCompiler.translateWithOptional(leftBGP, rightBGP);
+                SparqlToCypherCompiler.translateWithOptional(leftBGP, rightBGP, filterExpr);
 
             String cypherQuery = compilation.cypherQuery();
             Map<String, Object> parameters = compilation.parameters();

@@ -3,6 +3,8 @@ package com.falkordb.jena.query;
 import org.apache.jena.graph.Node;
 import org.apache.jena.graph.Triple;
 import org.apache.jena.sparql.core.BasicPattern;
+import org.apache.jena.sparql.core.Var;
+import org.apache.jena.sparql.expr.*;
 import org.apache.jena.vocabulary.RDF;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -126,9 +128,34 @@ public final class SparqlToCypherCompiler {
      * @return the compilation result containing Cypher query and metadata
      * @throws CannotCompileException if either BGP cannot be compiled
      */
+    /**
+     * Translate SPARQL BGPs with OPTIONAL pattern to Cypher (no filter).
+     * 
+     * @param requiredBGP the required basic graph pattern
+     * @param optionalBGP the optional basic graph pattern
+     * @return the compilation result with Cypher query and parameters
+     * @throws CannotCompileException if the pattern cannot be compiled
+     */
     public static CompilationResult translateWithOptional(
             final BasicPattern requiredBGP,
             final BasicPattern optionalBGP)
+            throws CannotCompileException {
+        return translateWithOptional(requiredBGP, optionalBGP, null);
+    }
+
+    /**
+     * Translate SPARQL BGPs with OPTIONAL pattern and optional FILTER to Cypher.
+     * 
+     * @param requiredBGP the required basic graph pattern
+     * @param optionalBGP the optional basic graph pattern
+     * @param filterExpr the filter expression (may be null)
+     * @return the compilation result with Cypher query and parameters
+     * @throws CannotCompileException if the pattern cannot be compiled
+     */
+    public static CompilationResult translateWithOptional(
+            final BasicPattern requiredBGP,
+            final BasicPattern optionalBGP,
+            final Expr filterExpr)
             throws CannotCompileException {
         
         if (requiredBGP == null || requiredBGP.isEmpty()) {
@@ -330,14 +357,143 @@ public final class SparqlToCypherCompiler {
         
         returnClause.append(String.join(", ", returnParts));
         
-        // Combine required + optional + return
-        String finalQuery = requiredMatches + optionalCypher.toString() + returnClause.toString();
+        // Add FILTER WHERE clause if present
+        StringBuilder filterClause = new StringBuilder();
+        if (filterExpr != null) {
+            String filterCypher = translateFilterExpr(filterExpr, variableMapping, nodeVariables, parameters, paramCounter);
+            if (filterCypher != null && !filterCypher.isEmpty()) {
+                filterClause.append("\nWHERE ").append(filterCypher);
+            }
+        }
+        
+        // Combine required + filter + optional + return
+        String finalQuery = requiredMatches + filterClause.toString() + optionalCypher.toString() + returnClause.toString();
         
         if (LOGGER.isDebugEnabled()) {
             LOGGER.debug("Compiled BGP with OPTIONAL to Cypher:\n{}", finalQuery);
         }
         
         return new CompilationResult(finalQuery, parameters, variableMapping);
+    }
+
+    /**
+     * Translate a SPARQL FILTER expression to Cypher WHERE clause.
+     * 
+     * @param expr the SPARQL filter expression
+     * @param variableMapping mapping of variables to Cypher expressions
+     * @param nodeVariables set of node variable names
+     * @param parameters parameter map to add new parameters to
+     * @param paramCounter starting parameter counter
+     * @return Cypher WHERE clause condition (without "WHERE" keyword)
+     * @throws CannotCompileException if the expression cannot be translated
+     */
+    private static String translateFilterExpr(
+            final Expr expr,
+            final Map<String, String> variableMapping,
+            final Set<String> nodeVariables,
+            final Map<String, Object> parameters,
+            int paramCounter) throws CannotCompileException {
+        
+        if (expr == null) {
+            return null;
+        }
+        
+        // Handle comparison operators
+        if (expr instanceof E_LessThan) {
+            E_LessThan lt = (E_LessThan) expr;
+            String left = translateFilterOperand(lt.getArg1(), variableMapping, nodeVariables);
+            String right = translateFilterOperand(lt.getArg2(), variableMapping, nodeVariables);
+            return left + " < " + right;
+        } else if (expr instanceof E_LessThanOrEqual) {
+            E_LessThanOrEqual lte = (E_LessThanOrEqual) expr;
+            String left = translateFilterOperand(lte.getArg1(), variableMapping, nodeVariables);
+            String right = translateFilterOperand(lte.getArg2(), variableMapping, nodeVariables);
+            return left + " <= " + right;
+        } else if (expr instanceof E_GreaterThan) {
+            E_GreaterThan gt = (E_GreaterThan) expr;
+            String left = translateFilterOperand(gt.getArg1(), variableMapping, nodeVariables);
+            String right = translateFilterOperand(gt.getArg2(), variableMapping, nodeVariables);
+            return left + " > " + right;
+        } else if (expr instanceof E_GreaterThanOrEqual) {
+            E_GreaterThanOrEqual gte = (E_GreaterThanOrEqual) expr;
+            String left = translateFilterOperand(gte.getArg1(), variableMapping, nodeVariables);
+            String right = translateFilterOperand(gte.getArg2(), variableMapping, nodeVariables);
+            return left + " >= " + right;
+        } else if (expr instanceof E_Equals) {
+            E_Equals eq = (E_Equals) expr;
+            String left = translateFilterOperand(eq.getArg1(), variableMapping, nodeVariables);
+            String right = translateFilterOperand(eq.getArg2(), variableMapping, nodeVariables);
+            return left + " = " + right;
+        } else if (expr instanceof E_NotEquals) {
+            E_NotEquals ne = (E_NotEquals) expr;
+            String left = translateFilterOperand(ne.getArg1(), variableMapping, nodeVariables);
+            String right = translateFilterOperand(ne.getArg2(), variableMapping, nodeVariables);
+            return left + " <> " + right;
+        } else if (expr instanceof E_LogicalAnd) {
+            E_LogicalAnd and = (E_LogicalAnd) expr;
+            String left = translateFilterExpr(and.getArg1(), variableMapping, nodeVariables, parameters, paramCounter);
+            String right = translateFilterExpr(and.getArg2(), variableMapping, nodeVariables, parameters, paramCounter);
+            return "(" + left + " AND " + right + ")";
+        } else if (expr instanceof E_LogicalOr) {
+            E_LogicalOr or = (E_LogicalOr) expr;
+            String left = translateFilterExpr(or.getArg1(), variableMapping, nodeVariables, parameters, paramCounter);
+            String right = translateFilterExpr(or.getArg2(), variableMapping, nodeVariables, parameters, paramCounter);
+            return "(" + left + " OR " + right + ")";
+        } else if (expr instanceof E_LogicalNot) {
+            E_LogicalNot not = (E_LogicalNot) expr;
+            String arg = translateFilterExpr(not.getArg(), variableMapping, nodeVariables, parameters, paramCounter);
+            return "NOT (" + arg + ")";
+        }
+        
+        throw new CannotCompileException(
+            "Unsupported FILTER expression type: " + expr.getClass().getSimpleName());
+    }
+    
+    /**
+     * Translate a FILTER operand (variable, constant, or property) to Cypher expression.
+     */
+    private static String translateFilterOperand(
+            final Expr expr,
+            final Map<String, String> variableMapping,
+            final Set<String> nodeVariables) throws CannotCompileException {
+        
+        if (expr instanceof ExprVar) {
+            ExprVar var = (ExprVar) expr;
+            String varName = var.getVarName();
+            
+            // Check if it's mapped to a property expression
+            if (variableMapping.containsKey(varName)) {
+                return variableMapping.get(varName);
+            }
+            
+            // Otherwise it's a node variable
+            if (nodeVariables.contains(varName)) {
+                return sanitizeVariableName(varName) + ".uri";
+            }
+            
+            throw new CannotCompileException(
+                "Unknown variable in FILTER: " + varName);
+        } else if (expr instanceof NodeValue) {
+            NodeValue nodeVal = (NodeValue) expr;
+            Node node = nodeVal.getNode();
+            
+            if (node.isLiteral()) {
+                Object value = node.getLiteralValue();
+                if (value instanceof Number) {
+                    return value.toString();
+                } else if (value instanceof String) {
+                    return "'" + value.toString().replace("'", "\\'") + "'";
+                } else if (value instanceof Boolean) {
+                    return value.toString();
+                }
+                return "'" + node.getLiteralLexicalForm().replace("'", "\\'") + "'";
+            } else if (node.isURI()) {
+                return "'" + node.getURI().replace("'", "\\'") + "'";
+            }
+        }
+        
+        throw new CannotCompileException(
+            "Unsupported FILTER operand type: " + expr.getClass().getSimpleName());
     }
 
     /**

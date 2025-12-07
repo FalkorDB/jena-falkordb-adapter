@@ -874,7 +874,7 @@ public class FalkorDBQueryPushdownTest {
     }
 
     @Test
-    @DisplayName("Test OPTIONAL with filter in required part")
+    @DisplayName("Test OPTIONAL with FILTER in required part")
     public void testOptionalWithFilterInRequired() {
         // Add test data
         var alice = model.createResource("http://example.org/person/alice");
@@ -893,6 +893,8 @@ public class FalkorDBQueryPushdownTest {
         
         Dataset dataset = DatasetFactory.create(model);
         
+        // Test FILTER pushdown with OPTIONAL pattern
+        // The FILTER in the required part should be translated to Cypher WHERE clause
         String sparql = """
             PREFIX foaf: <http://xmlns.com/foaf/0.1/>
             SELECT ?person ?name ?email WHERE {
@@ -912,7 +914,7 @@ public class FalkorDBQueryPushdownTest {
                 solutions.add(results.nextSolution());
             }
             
-            // Should return only Alice (age < 30)
+            // Should return only Alice (age < 30) with email
             assertEquals(1, solutions.size(), "Should return only Alice (age < 30)");
             
             QuerySolution solution = solutions.get(0);

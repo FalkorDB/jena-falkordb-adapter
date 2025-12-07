@@ -767,13 +767,10 @@ public final class SparqlToCypherCompiler {
         }
         
         // Handle variable object triples (for single-triple patterns only)
-        // These will use the translateWithVariableObject method
-        for (Triple triple : variableObjectTriples) {
-            if (triples.size() == 1) {
-                // Single-triple pattern - delegate to specialized handler
-                return translateWithVariableObject(triple);
-            }
-            // Multi-triple patterns with variable objects should have been caught earlier
+        // Multi-triple patterns with variable objects should have been caught earlier at line 609
+        if (!variableObjectTriples.isEmpty() && triples.size() == 1) {
+            // Single-triple pattern - delegate to specialized handler
+            return translateWithVariableObject(variableObjectTriples.get(0));
         }
 
         // If no MATCH clauses were generated but we have variables, 

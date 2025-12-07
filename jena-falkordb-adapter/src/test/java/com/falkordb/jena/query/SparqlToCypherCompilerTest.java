@@ -52,9 +52,10 @@ public class SparqlToCypherCompilerTest {
     }
 
     @Test
-    @DisplayName("Test single variable object falls back")
-    public void testSingleVariableObjectFallsBack() {
+    @DisplayName("Test single variable object compiles with UNION")
+    public void testSingleVariableObjectCompilesWithUnion() throws Exception {
         // ?s foaf:knows ?o - single triple with variable object
+        // Should now compile with UNION to query both relationships and properties
         BasicPattern bgp = new BasicPattern();
         bgp.add(Triple.create(
             NodeFactory.createVariable("s"),
@@ -62,9 +63,17 @@ public class SparqlToCypherCompilerTest {
             NodeFactory.createVariable("o")
         ));
 
-        // Should throw because ?o might be a literal
-        assertThrows(SparqlToCypherCompiler.CannotCompileException.class,
-            () -> SparqlToCypherCompiler.translate(bgp));
+        SparqlToCypherCompiler.CompilationResult result = 
+            SparqlToCypherCompiler.translate(bgp);
+
+        assertNotNull(result);
+        assertNotNull(result.cypherQuery());
+        assertTrue(result.cypherQuery().contains("MATCH"));
+        assertTrue(result.cypherQuery().contains("UNION ALL"));
+        assertTrue(result.cypherQuery().contains("knows"));
+        // Should query both relationships and properties
+        assertTrue(result.cypherQuery().contains(":Resource)"));
+        assertTrue(result.cypherQuery().contains("IS NOT NULL"));
     }
 
     @Test
@@ -111,9 +120,10 @@ public class SparqlToCypherCompilerTest {
     }
 
     @Test
-    @DisplayName("Test concrete subject URI with variable object falls back")
-    public void testConcreteSubjectWithVariableObjectFallsBack() {
+    @DisplayName("Test concrete subject URI with variable object compiles with UNION")
+    public void testConcreteSubjectWithVariableObjectCompilesWithUnion() throws Exception {
         // <http://example.org/alice> foaf:knows ?o - variable object
+        // Should now compile with UNION to query both relationships and properties
         BasicPattern bgp = new BasicPattern();
         bgp.add(Triple.create(
             NodeFactory.createURI("http://example.org/alice"),
@@ -121,9 +131,16 @@ public class SparqlToCypherCompilerTest {
             NodeFactory.createVariable("o")
         ));
 
-        // Should throw because ?o might be a literal
-        assertThrows(SparqlToCypherCompiler.CannotCompileException.class,
-            () -> SparqlToCypherCompiler.translate(bgp));
+        SparqlToCypherCompiler.CompilationResult result = 
+            SparqlToCypherCompiler.translate(bgp);
+
+        assertNotNull(result);
+        assertNotNull(result.cypherQuery());
+        assertTrue(result.cypherQuery().contains("MATCH"));
+        assertTrue(result.cypherQuery().contains("UNION ALL"));
+        assertTrue(result.cypherQuery().contains("alice"));
+        // Should parameterize the concrete URI
+        assertTrue(result.parameters().values().contains("http://example.org/alice"));
     }
 
     @Test
@@ -301,5 +318,105 @@ public class SparqlToCypherCompilerTest {
         assertNotNull(result.cypherQuery());
         assertTrue(result.cypherQuery().contains("MATCH"));
         assertTrue(result.cypherQuery().contains("Person"));
+    }
+
+    @Test
+    @DisplayName("Test variable object optimization generates correct Cypher structure")
+    public void testVariableObjectOptimizationStructure() throws Exception {
+        // ?person foaf:knows ?friend
+        // Should generate UNION query for both relationships and properties
+        BasicPattern bgp = new BasicPattern();
+        bgp.add(Triple.create(
+            NodeFactory.createVariable("person"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/knows"),
+            NodeFactory.createVariable("friend")
+        ));
+
+        SparqlToCypherCompiler.CompilationResult result = 
+            SparqlToCypherCompiler.translate(bgp);
+
+        assertNotNull(result);
+        String cypher = result.cypherQuery();
+        assertNotNull(cypher);
+        
+        // Should have UNION ALL
+        assertTrue(cypher.contains("UNION ALL"), 
+            "Should have UNION ALL for querying both relationships and properties");
+        
+        // Part 1: Should query relationships
+        assertTrue(cypher.contains("-[:`http://xmlns.com/foaf/0.1/knows`]->"),
+            "Should query relationship edges");
+        assertTrue(cypher.contains("(friend:Resource)"),
+            "Should query friend as Resource node");
+        
+        // Part 2: Should query properties
+        assertTrue(cypher.contains("IS NOT NULL"),
+            "Should check if property exists");
+        assertTrue(cypher.contains(".`http://xmlns.com/foaf/0.1/knows`"),
+            "Should access property value");
+    }
+
+    @Test
+    @DisplayName("Test variable object with concrete subject parameterizes correctly")
+    public void testVariableObjectConcreteSubjectParameters() throws Exception {
+        // <http://example.org/alice> ex:property ?value
+        BasicPattern bgp = new BasicPattern();
+        bgp.add(Triple.create(
+            NodeFactory.createURI("http://example.org/alice"),
+            NodeFactory.createURI("http://example.org/property"),
+            NodeFactory.createVariable("value")
+        ));
+
+        SparqlToCypherCompiler.CompilationResult result = 
+            SparqlToCypherCompiler.translate(bgp);
+
+        assertNotNull(result);
+        assertNotNull(result.parameters());
+        
+        // Concrete subject URI should be parameterized
+        assertTrue(result.parameters().values().contains("http://example.org/alice"),
+            "Concrete subject URI should be parameterized");
+        
+        // Should have UNION for both query paths
+        assertTrue(result.cypherQuery().contains("UNION ALL"));
+    }
+
+    @Test
+    @DisplayName("Test variable object returns correct variable names")
+    public void testVariableObjectReturnsCorrectVariables() throws Exception {
+        // ?s ex:prop ?o
+        BasicPattern bgp = new BasicPattern();
+        bgp.add(Triple.create(
+            NodeFactory.createVariable("subject"),
+            NodeFactory.createURI("http://example.org/hasValue"),
+            NodeFactory.createVariable("object")
+        ));
+
+        SparqlToCypherCompiler.CompilationResult result = 
+            SparqlToCypherCompiler.translate(bgp);
+
+        assertNotNull(result);
+        String cypher = result.cypherQuery();
+        
+        // Both UNION branches should return the same variable names
+        assertTrue(cypher.contains("AS subject"), 
+            "Should return subject variable");
+        assertTrue(cypher.contains("AS object"),
+            "Should return object variable");
+        
+        // Both branches should be consistent - both should return both variables
+        // Count occurrences properly
+        int subjectCount = 0;
+        int objectCount = 0;
+        String[] lines = cypher.split("\n");
+        for (String line : lines) {
+            if (line.contains(" AS subject")) subjectCount++;
+            if (line.contains(" AS object")) objectCount++;
+        }
+        
+        assertTrue(subjectCount >= 2, 
+            "Should have subject in both UNION branches (found " + subjectCount + "). Query:\n" + cypher);
+        assertTrue(objectCount >= 2, 
+            "Should have object in both UNION branches (found " + objectCount + "). Query:\n" + cypher);
     }
 }

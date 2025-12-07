@@ -166,7 +166,7 @@ public final class SparqlToCypherCompiler {
             if (triple.getSubject().isVariable()) {
                 declaredNodes.add(getNodeVariable(triple.getSubject()));
             }
-            if (triple.getObject().isVariable() && !triple.getObject().isLiteral()) {
+            if (triple.getObject().isVariable()) {
                 declaredNodes.add(getNodeVariable(triple.getObject()));
             }
         }

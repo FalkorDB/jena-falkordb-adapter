@@ -675,9 +675,8 @@ public class FalkorDBQueryPushdownTest {
                 .filter(sol -> sol.getResource("person").getURI().contains("bob"))
                 .findFirst()
                 .orElseThrow();
-            // Bob's solution might not contain email or it might be null
-            assertTrue(!bobSol.contains("email") || bobSol.get("email") == null,
-                "Bob should not have email");
+            // Bob's solution should not contain email
+            assertFalse(bobSol.contains("email"), "Bob should not have email");
         }
     }
 

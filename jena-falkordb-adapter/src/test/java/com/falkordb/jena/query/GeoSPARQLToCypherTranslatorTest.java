@@ -1,0 +1,162 @@
+package com.falkordb.jena.query;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import java.util.HashMap;
+import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+/**
+ * Unit tests for GeoSPARQLToCypherTranslator.
+ * 
+ * Tests the translation of WKT geometries to FalkorDB Cypher point() expressions.
+ */
+public class GeoSPARQLToCypherTranslatorTest {
+
+    @Test
+    @DisplayName("Parse WKT POINT to Cypher point() expression")
+    public void testParsePointWKT() {
+        String wkt = "POINT(-0.1278 51.5074)";
+        Map<String, Object> params = new HashMap<>();
+        
+        String result = GeoSPARQLToCypherTranslator.parseWKTToPoint(wkt, "geo", params);
+        
+        assertNotNull(result, "Result should not be null");
+        assertTrue(result.contains("point({"), "Should contain point({ expression");
+        assertTrue(result.contains("latitude:"), "Should contain latitude parameter");
+        assertTrue(result.contains("longitude:"), "Should contain longitude parameter");
+        assertEquals(51.5074, params.get("geo_lat"), "Latitude should be extracted");
+        assertEquals(-0.1278, params.get("geo_lon"), "Longitude should be extracted");
+    }
+
+    @Test
+    @DisplayName("Parse WKT POINT with positive coordinates")
+    public void testParsePointPositiveCoordinates() {
+        String wkt = "POINT(2.3522 48.8566)";
+        Map<String, Object> params = new HashMap<>();
+        
+        String result = GeoSPARQLToCypherTranslator.parseWKTToPoint(wkt, "p", params);
+        
+        assertNotNull(result);
+        assertEquals(48.8566, params.get("p_lat"));
+        assertEquals(2.3522, params.get("p_lon"));
+    }
+
+    @Test
+    @DisplayName("Extract latitude from WKT POINT")
+    public void testExtractLatitude() {
+        String wkt = "POINT(-0.1278 51.5074)";
+        
+        Double lat = GeoSPARQLToCypherTranslator.extractLatitude(wkt);
+        
+        assertNotNull(lat, "Latitude should be extracted");
+        assertEquals(51.5074, lat, 0.0001, "Latitude should match");
+    }
+
+    @Test
+    @DisplayName("Extract longitude from WKT POINT")
+    public void testExtractLongitude() {
+        String wkt = "POINT(-0.1278 51.5074)";
+        
+        Double lon = GeoSPARQLToCypherTranslator.extractLongitude(wkt);
+        
+        assertNotNull(lon, "Longitude should be extracted");
+        assertEquals(-0.1278, lon, 0.0001, "Longitude should match");
+    }
+
+    @Test
+    @DisplayName("Parse WKT POLYGON and extract first point")
+    public void testParsePolygonWKT() {
+        String wkt = "POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))";
+        Map<String, Object> params = new HashMap<>();
+        
+        String result = GeoSPARQLToCypherTranslator.parseWKTToPoint(wkt, "poly", params);
+        
+        assertNotNull(result, "Result should not be null for polygon");
+        assertTrue(result.contains("point({"), "Should contain point({ expression");
+        assertEquals(0.0, params.get("poly_lat"), "Should extract first point latitude");
+        assertEquals(0.0, params.get("poly_lon"), "Should extract first point longitude");
+    }
+
+    @Test
+    @DisplayName("Parse WKT POLYGON with complex coordinates")
+    public void testParseComplexPolygon() {
+        String wkt = "POLYGON((-0.15 51.50, -0.15 51.52, -0.10 51.52, -0.10 51.50, -0.15 51.50))";
+        Map<String, Object> params = new HashMap<>();
+        
+        String result = GeoSPARQLToCypherTranslator.parseWKTToPoint(wkt, "rect", params);
+        
+        assertNotNull(result);
+        assertEquals(51.50, params.get("rect_lat"));
+        assertEquals(-0.15, params.get("rect_lon"));
+    }
+
+    @Test
+    @DisplayName("Handle invalid WKT gracefully")
+    public void testInvalidWKT() {
+        String wkt = "INVALID WKT STRING";
+        Map<String, Object> params = new HashMap<>();
+        
+        String result = GeoSPARQLToCypherTranslator.parseWKTToPoint(wkt, "invalid", params);
+        
+        assertNull(result, "Should return null for invalid WKT");
+        assertTrue(params.isEmpty(), "No parameters should be added for invalid WKT");
+    }
+
+    @Test
+    @DisplayName("Extract latitude from invalid WKT returns null")
+    public void testExtractLatitudeInvalid() {
+        String wkt = "INVALID WKT";
+        
+        Double lat = GeoSPARQLToCypherTranslator.extractLatitude(wkt);
+        
+        assertNull(lat, "Should return null for invalid WKT");
+    }
+
+    @Test
+    @DisplayName("Extract longitude from invalid WKT returns null")
+    public void testExtractLongitudeInvalid() {
+        String wkt = "INVALID WKT";
+        
+        Double lon = GeoSPARQLToCypherTranslator.extractLongitude(wkt);
+        
+        assertNull(lon, "Should return null for invalid WKT");
+    }
+
+    @Test
+    @DisplayName("Parse WKT POINT with case insensitivity")
+    public void testCaseInsensitivity() {
+        String wkt1 = "POINT(-0.1278 51.5074)";
+        String wkt2 = "point(-0.1278 51.5074)";
+        String wkt3 = "Point(-0.1278 51.5074)";
+        
+        Map<String, Object> params1 = new HashMap<>();
+        Map<String, Object> params2 = new HashMap<>();
+        Map<String, Object> params3 = new HashMap<>();
+        
+        String result1 = GeoSPARQLToCypherTranslator.parseWKTToPoint(wkt1, "p", params1);
+        String result2 = GeoSPARQLToCypherTranslator.parseWKTToPoint(wkt2, "p", params2);
+        String result3 = GeoSPARQLToCypherTranslator.parseWKTToPoint(wkt3, "p", params3);
+        
+        assertNotNull(result1);
+        assertNotNull(result2);
+        assertNotNull(result3);
+        assertEquals(params1.get("p_lat"), params2.get("p_lat"));
+        assertEquals(params1.get("p_lat"), params3.get("p_lat"));
+    }
+
+    @Test
+    @DisplayName("Parse WKT POINT with extra whitespace")
+    public void testExtraWhitespace() {
+        String wkt = "POINT(  -0.1278   51.5074  )";
+        Map<String, Object> params = new HashMap<>();
+        
+        String result = GeoSPARQLToCypherTranslator.parseWKTToPoint(wkt, "p", params);
+        
+        assertNotNull(result);
+        assertEquals(51.5074, params.get("p_lat"));
+        assertEquals(-0.1278, params.get("p_lon"));
+    }
+}

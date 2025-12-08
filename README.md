@@ -114,6 +114,7 @@ A standalone SPARQL endpoint server built on Apache Jena Fuseki with FalkorDB as
   - OPTIONAL patterns (returns all required matches with NULL for missing optional data)
   - UNION patterns (alternative query patterns in single database call)
   - Aggregations (GROUP BY with COUNT, SUM, AVG, MIN, MAX - computed database-side)
+  - **Geospatial queries** (GeoSPARQL to FalkorDB point() and distance() functions)
 - ✅ **Magic property (falkor:cypher)** for direct Cypher execution within SPARQL
 - ✅ **Fuseki SPARQL server** with FalkorDB backend
 - ✅ **Inference support** with rule-based reasoning (RDFS/OWL rules)

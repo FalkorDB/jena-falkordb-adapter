@@ -534,6 +534,15 @@ public final class SparqlToCypherCompiler {
             return "NOT (" + arg + ")";
         }
         
+        // Check if this is a GeoSPARQL function
+        if (GeoSPARQLToCypherTranslator.isGeoSPARQLFunction(expr)) {
+            String geoExpr = GeoSPARQLToCypherTranslator.translateGeoFunction(
+                expr, "geo_p" + paramCounter, parameters);
+            if (geoExpr != null) {
+                return geoExpr;
+            }
+        }
+        
         throw new CannotCompileException(
             "Unsupported FILTER expression type: " + expr.getClass().getSimpleName());
     }

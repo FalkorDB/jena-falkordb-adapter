@@ -209,7 +209,7 @@ WHERE {
 Get both direct father relationships and inferred grandfather relationships:
 
 ```bash
-curl -G http://localhost:3330/fathers/query \
+curl -G http://localhost:3330/falkor/query \
   -H "Accept: application/sparql-results+json" \
   --data-urlencode 'query=
 PREFIX ff: <http://www.semanticweb.org/ontologies/2023/1/fathers_father#>
@@ -301,7 +301,7 @@ curl -X POST http://localhost:3330/falkor/data \
 Query for all people Alice knows through a 2-hop relationship (friend-of-friend) along with their geographic locations:
 
 ```bash
-curl -G http://localhost:3300/falkor/query \
+curl -G http://localhost:3330/falkor/query \
   -H "Accept: application/sparql-results+json" \
   --data-urlencode 'query=
 PREFIX social: <http://example.org/social#>

@@ -61,21 +61,6 @@ WHERE {
 LIMIT 10'
 ```
 
-**What happens:**
-- SPARQL Basic Graph Pattern (BGP) is automatically translated to a single Cypher query
-- No N+1 query problem
-- Returns all friends-of-friends in one database operation
-
-**Expected Cypher (generated automatically):**
-```cypher
-MATCH (:Resource {uri: "http://example.org/social#person1"})
-      -[:`http://example.org/social#knows`]->(:Resource)
-      -[:`http://example.org/social#knows`]->(fof:Resource)
-WHERE fof.`http://example.org/social#name` IS NOT NULL
-RETURN fof.uri AS fof, fof.`http://example.org/social#name` AS name
-LIMIT 10
-```
-
 ---
 
 ### 2.2 Query With Magic Property (Direct Cypher Execution)
@@ -300,7 +285,7 @@ The server will start on port 3030 with the service available at `/falkor`.
 Load the example data that contains both social relationships and geographic coordinates (London locations):
 
 ```bash
-curl -X POST http://localhost:3030/falkor/data \
+curl -X POST http://localhost:3330/falkor/data \
   -H "Content-Type: text/turtle" \
   --data-binary @samples/geosparql-with-inference/data-example.ttl
 ```
@@ -316,7 +301,7 @@ curl -X POST http://localhost:3030/falkor/data \
 Query for all people Alice knows through a 2-hop relationship (friend-of-friend) along with their geographic locations:
 
 ```bash
-curl -G http://localhost:3030/falkor/query \
+curl -G http://localhost:3300/falkor/query \
   -H "Accept: application/sparql-results+json" \
   --data-urlencode 'query=
 PREFIX social: <http://example.org/social#>
@@ -348,7 +333,7 @@ ORDER BY ?friendName'
 Check if Carol is in Alice's 2-hop network using an ASK query with inference:
 
 ```bash
-curl -G http://localhost:3030/falkor/query \
+curl -G http://localhost:3330/falkor/query \
   -H "Accept: application/sparql-results+json" \
   --data-urlencode 'query=
 PREFIX social: <http://example.org/social#>
@@ -372,7 +357,7 @@ Carol is reachable via the path: Alice → Bob → Carol (2 hops)
 Query for people in Bob's 2-hop network with their occupations and geographic locations:
 
 ```bash
-curl -G http://localhost:3030/falkor/query \
+curl -G http://localhost:3330/falkor/query \
   -H "Accept: application/sparql-results+json" \
   --data-urlencode 'query=
 PREFIX social: <http://example.org/social#>
@@ -398,7 +383,7 @@ ORDER BY ?friendName'
 Query all geographic features (regions) and people in the dataset:
 
 ```bash
-curl -G http://localhost:3030/falkor/query \
+curl -G http://localhost:3330/falkor/query \
   -H "Accept: application/sparql-results+json" \
   --data-urlencode 'query=
 PREFIX social: <http://example.org/social#>
@@ -426,7 +411,7 @@ ORDER BY ?featureName ?personName'
 Use aggregation to count people associated with geographic features:
 
 ```bash
-curl -G http://localhost:3030/falkor/query \
+curl -G http://localhost:3330/falkor/query \
   -H "Accept: application/sparql-results+json" \
   --data-urlencode 'query=
 PREFIX social: <http://example.org/social#>
@@ -457,7 +442,7 @@ Load and execute them using curl:
 ```bash
 # Example: Run query from file
 QUERY=$(cat samples/geosparql-with-inference/queries.sparql | head -20 | tail -15)
-curl -G http://localhost:3030/falkor/query \
+curl -G http://localhost:3330/falkor/query \
   -H "Accept: application/sparql-results+json" \
   --data-urlencode "query=$QUERY"
 ```

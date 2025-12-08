@@ -412,8 +412,6 @@ CMD ["java", "-jar", "/app/fuseki.jar"]
 **Docker Compose** example with FalkorDB:
 
 ```yaml
-version: '3.8'
-
 services:
   falkordb:
     image: falkordb/falkordb:latest
@@ -440,7 +438,7 @@ volumes:
 
 Run with:
 ```bash
-docker-compose up -d
+docker-compose -f docker-compose-tracing.yaml up -d
 ```
 
 ### Testing Your Deployment

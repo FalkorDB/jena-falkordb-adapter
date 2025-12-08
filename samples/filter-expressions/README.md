@@ -301,14 +301,198 @@ mvn test -Dtest=SparqlToCypherCompilerTest#testFilterWithAnd
 
 3. **Variable Object Ambiguity**: In multi-triple BGPs, variable objects that aren't used as subjects may cause fallback (use OPTIONAL or single-triple patterns for such cases)
 
+## Using curl with Fuseki
+
+You can use curl to load data and execute FILTER queries via the Fuseki SPARQL endpoint.
+
+### Prerequisites
+
+First, start FalkorDB and Fuseki:
+
+```bash
+# Start FalkorDB
+docker run -p 6379:6379 -it --rm falkordb/falkordb:latest
+
+# In another terminal, start Fuseki (from project root)
+mvn clean install -DskipTests
+java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar
+```
+
+The Fuseki server will start on `http://localhost:3330` with the default endpoint at `/falkor`.
+
+### Loading Test Data with curl
+
+First, load some sample data:
+
+```bash
+curl -X POST \
+  -H "Content-Type: application/sparql-update" \
+  --data 'PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX ex: <http://example.org/>
+
+INSERT DATA {
+    ex:person/alice foaf:name "Alice" ;
+                    foaf:age 25 ;
+                    foaf:email "alice@example.org" .
+    ex:person/bob foaf:name "Bob" ;
+                  foaf:age 35 ;
+                  foaf:email "bob@example.org" .
+    ex:person/charlie foaf:name "Charlie" ;
+                      foaf:age 45 ;
+                      foaf:email "charlie@example.org" .
+    ex:person/diana foaf:name "Diana" ;
+                    foaf:age 28 .
+}' \
+  http://localhost:3330/falkor/update
+```
+
+### Executing Queries with FILTER
+
+**Example 1: Simple numeric comparison (less than)**
+
+Find persons younger than 30:
+
+```bash
+curl -G \
+  --data-urlencode "query=PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT ?name ?age WHERE {
+    ?person foaf:name ?name .
+    ?person foaf:age ?age .
+    FILTER(?age < 30)
+}
+ORDER BY ?name" \
+  http://localhost:3330/falkor/query
+```
+
+**Example 2: Numeric range with AND**
+
+Find persons of working age (18-65):
+
+```bash
+curl -G \
+  --data-urlencode "query=PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT ?name ?age WHERE {
+    ?person foaf:name ?name .
+    ?person foaf:age ?age .
+    FILTER(?age >= 18 && ?age < 65)
+}
+ORDER BY ?age" \
+  http://localhost:3330/falkor/query
+```
+
+**Example 3: String equality**
+
+Find a specific person by name:
+
+```bash
+curl -G \
+  --data-urlencode "query=PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT ?email WHERE {
+    ?person foaf:name ?name .
+    ?person foaf:email ?email .
+    FILTER(?name = \"Alice\")
+}" \
+  http://localhost:3330/falkor/query
+```
+
+**Example 4: NOT operator**
+
+Find all adults (NOT minors, age >= 18):
+
+```bash
+curl -G \
+  --data-urlencode "query=PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT ?name ?age WHERE {
+    ?person foaf:name ?name .
+    ?person foaf:age ?age .
+    FILTER(!(?age < 18))
+}
+ORDER BY ?age" \
+  http://localhost:3330/falkor/query
+```
+
+**Example 5: OR operator**
+
+Find young or senior persons:
+
+```bash
+curl -G \
+  --data-urlencode "query=PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT ?name ?age WHERE {
+    ?person foaf:name ?name .
+    ?person foaf:age ?age .
+    FILTER(?age < 30 || ?age > 60)
+}
+ORDER BY ?age" \
+  http://localhost:3330/falkor/query
+```
+
+**Example 6: Complex combined expression**
+
+Find persons in specific age ranges with multiple conditions:
+
+```bash
+curl -G \
+  --data-urlencode "query=PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT ?name ?age WHERE {
+    ?person foaf:name ?name .
+    ?person foaf:age ?age .
+    FILTER((?age >= 20 && ?age < 30) || (?age >= 40 && ?age < 50))
+}
+ORDER BY ?age" \
+  http://localhost:3330/falkor/query
+```
+
+**Example 7: Not equals operator**
+
+Find all persons except Bob:
+
+```bash
+curl -G \
+  --data-urlencode "query=PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT ?name ?age WHERE {
+    ?person foaf:name ?name .
+    ?person foaf:age ?age .
+    FILTER(?name != \"Bob\")
+}
+ORDER BY ?name" \
+  http://localhost:3330/falkor/query
+```
+
+**Example 8: FILTER with OPTIONAL**
+
+Find young persons with optional email:
+
+```bash
+curl -G \
+  --data-urlencode "query=PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT ?name ?age ?email WHERE {
+    ?person foaf:name ?name .
+    ?person foaf:age ?age .
+    FILTER(?age < 35)
+    OPTIONAL { ?person foaf:email ?email }
+}
+ORDER BY ?age" \
+  http://localhost:3330/falkor/query
+```
+
 ## Related Documentation
 
 - [OPTIMIZATIONS.md](../../OPTIMIZATIONS.md#filter-expressions) - Full optimization documentation
 - [Query Pushdown Examples](../query-pushdown/) - Basic BGP translation
 - [OPTIONAL Patterns](../optional-patterns/) - FILTER with OPTIONAL
 - [Variable Objects](../variable-objects/) - Variable object optimization
+- [Fuseki GETTING_STARTED.md](../../jena-fuseki-falkordb/GETTING_STARTED.md) - Fuseki setup and usage
 
 ## See Also
 
 - [SparqlToCypherCompiler.java](../../jena-falkordb-adapter/src/main/java/com/falkordb/jena/query/SparqlToCypherCompiler.java) - Compiler implementation
-- [FalkorDBOpExecutor.java](../../jena-falkordb-adapter/src/main/java/com/falkordb/jena/query/FalkorDBOpExecutor.java) - Query execution with pushdown
+- [FalkorDBOpExecutor.java](../../jena-falkordb-adapter/src/main/java/com/falkordb/jena/query/FalkorDB OpExecutor.java) - Query execution with pushdown

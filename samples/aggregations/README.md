@@ -455,12 +455,199 @@ GROUP BY ?type
 2. Use FILTER to exclude NULLs if needed
 3. Double-check GROUP BY variables
 
+## Using curl with Fuseki
+
+You can use curl to load data and execute aggregation queries via the Fuseki SPARQL endpoint.
+
+### Prerequisites
+
+First, start FalkorDB and Fuseki:
+
+```bash
+# Start FalkorDB
+docker run -p 6379:6379 -it --rm falkordb/falkordb:latest
+
+# In another terminal, start Fuseki (from project root)
+mvn clean install -DskipTests
+java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar
+```
+
+The Fuseki server will start on `http://localhost:3330` with the default endpoint at `/falkor`.
+
+### Loading Data with curl
+
+**Load the sample data file (`data-example.ttl`):**
+
+```bash
+curl -X POST \
+  -H "Content-Type: text/turtle" \
+  --data-binary @samples/aggregations/data-example.ttl \
+  http://localhost:3330/falkor/data
+```
+
+### Executing Aggregation Queries with curl
+
+**Example 1: COUNT with GROUP BY**
+
+Count entities by type:
+
+```bash
+curl -G \
+  --data-urlencode "query=PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+
+SELECT ?type (COUNT(?entity) AS ?count)
+WHERE {
+    ?entity rdf:type ?type .
+}
+GROUP BY ?type
+ORDER BY DESC(?count)" \
+  http://localhost:3330/falkor/query
+```
+
+**Example 2: AVG with GROUP BY**
+
+Calculate average age by person type:
+
+```bash
+curl -G \
+  --data-urlencode "query=PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX ex: <http://example.org/>
+
+SELECT ?type (AVG(?age) AS ?avgAge)
+WHERE {
+    ?person rdf:type ?type .
+    ?person ex:age ?age .
+}
+GROUP BY ?type" \
+  http://localhost:3330/falkor/query
+```
+
+**Example 3: Multiple Aggregations**
+
+Get comprehensive statistics in one query:
+
+```bash
+curl -G \
+  --data-urlencode "query=PREFIX ex: <http://example.org/>
+
+SELECT 
+    (COUNT(?item) AS ?count)
+    (SUM(?price) AS ?total)
+    (AVG(?price) AS ?avgPrice)
+    (MIN(?price) AS ?minPrice)
+    (MAX(?price) AS ?maxPrice)
+WHERE {
+    ?item ex:price ?price .
+}" \
+  http://localhost:3330/falkor/query
+```
+
+**Example 4: COUNT DISTINCT**
+
+Count unique types in the database:
+
+```bash
+curl -G \
+  --data-urlencode "query=PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+
+SELECT (COUNT(DISTINCT ?type) AS ?uniqueTypes)
+WHERE {
+    ?entity rdf:type ?type .
+}" \
+  http://localhost:3330/falkor/query
+```
+
+**Example 5: SUM by Category**
+
+Sum prices by product category:
+
+```bash
+curl -G \
+  --data-urlencode "query=PREFIX ex: <http://example.org/>
+
+SELECT ?category (SUM(?price) AS ?totalPrice)
+WHERE {
+    ?product ex:category ?category .
+    ?product ex:price ?price .
+}
+GROUP BY ?category
+ORDER BY DESC(?totalPrice)" \
+  http://localhost:3330/falkor/query
+```
+
+**Example 6: MIN and MAX**
+
+Find cheapest and most expensive items:
+
+```bash
+curl -G \
+  --data-urlencode "query=PREFIX ex: <http://example.org/>
+
+SELECT 
+    (MIN(?price) AS ?cheapest)
+    (MAX(?price) AS ?mostExpensive)
+WHERE {
+    ?item ex:price ?price .
+}" \
+  http://localhost:3330/falkor/query
+```
+
+**Example 7: COUNT(*)**
+
+Count all triples:
+
+```bash
+curl -G \
+  --data-urlencode "query=SELECT (COUNT(*) AS ?totalTriples)
+WHERE {
+    ?s ?p ?o .
+}" \
+  http://localhost:3330/falkor/query
+```
+
+**Example 8: Aggregation with FILTER**
+
+Average age of adults only:
+
+```bash
+curl -G \
+  --data-urlencode "query=PREFIX ex: <http://example.org/>
+
+SELECT (AVG(?age) AS ?avgAdultAge)
+WHERE {
+    ?person ex:age ?age .
+    FILTER(?age >= 18)
+}" \
+  http://localhost:3330/falkor/query
+```
+
+**Example 9: Multiple GROUP BY variables**
+
+Count by type and category:
+
+```bash
+curl -G \
+  --data-urlencode "query=PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX ex: <http://example.org/>
+
+SELECT ?type ?category (COUNT(?item) AS ?count)
+WHERE {
+    ?item rdf:type ?type .
+    ?item ex:category ?category .
+}
+GROUP BY ?type ?category
+ORDER BY ?type ?category" \
+  http://localhost:3330/falkor/query
+```
+
 ## See Also
 
 - [OPTIMIZATIONS.md](../../OPTIMIZATIONS.md#aggregations) - Complete optimization guide
 - [Query Pushdown Examples](../query-pushdown/) - Basic query translation
 - [FILTER Examples](../filter-expressions/) - Filter expression optimization
 - [Magic Property](../magic-property/) - Direct Cypher for complex aggregations
+- [Fuseki GETTING_STARTED.md](../../jena-fuseki-falkordb/GETTING_STARTED.md) - Fuseki setup and usage
 
 ## Contributing
 

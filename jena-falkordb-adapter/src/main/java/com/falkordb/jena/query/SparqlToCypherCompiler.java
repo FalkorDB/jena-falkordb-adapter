@@ -536,8 +536,10 @@ public final class SparqlToCypherCompiler {
         
         // Check if this is a GeoSPARQL function
         if (GeoSPARQLToCypherTranslator.isGeoSPARQLFunction(expr)) {
+            // Use unique prefix for each geospatial function
+            String geoPrefix = "geo_p" + (paramCounter++);
             String geoExpr = GeoSPARQLToCypherTranslator.translateGeoFunction(
-                expr, "geo_p" + paramCounter, parameters);
+                expr, geoPrefix, parameters);
             if (geoExpr != null) {
                 return geoExpr;
             }

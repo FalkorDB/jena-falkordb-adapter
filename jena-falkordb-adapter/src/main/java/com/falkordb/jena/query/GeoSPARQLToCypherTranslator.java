@@ -93,6 +93,17 @@ public final class GeoSPARQLToCypherTranslator {
             Pattern.CASE_INSENSITIVE);
 
     /**
+     * Default distance threshold for spatial operations (in degrees).
+     * 
+     * <p>This is a simplified approximation used for spatial operations like
+     * sfWithin, sfContains, and sfIntersects. A more accurate implementation
+     * would use proper geometric algorithms.</p>
+     * 
+     * <p>Note: 0.001 degrees ≈ 111 meters at the equator</p>
+     */
+    private static final double SPATIAL_THRESHOLD_DEGREES = 0.001;
+
+    /**
      * Private constructor to prevent instantiation.
      */
     private GeoSPARQLToCypherTranslator() {
@@ -200,6 +211,10 @@ public final class GeoSPARQLToCypherTranslator {
 
     /**
      * Translates geof:sfWithin function to Cypher distance check.
+     * 
+     * <p><b>Limitation:</b> This is a simplified implementation using distance-based
+     * approximation. A full implementation would require proper point-in-polygon
+     * algorithms.</p>
      *
      * @param func the within function
      * @param varPrefix variable prefix
@@ -221,11 +236,15 @@ public final class GeoSPARQLToCypherTranslator {
 
         // For point-in-polygon checks, we use bounding box approximation
         // This is a simplified implementation
-        return "distance(" + point + ", " + region + ") < 0.001";
+        return "distance(" + point + ", " + region + ") < " + SPATIAL_THRESHOLD_DEGREES;
     }
 
     /**
      * Translates geof:sfContains function to Cypher containment check.
+     * 
+     * <p><b>Limitation:</b> This is a simplified implementation using distance-based
+     * approximation. A full implementation would require proper geometric containment
+     * algorithms.</p>
      *
      * @param func the contains function
      * @param varPrefix variable prefix
@@ -245,12 +264,16 @@ public final class GeoSPARQLToCypherTranslator {
             return null;
         }
 
-        // For polygon-contains-point checks
-        return "distance(" + container + ", " + contained + ") < 0.001";
+        // For polygon-contains-point checks - simplified approximation
+        return "distance(" + container + ", " + contained + ") < " + SPATIAL_THRESHOLD_DEGREES;
     }
 
     /**
      * Translates geof:sfIntersects function to Cypher intersection check.
+     * 
+     * <p><b>Limitation:</b> This is a simplified implementation using distance-based
+     * approximation. A full implementation would require proper geometric intersection
+     * algorithms.</p>
      *
      * @param func the intersects function
      * @param varPrefix variable prefix
@@ -270,8 +293,8 @@ public final class GeoSPARQLToCypherTranslator {
             return null;
         }
 
-        // For geometry intersection checks
-        return "distance(" + geom1 + ", " + geom2 + ") < 0.001";
+        // For geometry intersection checks - simplified approximation
+        return "distance(" + geom1 + ", " + geom2 + ") < " + SPATIAL_THRESHOLD_DEGREES;
     }
 
     /**

@@ -1,0 +1,43 @@
+@prefix ex: <http://example.org/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+ex:london a ex:Location ;
+    rdfs:label "London" ;
+    ex:name "London" ;
+    ex:latitude "51.5074"^^xsd:double ;
+    ex:longitude "-0.1278"^^xsd:double ;
+    ex:country "United Kingdom" ;
+    ex:population "8982000"^^xsd:integer .
+
+ex:paris a ex:Location ;
+    rdfs:label "Paris" ;
+    ex:name "Paris" ;
+    ex:latitude "48.8566"^^xsd:double ;
+    ex:longitude "2.3522"^^xsd:double ;
+    ex:country "France" ;
+    ex:population "2161000"^^xsd:integer .
+
+ex:berlin a ex:Location ;
+    rdfs:label "Berlin" ;
+    ex:name "Berlin" ;
+    ex:latitude "52.5200"^^xsd:double ;
+    ex:longitude "13.4050"^^xsd:double ;
+    ex:country "Germany" ;
+    ex:population "3645000"^^xsd:integer .
+
+ex:madrid a ex:Location ;
+    rdfs:label "Madrid" ;
+    ex:name "Madrid" ;
+    ex:latitude "40.4168"^^xsd:double ;
+    ex:longitude "-3.7038"^^xsd:double ;
+    ex:country "Spain" ;
+    ex:population "3223000"^^xsd:integer .
+
+ex:rome a ex:Location ;
+    rdfs:label "Rome" ;
+    ex:name "Rome" ;
+    ex:latitude "41.9028"^^xsd:double ;
+    ex:longitude "12.4964"^^xsd:double ;
+    ex:country "Italy" ;
+    ex:population "2873000"^^xsd:integer .

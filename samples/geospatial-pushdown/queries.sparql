@@ -1,0 +1,75 @@
+# Query 1: All Locations
+# Retrieves all stored locations with their coordinates
+PREFIX ex: <http://example.org/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+SELECT ?label ?lat ?lon ?country ?population WHERE {
+  ?loc a ex:Location ;
+       rdfs:label ?label ;
+       ex:latitude ?lat ;
+       ex:longitude ?lon ;
+       ex:country ?country ;
+       ex:population ?population .
+}
+ORDER BY ?label
+
+# Query 2: Bounding Box Filter
+# Find cities within Central/Western Europe
+# Lat: 48-53°N, Lon: -1-14°E
+PREFIX ex: <http://example.org/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+SELECT ?label ?lat ?lon ?country WHERE {
+  ?loc a ex:Location ;
+       rdfs:label ?label ;
+       ex:latitude ?lat ;
+       ex:longitude ?lon ;
+       ex:country ?country .
+  FILTER(?lat >= 48.0 && ?lat <= 53.0)
+  FILTER(?lon >= -1.0 && ?lon <= 14.0)
+}
+ORDER BY ?label
+
+# Query 3: Filter by Country
+# Find all cities in France
+PREFIX ex: <http://example.org/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+SELECT ?label ?lat ?lon ?population WHERE {
+  ?loc a ex:Location ;
+       rdfs:label ?label ;
+       ex:latitude ?lat ;
+       ex:longitude ?lon ;
+       ex:country "France" ;
+       ex:population ?population .
+}
+
+# Query 4: Cities by Latitude Range
+# Find cities in southern Europe (lat < 45°N)
+PREFIX ex: <http://example.org/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+SELECT ?label ?lat ?lon ?country WHERE {
+  ?loc a ex:Location ;
+       rdfs:label ?label ;
+       ex:latitude ?lat ;
+       ex:longitude ?lon ;
+       ex:country ?country .
+  FILTER(?lat < 45.0)
+}
+ORDER BY ?lat
+
+# Query 5: Large Cities
+# Find cities with population > 3 million
+PREFIX ex: <http://example.org/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+SELECT ?label ?population ?lat ?lon WHERE {
+  ?loc a ex:Location ;
+       rdfs:label ?label ;
+       ex:latitude ?lat ;
+       ex:longitude ?lon ;
+       ex:population ?population .
+  FILTER(?population > 3000000)
+}
+ORDER BY DESC(?population)

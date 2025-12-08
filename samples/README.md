@@ -13,6 +13,7 @@ samples/
 ├── optional-patterns/     # Efficient optional data retrieval
 ├── union-patterns/        # Alternative query patterns with UNION
 ├── filter-expressions/    # FILTER expression optimization
+├── aggregations/          # GROUP BY with COUNT, SUM, AVG, MIN, MAX
 └── magic-property/        # Direct Cypher execution
 ```
 
@@ -102,7 +103,22 @@ Automatically pushes FILTER expressions down to Cypher WHERE clauses, eliminatin
 - Complex combined expressions
 - FILTER with UNION queries
 
-### 7. Magic Property (Direct Cypher)
+### 7. Aggregations (GROUP BY)
+**Location:** [`aggregations/`](aggregations/)
+
+Translates SPARQL aggregation queries to Cypher, enabling database-side computation and reducing data transfer.
+
+**Performance:** 200-1000x less data transfer, enables native database aggregation
+
+**Examples:**
+- COUNT with GROUP BY
+- SUM, AVG, MIN, MAX aggregations
+- Multiple aggregations in single query
+- COUNT DISTINCT
+- Global aggregations (no GROUP BY)
+- Complex grouping scenarios
+
+### 8. Magic Property (Direct Cypher)
 **Location:** [`magic-property/`](magic-property/)
 
 Allows direct Cypher execution within SPARQL for maximum control and performance.
@@ -179,6 +195,7 @@ Each subdirectory contains:
 | **OPTIONAL Patterns** | Nx | Partial data retrieval |
 | **UNION Patterns** | Nx | Alternative query patterns |
 | **FILTER Expressions** | Reduces data transfer | Filtering, range queries, complex conditions |
+| **Aggregations** | 200-1000x | GROUP BY, COUNT, SUM, AVG, MIN, MAX |
 | **Magic Property** | Maximum | Complex Cypher patterns |
 
 ## File Formats

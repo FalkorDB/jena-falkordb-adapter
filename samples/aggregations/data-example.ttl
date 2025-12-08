@@ -1,0 +1,161 @@
+# Sample RDF data for aggregations optimization examples
+# Demonstrates: people with ages, products with prices, organizations
+
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix ex: <http://example.org/> .
+
+# ==========================================
+# People with Ages (for AVG, COUNT by type)
+# ==========================================
+
+# Students (ages 19-23)
+ex:student1 a ex:Student ;
+    foaf:name "Alice Smith" ;
+    ex:age 20 .
+
+ex:student2 a ex:Student ;
+    foaf:name "Bob Johnson" ;
+    ex:age 21 .
+
+ex:student3 a ex:Student ;
+    foaf:name "Charlie Brown" ;
+    ex:age 22 .
+
+ex:student4 a ex:Student ;
+    foaf:name "Diana Prince" ;
+    ex:age 19 .
+
+ex:student5 a ex:Student ;
+    foaf:name "Eve Wilson" ;
+    ex:age 23 .
+
+# Teachers (ages 38-45)
+ex:teacher1 a ex:Teacher ;
+    foaf:name "Prof. Frank Miller" ;
+    ex:age 45 .
+
+ex:teacher2 a ex:Teacher ;
+    foaf:name "Dr. Grace Lee" ;
+    ex:age 38 .
+
+ex:teacher3 a ex:Teacher ;
+    foaf:name "Prof. Henry Adams" ;
+    ex:age 42 .
+
+# ==========================================
+# Products with Prices and Categories
+# ==========================================
+
+# Electronics
+ex:product1 a ex:Product ;
+    rdfs:label "Laptop" ;
+    ex:category "Electronics" ;
+    ex:price 1200.00 .
+
+ex:product2 a ex:Product ;
+    rdfs:label "Smartphone" ;
+    ex:category "Electronics" ;
+    ex:price 800.00 .
+
+ex:product3 a ex:Product ;
+    rdfs:label "Tablet" ;
+    ex:category "Electronics" ;
+    ex:price 500.00 .
+
+ex:product4 a ex:Product ;
+    rdfs:label "Monitor" ;
+    ex:category "Electronics" ;
+    ex:price 300.00 .
+
+# Books
+ex:product5 a ex:Product ;
+    rdfs:label "Programming in Java" ;
+    ex:category "Books" ;
+    ex:price 45.00 .
+
+ex:product6 a ex:Product ;
+    rdfs:label "Database Design" ;
+    ex:category "Books" ;
+    ex:price 55.00 .
+
+ex:product7 a ex:Product ;
+    rdfs:label "Web Development" ;
+    ex:category "Books" ;
+    ex:price 40.00 .
+
+# Furniture
+ex:product8 a ex:Product ;
+    rdfs:label "Desk Chair" ;
+    ex:category "Furniture" ;
+    ex:price 250.00 .
+
+ex:product9 a ex:Product ;
+    rdfs:label "Standing Desk" ;
+    ex:category "Furniture" ;
+    ex:price 600.00 .
+
+ex:product10 a ex:Product ;
+    rdfs:label "Bookshelf" ;
+    ex:category "Furniture" ;
+    ex:price 150.00 .
+
+# ==========================================
+# Organizations with Employee Counts
+# ==========================================
+
+ex:org1 a ex:Organization ;
+    rdfs:label "Tech Corp" ;
+    ex:employeeCount 500 ;
+    ex:revenue 10000000 .
+
+ex:org2 a ex:Organization ;
+    rdfs:label "Software Inc" ;
+    ex:employeeCount 200 ;
+    ex:revenue 5000000 .
+
+ex:org3 a ex:Organization ;
+    rdfs:label "Data Solutions" ;
+    ex:employeeCount 150 ;
+    ex:revenue 3000000 .
+
+ex:org4 a ex:Organization ;
+    rdfs:label "Cloud Services" ;
+    ex:employeeCount 800 ;
+    ex:revenue 20000000 .
+
+ex:org5 a ex:Organization ;
+    rdfs:label "AI Research Lab" ;
+    ex:employeeCount 100 ;
+    ex:revenue 2000000 .
+
+# ==========================================
+# Sample Data Statistics
+# ==========================================
+# 
+# Students: 5 (ages: 19, 20, 21, 22, 23)
+#   - Count: 5
+#   - Avg age: 21
+#   - Min age: 19
+#   - Max age: 23
+#   - Sum ages: 105
+#
+# Teachers: 3 (ages: 38, 42, 45)
+#   - Count: 3
+#   - Avg age: 41.67
+#   - Min age: 38
+#   - Max age: 45
+#   - Sum ages: 125
+#
+# Products by Category:
+#   - Electronics: 4 items, total price: 2800, avg: 700
+#   - Books: 3 items, total price: 140, avg: 46.67
+#   - Furniture: 3 items, total price: 1000, avg: 333.33
+#   - All products: 10 items, total: 3940, avg: 394
+#
+# Organizations: 5
+#   - Total employees: 1750
+#   - Avg employees: 350
+#   - Total revenue: 40000000
+#   - Avg revenue: 8000000

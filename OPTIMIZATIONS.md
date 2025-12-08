@@ -1005,6 +1005,167 @@ try (QueryExecution qexec = QueryExecutionFactory.create(query, model)) {
 }
 ```
 
+## 4. Geospatial Query Pushdown
+
+> **Status**: ✅ **IMPLEMENTED**  
+> **Tests**: See [GeoSPARQLToCypherTranslatorTest.java](jena-falkordb-adapter/src/test/java/com/falkordb/jena/query/GeoSPARQLToCypherTranslatorTest.java) and [FalkorDBGeospatialPushdownTest.java](jena-falkordb-adapter/src/test/java/com/falkordb/jena/query/FalkorDBGeospatialPushdownTest.java)  
+> **Examples**: See [samples/geospatial-pushdown/](samples/geospatial-pushdown/)  
+> **Full Documentation**: See [GEOSPATIAL_PUSHDOWN.md](GEOSPATIAL_PUSHDOWN.md)
+
+### The Problem
+
+GeoSPARQL queries typically require:
+1. Fetching all spatial data from the database
+2. Parsing WKT geometries on the client
+3. Performing spatial computations in memory
+4. Filtering results client-side
+
+This results in high data transfer and slow spatial queries.
+
+### The Solution
+
+The geospatial pushdown mechanism translates GeoSPARQL functions to FalkorDB's native `point()` and `distance()` functions:
+
+**GeoSPARQL Query:**
+```sparql
+PREFIX geof: <http://www.opengis.net/def/function/geosparql/>
+PREFIX ex: <http://example.org/>
+
+SELECT ?city ?distance WHERE {
+  ?city ex:latitude ?lat .
+  ?city ex:longitude ?lon .
+  FILTER(?lat >= 51.0 && ?lat <= 52.0)
+  FILTER(?lon >= -1.0 && ?lon <= 0.0)
+}
+```
+
+**Generated Cypher:**
+```cypher
+MATCH (city:Resource)
+WHERE city.`http://example.org/latitude` IS NOT NULL
+  AND city.`http://example.org/longitude` IS NOT NULL
+  AND city.`http://example.org/latitude` >= 51.0
+  AND city.`http://example.org/latitude` <= 52.0
+  AND city.`http://example.org/longitude` >= -1.0
+  AND city.`http://example.org/longitude` <= 0.0
+RETURN city.uri AS city,
+       city.`http://example.org/latitude` AS lat,
+       city.`http://example.org/longitude` AS lon
+```
+
+### Supported GeoSPARQL Functions
+
+| GeoSPARQL Function | FalkorDB Translation | Description |
+|--------------------|---------------------|-------------|
+| `geof:distance` | `distance(point1, point2)` | Calculate distance between two points (meters) |
+| `geof:sfWithin` | Distance-based range check | Check if a point is within a region |
+| `geof:sfContains` | Spatial containment logic | Check if a region contains a point |
+| `geof:sfIntersects` | Spatial intersection logic | Check if two geometries intersect |
+
+### Supported Geometry Types
+
+- ✅ **POINT** - Full support with latitude/longitude
+- ⚠️ **POLYGON** - Partial support (bounding box approximation)
+- ❌ **LINESTRING** - Planned for future release
+- ❌ **MULTIPOINT** - Planned for future release
+
+### Performance Gains
+
+| Query Type | Without Pushdown | With Pushdown | Improvement |
+|------------|-----------------|---------------|-------------|
+| Distance calculation (100 points) | 100 queries + computation | 1 query | 100x fewer calls |
+| Bounding box query (1000 points) | All data fetched + filtering | Database filtering | Minimal data transfer |
+| Nearby locations (radius search) | Client-side distance calc | Database-side distance | Native optimization |
+
+### Usage Example
+
+```java
+import com.falkordb.jena.FalkorDBModelFactory;
+import org.apache.jena.rdf.model.Model;
+import org.apache.jena.rdf.model.Resource;
+import org.apache.jena.query.*;
+
+Model model = FalkorDBModelFactory.createModel("geo_graph");
+
+// Store locations with coordinates
+Resource london = model.createResource("http://example.org/london");
+london.addProperty(model.createProperty("http://example.org/name"), "London");
+london.addProperty(model.createProperty("http://example.org/latitude"), 
+    model.createTypedLiteral(51.5074));
+london.addProperty(model.createProperty("http://example.org/longitude"), 
+    model.createTypedLiteral(-0.1278));
+
+Resource paris = model.createResource("http://example.org/paris");
+paris.addProperty(model.createProperty("http://example.org/name"), "Paris");
+paris.addProperty(model.createProperty("http://example.org/latitude"), 
+    model.createTypedLiteral(48.8566));
+paris.addProperty(model.createProperty("http://example.org/longitude"), 
+    model.createTypedLiteral(2.3522));
+
+// Query locations within bounding box
+String sparql = """
+    PREFIX ex: <http://example.org/>
+    SELECT ?name ?lat ?lon WHERE {
+      ?loc ex:name ?name .
+      ?loc ex:latitude ?lat .
+      ?loc ex:longitude ?lon .
+      FILTER(?lat >= 48.0 && ?lat <= 52.0)
+      FILTER(?lon >= -1.0 && ?lon <= 3.0)
+    }
+    ORDER BY ?name
+    """;
+
+Query query = QueryFactory.create(sparql);
+try (QueryExecution qexec = QueryExecutionFactory.create(query, model)) {
+    ResultSet results = qexec.execSelect();
+    while (results.hasNext()) {
+        QuerySolution sol = results.next();
+        System.out.println(sol.getLiteral("name").getString() + " at " +
+                          sol.getLiteral("lat").getDouble() + ", " +
+                          sol.getLiteral("lon").getDouble());
+    }
+}
+```
+
+### OpenTelemetry Tracing
+
+Geospatial operations are fully instrumented:
+
+- **Span**: `GeoSPARQLToCypherTranslator.translateGeoFunction`
+- **Attributes**: 
+  - `falkordb.geospatial.function` - Function name (distance, sfWithin, etc.)
+  - `falkordb.geospatial.geometry_type` - Geometry type (POINT, POLYGON, etc.)
+  - `falkordb.cypher.expression` - Generated Cypher expression
+
+### WKT Parsing
+
+The adapter supports parsing WKT (Well-Known Text) geometries:
+
+```java
+// Parse POINT geometry
+String wkt = "POINT(-0.1278 51.5074)";
+Double lat = GeoSPARQLToCypherTranslator.extractLatitude(wkt);  // 51.5074
+Double lon = GeoSPARQLToCypherTranslator.extractLongitude(wkt); // -0.1278
+
+// Generate Cypher point() expression
+Map<String, Object> params = new HashMap<>();
+String pointExpr = GeoSPARQLToCypherTranslator.parseWKTToPoint(wkt, "geo", params);
+// Returns: point({latitude: $geo_lat, longitude: $geo_lon})
+// params: {geo_lat: 51.5074, geo_lon: -0.1278}
+```
+
+### Complete Documentation
+
+For comprehensive documentation including:
+- FalkorDB geospatial capabilities
+- All supported functions and geometry types
+- Data formats (Turtle, JSON-LD, RDF/XML)
+- Advanced usage with magic property
+- Performance comparisons
+- Best practices
+
+See **[GEOSPATIAL_PUSHDOWN.md](GEOSPATIAL_PUSHDOWN.md)**
+
 ## Future Improvements
 
 The query pushdown can be extended to support additional SPARQL patterns. Below are implementation suggestions for each:

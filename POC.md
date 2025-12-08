@@ -162,7 +162,7 @@ The `grandfather_of_bwd.rule` file contains a backward-chaining rule that infers
 
 ### 4.1 Setup Inference Model with Rules
 
-The repository includes a pre-configured file `config-falkordb-inference.ttl` that uses FalkorDB as the backend with grandfather inference rules. This configuration:
+The repository includes a pre-configured file `config-falkordb-lazy-inference.ttl` that uses FalkorDB as the backend with grandfather inference rules. This configuration:
 
 - Uses FalkorDB (not in-memory) for persistent graph storage
 - Applies backward-chaining inference rules from `rules/grandfather_of_bwd.rule`
@@ -172,7 +172,7 @@ The repository includes a pre-configured file `config-falkordb-inference.ttl` th
 
 ```bash
 java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
-  --config jena-fuseki-falkordb/src/main/resources/config-falkordb-inference.ttl
+  --config jena-fuseki-falkordb/src/main/resources/config-falkordb-lazy-inference.ttl
 ```
 
 The configuration uses FalkorDB as the base model with inference layered on top, so your data is stored in FalkorDB and inference is computed on-demand.

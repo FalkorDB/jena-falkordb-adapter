@@ -20,7 +20,7 @@ import java.nio.file.Path;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * System test for grandfather inference using config-falkordb-inference.ttl.
+ * System test for grandfather inference using config-falkordb-lazy-inference.ttl.
  *
  * <p>This test demonstrates the complete workflow from POC.md:</p>
  * <ul>
@@ -42,7 +42,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * </pre>
  * and got empty results.
  *
- * <p>This test uses the existing config-falkordb-inference.ttl file which configures:</p>
+ * <p>This test uses the existing config-falkordb-lazy-inference.ttl file which configures:</p>
  * <ul>
  *   <li>FalkorDB as the backend (not in-memory)</li>
  *   <li>Generic Rule Reasoner with backward chaining</li>
@@ -75,7 +75,7 @@ public class GrandfatherInferenceSystemTest {
 
     @BeforeEach
     public void setUp() throws IOException {
-        // Load the config-falkordb-inference.ttl from resources and customize it for this test
+        // Load the config-falkordb-lazy-inference.ttl from resources and customize it for this test
         String configContent = loadAndCustomizeConfig(falkorHost, falkorPort);
         Path configPath = tempDir.resolve("config-test-grandfather.ttl");
         Files.writeString(configPath, configContent);
@@ -110,10 +110,10 @@ public class GrandfatherInferenceSystemTest {
     }
 
     /**
-     * Load config-falkordb-inference.ttl and customize it for this test with dynamic settings.
+     * Load config-falkordb-lazy-inference.ttl and customize it for this test with dynamic settings.
      */
     private String loadAndCustomizeConfig(String host, int port) {
-        // Generate config similar to config-falkordb-inference.ttl but with test-specific settings
+        // Generate config similar to config-falkordb-lazy-inference.ttl but with test-specific settings
         return "# FalkorDB Fuseki Configuration with Inference Rules (Test)\n" +
                "@prefix :        <#> .\n" +
                "@prefix falkor:  <http://falkordb.com/jena/assembler#> .\n" +
@@ -158,7 +158,7 @@ public class GrandfatherInferenceSystemTest {
     }
 
     @Test
-    @DisplayName("System Test: Load fathers_father.ttl and query grandfather_of using config-falkordb-inference.ttl pattern")
+    @DisplayName("System Test: Load fathers_father.ttl and query grandfather_of using config-falkordb-lazy-inference.ttl pattern")
     public void testLoadFathersFatherAndQueryGrandfather() {
         // Step 1: Load the fathers_father.ttl data file using SPARQL INSERT
         // This mimics: curl -X POST http://localhost:3330/falkor/data \

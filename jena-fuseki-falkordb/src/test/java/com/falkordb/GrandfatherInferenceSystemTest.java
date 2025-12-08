@@ -42,11 +42,11 @@ import static org.junit.jupiter.api.Assertions.*;
  * </pre>
  * and got empty results.
  *
- * <p>This test uses the config-falkordb-lazy-inference.ttl pattern which configures:</p>
+ * <p>This test creates a custom configuration following the config-falkordb-lazy-inference.ttl pattern:</p>
  * <ul>
  *   <li>FalkorDB as the backend (not in-memory)</li>
  *   <li>Generic Rule Reasoner with backward chaining (lazy inference)</li>
- *   <li>Grandfather inference rule from rules/grandfather_of_bwd.rule</li>
+ *   <li>Custom configuration using rules/grandfather_of_bwd.rule for this specific test</li>
  * </ul>
  *
  * <p>Prerequisites: FalkorDB must be running on localhost:6379</p>

@@ -965,7 +965,8 @@ http://localhost:16686/trace/<trace-id>
 
 ```bash
 # Run all tests with Java 21
-cd /home/runner/work/jena-falkordb-adapter/jena-falkordb-adapter
+# Make sure you are in the project root directory
+cd jena-falkordb-adapter
 export JAVA_HOME=/usr/lib/jvm/msopenjdk-21-amd64
 export PATH=$JAVA_HOME/bin:$PATH
 mvn clean test

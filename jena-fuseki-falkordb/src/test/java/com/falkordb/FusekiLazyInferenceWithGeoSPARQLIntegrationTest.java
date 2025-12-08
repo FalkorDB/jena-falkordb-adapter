@@ -81,7 +81,9 @@ public class FusekiLazyInferenceWithGeoSPARQLIntegrationTest {
 
     @BeforeEach
     public void setUp() throws Exception {
-        // Initialize GeoSPARQL
+        // Initialize GeoSPARQL - this enables spatial query capabilities
+        // GeoSPARQLConfig.setupMemoryIndex() registers spatial functions and property functions
+        // that will be available when querying the dataset
         GeoSPARQLConfig.setupMemoryIndex();
         
         // Create FalkorDB-backed model as base model
@@ -105,7 +107,8 @@ public class FusekiLazyInferenceWithGeoSPARQLIntegrationTest {
         // Create inference model wrapping the FalkorDB model
         infModel = ModelFactory.createInfModel(reasoner, falkorModel);
 
-        // Create dataset from inference model with GeoSPARQL support
+        // Create dataset from inference model
+        // GeoSPARQL capabilities are available through the initialized GeoSPARQLConfig
         var ds = DatasetFactory.create(infModel);
 
         // Start Fuseki server

@@ -22,35 +22,35 @@
 # }
 
 # People (100 triples with properties)
-ex:person/alice
+<http://example.org/person/alice>
     a foaf:Person ;
     foaf:name "Alice" ;
     foaf:age 30 ;
     foaf:email "alice@example.org" ;
     rdfs:label "Alice Smith" .
 
-ex:person/bob
+<http://example.org/person/bob>
     a foaf:Person ;
     foaf:name "Bob" ;
     foaf:age 35 ;
     foaf:email "bob@example.org" ;
     rdfs:label "Bob Jones" .
 
-ex:person/charlie
+<http://example.org/person/charlie>
     a foaf:Person ;
     foaf:name "Charlie" ;
     foaf:age 28 ;
     foaf:email "charlie@example.org" ;
     rdfs:label "Charlie Brown" .
 
-ex:person/diana
+<http://example.org/person/diana>
     a foaf:Person ;
     foaf:name "Diana" ;
     foaf:age 32 ;
     foaf:email "diana@example.org" ;
     rdfs:label "Diana Prince" .
 
-ex:person/eve
+<http://example.org/person/eve>
     a foaf:Person ;
     foaf:name "Eve" ;
     foaf:age 29 ;
@@ -58,70 +58,70 @@ ex:person/eve
     rdfs:label "Eve Adams" .
 
 # Relationships (social network)
-ex:person/alice
-    foaf:knows ex:person/bob ,
-               ex:person/charlie ,
-               ex:person/diana .
+<http://example.org/person/alice>
+    foaf:knows <http://example.org/person/bob> ,
+               <http://example.org/person/charlie> ,
+               <http://example.org/person/diana> .
 
-ex:person/bob
-    foaf:knows ex:person/charlie ,
-               ex:person/eve .
+<http://example.org/person/bob>
+    foaf:knows <http://example.org/person/charlie> ,
+               <http://example.org/person/eve> .
 
-ex:person/charlie
-    foaf:knows ex:person/diana ,
-               ex:person/eve .
+<http://example.org/person/charlie>
+    foaf:knows <http://example.org/person/diana> ,
+               <http://example.org/person/eve> .
 
-ex:person/diana
-    foaf:knows ex:person/eve ,
-               ex:person/alice .
+<http://example.org/person/diana>
+    foaf:knows <http://example.org/person/eve> ,
+               <http://example.org/person/alice> .
 
 # Organizations
-ex:org/company1
+<http://example.org/org/company1>
     a ex:Organization ;
     rdfs:label "Tech Corp" ;
     ex:foundedYear 2010 ;
     ex:employeeCount 500 .
 
-ex:org/company2
+<http://example.org/org/company2>
     a ex:Organization ;
     rdfs:label "Data Inc" ;
     ex:foundedYear 2015 ;
     ex:employeeCount 250 .
 
 # Employment relationships
-ex:person/alice ex:worksAt ex:org/company1 .
-ex:person/bob ex:worksAt ex:org/company1 .
-ex:person/charlie ex:worksAt ex:org/company2 .
-ex:person/diana ex:worksAt ex:org/company2 .
-ex:person/eve ex:worksAt ex:org/company1 .
+<http://example.org/person/alice> ex:worksAt <http://example.org/org/company1> .
+<http://example.org/person/bob> ex:worksAt <http://example.org/org/company1> .
+<http://example.org/person/charlie> ex:worksAt <http://example.org/org/company2> .
+<http://example.org/person/diana> ex:worksAt <http://example.org/org/company2> .
+<http://example.org/person/eve> ex:worksAt <http://example.org/org/company1> .
 
 # Projects
-ex:project/alpha
+<http://example.org/project/alpha>
     a ex:Project ;
     rdfs:label "Project Alpha" ;
     ex:status "active" ;
     ex:startDate "2024-01-01"^^xsd:date .
 
-ex:project/beta
+<http://example.org/project/beta>
     a ex:Project ;
     rdfs:label "Project Beta" ;
     ex:status "planning" ;
     ex:startDate "2024-06-01"^^xsd:date .
 
 # Project assignments
-ex:person/alice ex:worksOn ex:project/alpha .
-ex:person/bob ex:worksOn ex:project/alpha .
-ex:person/charlie ex:worksOn ex:project/beta .
-ex:person/diana ex:worksOn ex:project/beta .
+<http://example.org/person/alice> ex:worksOn <http://example.org/project/alpha> .
+<http://example.org/person/bob> ex:worksOn <http://example.org/project/alpha> .
+<http://example.org/person/charlie> ex:worksOn <http://example.org/project/beta> .
+<http://example.org/person/diana> ex:worksOn <http://example.org/project/beta> .
 
 # Skills
-ex:skill/java a ex:Skill ; rdfs:label "Java Programming" .
-ex:skill/python a ex:Skill ; rdfs:label "Python Programming" .
-ex:skill/databases a ex:Skill ; rdfs:label "Database Design" .
+<http://example.org/skill/java> a ex:Skill ; rdfs:label "Java Programming" .
+<http://example.org/skill/python> a ex:Skill ; rdfs:label "Python Programming" .
+<http://example.org/skill/databases> a ex:Skill ; rdfs:label "Database Design" .
 
-ex:person/alice ex:hasSkill ex:skill/java , ex:skill/databases .
-ex:person/bob ex:hasSkill ex:skill/python , ex:skill/databases .
-ex:person/charlie ex:hasSkill ex:skill/java , ex:skill/python .
+<http://example.org/person/alice> ex:hasSkill <http://example.org/skill/java> , <http://example.org/skill/databases> .
+<http://example.org/person/bob> ex:hasSkill <http://example.org/skill/python> , <http://example.org/skill/databases> .
+<http://example.org/person/charlie> ex:hasSkill <http://example.org/skill/java> , <http://example.org/skill/python> .
 
 # Performance note:
 # Without transaction: ~180+ individual database operations

@@ -162,20 +162,35 @@ The `grandfather_of_bwd.rule` file contains a backward-chaining rule that infers
 
 ### 4.1 Setup Inference Model with Rules
 
-The repository includes a pre-configured file `config-falkordb-inference.ttl` that uses FalkorDB as the backend with grandfather inference rules. This configuration:
+The repository includes a pre-configured file `config-falkordb-lazy-inference.ttl` that uses FalkorDB as the backend with lazy inference rules. This configuration:
 
 - Uses FalkorDB (not in-memory) for persistent graph storage
-- Applies backward-chaining inference rules from `rules/grandfather_of_bwd.rule`
+- Applies backward-chaining inference rules for lazy, on-demand inference
 - Provides all standard Fuseki endpoints at `/falkor`
 
-**Start Fuseki with the FalkorDB inference configuration**:
+**For this grandfather example, you can create a custom configuration based on the lazy inference pattern**:
 
-```bash
-java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
-  --config jena-fuseki-falkordb/src/main/resources/config-falkordb-inference.ttl
-```
+The repository includes `config-falkordb-lazy-inference.ttl` as a reference configuration for lazy inference (it uses `friend_of_friend_bwd.rule`). To adapt it for the grandfather example, copy the config file and change the rule file reference from friend_of_friend to grandfather:
 
-The configuration uses FalkorDB as the base model with inference layered on top, so your data is stored in FalkorDB and inference is computed on-demand.
+1. From the project root directory, copy the config:
+   ```bash
+   cp jena-fuseki-falkordb/src/main/resources/config-falkordb-lazy-inference.ttl my-grandfather-config.ttl
+   ```
+2. Edit `my-grandfather-config.ttl` and change this line:
+   ```turtle
+   ja:rulesFrom <file:rules/friend_of_friend_bwd.rule> ;
+   ```
+   to:
+   ```turtle
+   ja:rulesFrom <file:rules/grandfather_of_bwd.rule> ;
+   ```
+3. Start Fuseki with your custom config:
+   ```bash
+   java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
+     --config my-grandfather-config.ttl
+   ```
+
+The configuration uses FalkorDB as the base model with inference layered on top, so your data is stored in FalkorDB and inference is computed on-demand using backward chaining (lazy inference).
 
 ### 4.2 Load the Data to the Inference Endpoint
 

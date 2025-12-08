@@ -1,0 +1,245 @@
+# Aggregations Optimization - Sample SPARQL Queries
+# These queries demonstrate automatic translation to Cypher aggregations
+
+# ==========================================
+# Example 1: COUNT with GROUP BY
+# ==========================================
+# Count entities by type
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+
+SELECT ?type (COUNT(?entity) AS ?count)
+WHERE {
+    ?entity rdf:type ?type .
+}
+GROUP BY ?type
+ORDER BY DESC(?count)
+
+# Generated Cypher:
+# MATCH (entity:Resource)
+# UNWIND labels(entity) AS type
+# WHERE type <> 'Resource'
+# RETURN type, count(entity) AS count
+# ORDER BY count DESC
+
+
+# ==========================================
+# Example 2: AVG with GROUP BY
+# ==========================================
+# Calculate average age by person type
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX ex: <http://example.org/>
+
+SELECT ?type (AVG(?age) AS ?avgAge)
+WHERE {
+    ?person rdf:type ?type .
+    ?person ex:age ?age .
+}
+GROUP BY ?type
+
+# Generated Cypher:
+# MATCH (person:Resource)
+# WHERE person.`http://example.org/age` IS NOT NULL
+# UNWIND labels(person) AS type
+# WHERE type <> 'Resource'
+# RETURN type, avg(person.`http://example.org/age`) AS avgAge
+
+
+# ==========================================
+# Example 3: Multiple Aggregations
+# ==========================================
+# Get comprehensive statistics in one query
+PREFIX ex: <http://example.org/>
+
+SELECT 
+    (COUNT(?item) AS ?count)
+    (SUM(?price) AS ?total)
+    (AVG(?price) AS ?avgPrice)
+    (MIN(?price) AS ?minPrice)
+    (MAX(?price) AS ?maxPrice)
+WHERE {
+    ?item ex:price ?price .
+}
+
+# Generated Cypher:
+# MATCH (item:Resource)
+# WHERE item.`http://example.org/price` IS NOT NULL
+# RETURN 
+#     count(item) AS count,
+#     sum(item.`http://example.org/price`) AS total,
+#     avg(item.`http://example.org/price`) AS avgPrice,
+#     min(item.`http://example.org/price`) AS minPrice,
+#     max(item.`http://example.org/price`) AS maxPrice
+
+
+# ==========================================
+# Example 4: COUNT DISTINCT
+# ==========================================
+# Count unique types in the database
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+
+SELECT (COUNT(DISTINCT ?type) AS ?uniqueTypes)
+WHERE {
+    ?entity rdf:type ?type .
+}
+
+# Generated Cypher:
+# MATCH (entity:Resource)
+# UNWIND labels(entity) AS type
+# WHERE type <> 'Resource'
+# RETURN count(DISTINCT type) AS uniqueTypes
+
+
+# ==========================================
+# Example 5: SUM by Category
+# ==========================================
+# Sum prices by product category
+PREFIX ex: <http://example.org/>
+
+SELECT ?category (SUM(?price) AS ?totalPrice)
+WHERE {
+    ?product ex:category ?category .
+    ?product ex:price ?price .
+}
+GROUP BY ?category
+ORDER BY DESC(?totalPrice)
+
+# Generated Cypher:
+# MATCH (product:Resource)
+# WHERE product.`http://example.org/category` IS NOT NULL
+#   AND product.`http://example.org/price` IS NOT NULL
+# RETURN 
+#     product.`http://example.org/category` AS category,
+#     sum(product.`http://example.org/price`) AS totalPrice
+# ORDER BY totalPrice DESC
+
+
+# ==========================================
+# Example 6: MIN and MAX
+# ==========================================
+# Find price range for products
+PREFIX ex: <http://example.org/>
+
+SELECT 
+    (MIN(?price) AS ?minPrice)
+    (MAX(?price) AS ?maxPrice)
+WHERE {
+    ?product ex:price ?price .
+}
+
+# Generated Cypher:
+# MATCH (product:Resource)
+# WHERE product.`http://example.org/price` IS NOT NULL
+# RETURN 
+#     min(product.`http://example.org/price`) AS minPrice,
+#     max(product.`http://example.org/price`) AS maxPrice
+
+
+# ==========================================
+# Example 7: COUNT(*) - Count All
+# ==========================================
+# Count all entities with a type
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+
+SELECT (COUNT(*) AS ?total)
+WHERE {
+    ?entity rdf:type ?type .
+}
+
+# Generated Cypher:
+# MATCH (entity:Resource)-[:`http://www.w3.org/1999/02/22-rdf-syntax-ns#type`]->(type:Resource)
+# RETURN count(*) AS total
+
+
+# ==========================================
+# Example 8: Multiple GROUP BY Variables
+# ==========================================
+# Count by type and category
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX ex: <http://example.org/>
+
+SELECT ?type ?category (COUNT(?entity) AS ?count)
+WHERE {
+    ?entity rdf:type ?type .
+    ?entity ex:category ?category .
+}
+GROUP BY ?type ?category
+ORDER BY DESC(?count)
+
+# Generated Cypher:
+# MATCH (entity:Resource)
+# WHERE entity.`http://example.org/category` IS NOT NULL
+# UNWIND labels(entity) AS type
+# WHERE type <> 'Resource'
+# RETURN 
+#     type, 
+#     entity.`http://example.org/category` AS category,
+#     count(entity) AS count
+# ORDER BY count DESC
+
+
+# ==========================================
+# Example 9: SUM DISTINCT
+# ==========================================
+# Sum of distinct price values
+PREFIX ex: <http://example.org/>
+
+SELECT (SUM(DISTINCT ?price) AS ?uniquePriceTotal)
+WHERE {
+    ?product ex:price ?price .
+}
+
+# Generated Cypher:
+# MATCH (product:Resource)
+# WHERE product.`http://example.org/price` IS NOT NULL
+# RETURN sum(DISTINCT product.`http://example.org/price`) AS uniquePriceTotal
+
+
+# ==========================================
+# Example 10: AVG with FILTER
+# ==========================================
+# Average age of adults (age >= 18)
+PREFIX ex: <http://example.org/>
+
+SELECT (AVG(?age) AS ?avgAdultAge)
+WHERE {
+    ?person ex:age ?age .
+    FILTER(?age >= 18)
+}
+
+# Note: FILTER is applied before aggregation
+# Generated Cypher:
+# MATCH (person:Resource)
+# WHERE person.`http://example.org/age` IS NOT NULL
+#   AND person.`http://example.org/age` >= 18
+# RETURN avg(person.`http://example.org/age`) AS avgAdultAge
+
+
+# ==========================================
+# Example 11: Complex Grouping
+# ==========================================
+# Average price and count by category
+PREFIX ex: <http://example.org/>
+
+SELECT ?category 
+       (COUNT(?product) AS ?productCount)
+       (AVG(?price) AS ?avgPrice)
+       (MIN(?price) AS ?minPrice)
+       (MAX(?price) AS ?maxPrice)
+WHERE {
+    ?product ex:category ?category .
+    ?product ex:price ?price .
+}
+GROUP BY ?category
+ORDER BY DESC(?productCount)
+
+# Generated Cypher:
+# MATCH (product:Resource)
+# WHERE product.`http://example.org/category` IS NOT NULL
+#   AND product.`http://example.org/price` IS NOT NULL
+# RETURN 
+#     product.`http://example.org/category` AS category,
+#     count(product) AS productCount,
+#     avg(product.`http://example.org/price`) AS avgPrice,
+#     min(product.`http://example.org/price`) AS minPrice,
+#     max(product.`http://example.org/price`) AS maxPrice
+# ORDER BY productCount DESC

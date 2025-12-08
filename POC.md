@@ -170,9 +170,12 @@ The repository includes a pre-configured file `config-falkordb-lazy-inference.tt
 
 **For this grandfather example, you can create a custom configuration based on the lazy inference pattern**:
 
-The repository includes `config-falkordb-lazy-inference.ttl` as a reference configuration for lazy inference. To use it with the grandfather example, copy the config file and modify the rule file reference:
+The repository includes `config-falkordb-lazy-inference.ttl` as a reference configuration for lazy inference (it uses `friend_of_friend_bwd.rule`). To adapt it for the grandfather example, copy the config file and change the rule file reference from friend_of_friend to grandfather:
 
-1. Copy the config: `cp jena-fuseki-falkordb/src/main/resources/config-falkordb-lazy-inference.ttl my-grandfather-config.ttl`
+1. From the project root directory, copy the config:
+   ```bash
+   cp jena-fuseki-falkordb/src/main/resources/config-falkordb-lazy-inference.ttl my-grandfather-config.ttl
+   ```
 2. Edit `my-grandfather-config.ttl` and change this line:
    ```turtle
    ja:rulesFrom <file:rules/friend_of_friend_bwd.rule> ;

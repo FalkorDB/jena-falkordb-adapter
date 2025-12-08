@@ -495,4 +495,4 @@ ORDER BY ?age" \
 ## See Also
 
 - [SparqlToCypherCompiler.java](../../jena-falkordb-adapter/src/main/java/com/falkordb/jena/query/SparqlToCypherCompiler.java) - Compiler implementation
-- [FalkorDBOpExecutor.java](../../jena-falkordb-adapter/src/main/java/com/falkordb/jena/query/FalkorDB OpExecutor.java) - Query execution with pushdown
+- [FalkorDBOpExecutor.java](../../jena-falkordb-adapter/src/main/java/com/falkordb/jena/query/FalkorDBOpExecutor.java) - Query execution with pushdown

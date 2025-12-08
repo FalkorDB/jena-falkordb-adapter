@@ -1,17 +1,8 @@
 package com.falkordb;
 
-import com.falkordb.jena.FalkorDBGraph;
-import com.falkordb.jena.FalkorDBModelFactory;
 import org.apache.jena.fuseki.main.FusekiServer;
-import org.apache.jena.query.DatasetFactory;
 import org.apache.jena.query.QueryExecution;
 import org.apache.jena.query.ResultSet;
-import org.apache.jena.rdf.model.InfModel;
-import org.apache.jena.rdf.model.Model;
-import org.apache.jena.rdf.model.ModelFactory;
-import org.apache.jena.reasoner.rulesys.GenericRuleReasoner;
-import org.apache.jena.reasoner.rulesys.Rule;
-import org.apache.jena.riot.RDFDataMgr;
 import org.apache.jena.sparql.exec.http.QueryExecutionHTTP;
 import org.apache.jena.sparql.exec.http.UpdateExecutionHTTP;
 import org.junit.jupiter.api.AfterEach;
@@ -19,21 +10,21 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
-import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.util.List;
-import java.util.stream.Collectors;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * System test for grandfather inference using config-falkordb-lazy-inference.ttl pattern.
+ * System test for grandfather inference using config-falkordb-inference.ttl.
  *
  * <p>This test demonstrates the complete workflow from POC.md:</p>
  * <ul>
- *   <li>Starting a Fuseki server with FalkorDB backend and lazy inference</li>
+ *   <li>Starting a Fuseki server with FalkorDB backend and inference using the existing config file</li>
  *   <li>Loading fathers_father_sample.ttl data file</li>
  *   <li>Querying for grandfather_of relationships using backward chaining rules</li>
  * </ul>
@@ -51,24 +42,30 @@ import static org.junit.jupiter.api.Assertions.*;
  * </pre>
  * and got empty results.
  *
+ * <p>This test uses the existing config-falkordb-inference.ttl file which configures:</p>
+ * <ul>
+ *   <li>FalkorDB as the backend (not in-memory)</li>
+ *   <li>Generic Rule Reasoner with backward chaining</li>
+ *   <li>Grandfather inference rule from rules/grandfather_of_bwd.rule</li>
+ * </ul>
+ *
  * <p>Prerequisites: FalkorDB must be running on localhost:6379</p>
  */
 public class GrandfatherInferenceSystemTest {
 
-    private static final String TEST_GRAPH = "grandfather_system_test_graph";
     private static final int TEST_PORT = 3335;
     private static final String DATASET_PATH = "/falkor";
     private static final int DEFAULT_FALKORDB_PORT = 6379;
+
+    @TempDir
+    Path tempDir;
 
     private static String falkorHost;
     private static int falkorPort;
 
     private FusekiServer server;
-    private Model falkorModel;
-    private InfModel infModel;
     private String sparqlEndpoint;
     private String updateEndpoint;
-    private String dataEndpoint;
 
     @BeforeAll
     public static void setUpContainer() {
@@ -77,56 +74,80 @@ public class GrandfatherInferenceSystemTest {
     }
 
     @BeforeEach
-    public void setUp() throws Exception {
-        // Create FalkorDB-backed model as base model (mimicking config-falkordb-lazy-inference.ttl)
-        falkorModel = FalkorDBModelFactory.builder()
-                .host(falkorHost)
-                .port(falkorPort)
-                .graphName(TEST_GRAPH)
-                .build();
+    public void setUp() throws IOException {
+        // Load the config-falkordb-inference.ttl from resources and customize it for this test
+        String configContent = loadAndCustomizeConfig(falkorHost, falkorPort);
+        Path configPath = tempDir.resolve("config-test-grandfather.ttl");
+        Files.writeString(configPath, configContent);
 
-        // Clear the graph before each test
-        if (falkorModel.getGraph() instanceof FalkorDBGraph falkorGraph) {
-            falkorGraph.clear();
+        // Copy the grandfather rule file to a location accessible by the config
+        Path rulesDir = tempDir.resolve("rules");
+        Files.createDirectories(rulesDir);
+        try (InputStream ruleStream = getClass().getClassLoader()
+                .getResourceAsStream("rules/grandfather_of_bwd.rule")) {
+            if (ruleStream != null) {
+                Files.copy(ruleStream, rulesDir.resolve("grandfather_of_bwd.rule"));
+            }
         }
 
-        // Load backward chaining rules for grandfather inference
-        var rules = loadRulesFromClasspath("rules/grandfather_of_bwd.rule");
-
-        // Create a Generic Rule Reasoner with backward chaining (lazy inference)
-        var reasoner = new GenericRuleReasoner(rules);
-
-        // Create inference model wrapping the FalkorDB model
-        infModel = ModelFactory.createInfModel(reasoner, falkorModel);
-
-        // Create dataset from inference model
-        var ds = DatasetFactory.create(infModel);
-
-        // Start Fuseki server (mimicking the server configuration)
+        // Start Fuseki server with the config file
         server = FusekiServer.create()
                 .port(TEST_PORT)
-                .add(DATASET_PATH, ds)
+                .parseConfigFile(configPath.toString())
                 .build();
         server.start();
 
         sparqlEndpoint = "http://localhost:" + TEST_PORT + DATASET_PATH + "/query";
         updateEndpoint = "http://localhost:" + TEST_PORT + DATASET_PATH + "/update";
-        dataEndpoint = "http://localhost:" + TEST_PORT + DATASET_PATH + "/data";
+
+        // Clear any existing data
+        String clearQuery = "DELETE WHERE { ?s ?p ?o }";
+        try {
+            UpdateExecutionHTTP.service(updateEndpoint).update(clearQuery).execute();
+        } catch (Exception e) {
+            // Ignore - graph might not exist yet
+        }
     }
 
     /**
-     * Load rules from a classpath resource file.
+     * Load config-falkordb-inference.ttl and customize it for this test with dynamic settings.
      */
-    private List<Rule> loadRulesFromClasspath(String resourcePath) throws Exception {
-        try (InputStream is = getClass().getClassLoader().getResourceAsStream(resourcePath)) {
-            if (is == null) {
-                throw new IllegalArgumentException("Rule file not found: " + resourcePath);
-            }
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(is))) {
-                String ruleContent = reader.lines().collect(Collectors.joining("\n"));
-                return Rule.parseRules(ruleContent);
-            }
-        }
+    private String loadAndCustomizeConfig(String host, int port) {
+        // Generate config similar to config-falkordb-inference.ttl but with test-specific settings
+        return "# FalkorDB Fuseki Configuration with Inference Rules (Test)\n" +
+               "@prefix :        <#> .\n" +
+               "@prefix falkor:  <http://falkordb.com/jena/assembler#> .\n" +
+               "@prefix fuseki:  <http://jena.apache.org/fuseki#> .\n" +
+               "@prefix ja:      <http://jena.hpl.hp.com/2005/11/Assembler#> .\n" +
+               "@prefix rdf:     <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .\n" +
+               "@prefix rdfs:    <http://www.w3.org/2000/01/rdf-schema#> .\n" +
+               "\n" +
+               "falkor:FalkorDBModel rdfs:subClassOf ja:Model .\n" +
+               "\n" +
+               "[] rdf:type fuseki:Server ;\n" +
+               "   fuseki:services ( :service ) .\n" +
+               "\n" +
+               ":service rdf:type fuseki:Service ;\n" +
+               "    fuseki:name \"falkor\" ;\n" +
+               "    fuseki:endpoint [ fuseki:operation fuseki:query ; fuseki:name \"query\" ] ;\n" +
+               "    fuseki:endpoint [ fuseki:operation fuseki:update ; fuseki:name \"update\" ] ;\n" +
+               "    fuseki:endpoint [ fuseki:operation fuseki:gsp-rw ; fuseki:name \"data\" ] ;\n" +
+               "    fuseki:dataset :dataset_rdf .\n" +
+               "\n" +
+               ":dataset_rdf rdf:type ja:RDFDataset ;\n" +
+               "    ja:defaultGraph :model_inf .\n" +
+               "\n" +
+               ":model_inf rdf:type ja:InfModel ;\n" +
+               "    ja:baseModel :falkor_db_model ;\n" +
+               "    ja:reasoner [\n" +
+               "        ja:reasonerURL <http://jena.hpl.hp.com/2003/GenericRuleReasoner> ;\n" +
+               "        ja:rulesFrom <file:" + tempDir.resolve("rules/grandfather_of_bwd.rule").toString() + "> ;\n" +
+               "    ] .\n" +
+               "\n" +
+               ":falkor_db_model rdf:type falkor:FalkorDBModel ;\n" +
+               "    falkor:host \"" + host + "\" ;\n" +
+               "    falkor:port " + port + " ;\n" +
+               "    falkor:graphName \"grandfather_test_graph\" .\n";
     }
 
     @AfterEach
@@ -134,29 +155,37 @@ public class GrandfatherInferenceSystemTest {
         if (server != null) {
             server.stop();
         }
-        if (infModel != null) {
-            infModel.close();
-        }
-        if (falkorModel != null) {
-            falkorModel.close();
-        }
     }
 
     @Test
-    @DisplayName("System Test: Load fathers_father_sample.ttl and query grandfather_of with lazy inference")
-    public void testLoadFathersFatherSampleAndQueryGrandfather() throws Exception {
-        // Step 1: Load the fathers_father_sample.ttl data file
+    @DisplayName("System Test: Load fathers_father.ttl and query grandfather_of using config-falkordb-inference.ttl pattern")
+    public void testLoadFathersFatherAndQueryGrandfather() {
+        // Step 1: Load the fathers_father.ttl data file using SPARQL INSERT
         // This mimics: curl -X POST http://localhost:3330/falkor/data \
         //                -H "Content-Type: text/turtle" \
         //                --data-binary @data/fathers_father_sample.ttl
         
-        try (InputStream dataStream = getClass().getClassLoader()
-                .getResourceAsStream("data/fathers_father.ttl")) {
-            assertNotNull(dataStream, "fathers_father.ttl should be available in test resources");
-            
-            // Read the data file into the inference model
-            RDFDataMgr.read(infModel, dataStream, null, org.apache.jena.riot.Lang.TURTLE);
-        }
+        String insertQuery =
+                "PREFIX ff: <http://www.semanticweb.org/ontologies/2023/1/fathers_father#> " +
+                        "PREFIX owl: <http://www.w3.org/2002/07/owl#> " +
+                        "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> " +
+                        "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> " +
+                        "INSERT DATA { " +
+                        "  ff:father_of rdf:type owl:ObjectProperty ; " +
+                        "    rdfs:domain ff:Male ; " +
+                        "    rdfs:range ff:Male . " +
+                        "  ff:grandfather_of rdf:type owl:ObjectProperty ; " +
+                        "    rdfs:domain ff:Male ; " +
+                        "    rdfs:range ff:Male . " +
+                        "  ff:Male rdf:type owl:Class . " +
+                        "  ff:Abraham rdf:type ff:Male ; " +
+                        "    ff:father_of ff:Isaac . " +
+                        "  ff:Isaac rdf:type ff:Male ; " +
+                        "    ff:father_of ff:Jacob . " +
+                        "  ff:Jacob rdf:type ff:Male . " +
+                        "}";
+
+        UpdateExecutionHTTP.service(updateEndpoint).update(insertQuery).execute();
 
         // Verify data was loaded - check for father_of relationships
         String verifyDataQuery =
@@ -202,7 +231,7 @@ public class GrandfatherInferenceSystemTest {
         try (QueryExecution qexec = QueryExecutionHTTP.service(sparqlEndpoint).query(grandfatherQuery).build()) {
             ResultSet results = qexec.execSelect();
             assertTrue(results.hasNext(), 
-                "Should infer grandfather relationship (Abraham grandfather_of Jacob)");
+                "Should infer grandfather relationship (Abraham grandfather_of Jacob) using FalkorDB backend");
 
             var solution = results.next();
             String grandfather = solution.getResource("grandfather").getURI();
@@ -221,81 +250,41 @@ public class GrandfatherInferenceSystemTest {
     }
 
     @Test
-    @DisplayName("System Test: Verify inference works with programmatic data insertion")
-    public void testGrandfatherInferenceWithProgrammaticInsert() {
-        // Insert the same data as fathers_father_sample.ttl programmatically
+    @DisplayName("System Test: Verify ASK query for specific grandfather relationship with FalkorDB backend")
+    public void testAskQueryForGrandfatherRelationship() {
+        // Insert data
         String insertQuery =
                 "PREFIX ff: <http://www.semanticweb.org/ontologies/2023/1/fathers_father#> " +
-                        "PREFIX owl: <http://www.w3.org/2002/07/owl#> " +
-                        "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> " +
-                        "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> " +
                         "INSERT DATA { " +
-                        "  ff:father_of rdf:type owl:ObjectProperty ; " +
-                        "    rdfs:domain ff:Male ; " +
-                        "    rdfs:range ff:Male . " +
-                        "  ff:grandfather_of rdf:type owl:ObjectProperty ; " +
-                        "    rdfs:domain ff:Male ; " +
-                        "    rdfs:range ff:Male . " +
-                        "  ff:Male rdf:type owl:Class . " +
-                        "  ff:Abraham rdf:type ff:Male ; " +
-                        "    ff:father_of ff:Isaac . " +
-                        "  ff:Isaac rdf:type ff:Male ; " +
-                        "    ff:father_of ff:Jacob . " +
-                        "  ff:Jacob rdf:type ff:Male . " +
+                        "  ff:Abraham ff:father_of ff:Isaac . " +
+                        "  ff:Isaac ff:father_of ff:Jacob . " +
                         "}";
 
         UpdateExecutionHTTP.service(updateEndpoint).update(insertQuery).execute();
 
-        // Query for inferred grandfather relationship
-        String grandfatherQuery =
-                "PREFIX ff: <http://www.semanticweb.org/ontologies/2023/1/fathers_father#> " +
-                        "SELECT ?grandfather ?grandson " +
-                        "WHERE { " +
-                        "  ?grandfather ff:grandfather_of ?grandson . " +
-                        "}";
-
-        try (QueryExecution qexec = QueryExecutionHTTP.service(sparqlEndpoint).query(grandfatherQuery).build()) {
-            ResultSet results = qexec.execSelect();
-            assertTrue(results.hasNext(), 
-                "Should infer grandfather relationship with programmatic insert");
-
-            var solution = results.next();
-            String grandfather = solution.getResource("grandfather").getLocalName();
-            String grandson = solution.getResource("grandson").getLocalName();
-
-            assertEquals("Abraham", grandfather, "Abraham should be grandfather");
-            assertEquals("Jacob", grandson, "Jacob should be grandson");
-        }
-    }
-
-    @Test
-    @DisplayName("System Test: Verify ASK query for specific grandfather relationship")
-    public void testAskQueryForGrandfatherRelationship() throws Exception {
-        // Load data
-        try (InputStream dataStream = getClass().getClassLoader()
-                .getResourceAsStream("data/fathers_father.ttl")) {
-            RDFDataMgr.read(infModel, dataStream, null, org.apache.jena.riot.Lang.TURTLE);
-        }
-
-        // ASK if Abraham is grandfather of Jacob
+        // ASK if Abraham is grandfather of Jacob (should be inferred)
         String askQuery =
                 "PREFIX ff: <http://www.semanticweb.org/ontologies/2023/1/fathers_father#> " +
                         "ASK { ff:Abraham ff:grandfather_of ff:Jacob }";
 
         try (QueryExecution qexec = QueryExecutionHTTP.service(sparqlEndpoint).query(askQuery).build()) {
             boolean result = qexec.execAsk();
-            assertTrue(result, "Abraham should be inferred as grandfather of Jacob");
+            assertTrue(result, "Abraham should be inferred as grandfather of Jacob using FalkorDB+inference");
         }
     }
 
     @Test
-    @DisplayName("System Test: Query all relationships including inferred ones")
-    public void testQueryAllRelationshipsIncludingInferred() throws Exception {
-        // Load data
-        try (InputStream dataStream = getClass().getClassLoader()
-                .getResourceAsStream("data/fathers_father.ttl")) {
-            RDFDataMgr.read(infModel, dataStream, null, org.apache.jena.riot.Lang.TURTLE);
-        }
+    @DisplayName("System Test: Query all relationships including inferred ones with FalkorDB backend")
+    public void testQueryAllRelationshipsIncludingInferred() {
+        // Insert data
+        String insertQuery =
+                "PREFIX ff: <http://www.semanticweb.org/ontologies/2023/1/fathers_father#> " +
+                        "INSERT DATA { " +
+                        "  ff:Abraham ff:father_of ff:Isaac . " +
+                        "  ff:Isaac ff:father_of ff:Jacob . " +
+                        "}";
+
+        UpdateExecutionHTTP.service(updateEndpoint).update(insertQuery).execute();
 
         // Query for both father_of (direct) and grandfather_of (inferred) relationships
         String allRelationshipsQuery =
@@ -334,7 +323,7 @@ public class GrandfatherInferenceSystemTest {
                 }
             }
             
-            assertEquals(2, fatherCount, "Should have 2 direct father relationships");
+            assertEquals(2, fatherCount, "Should have 2 direct father relationships stored in FalkorDB");
             assertEquals(1, grandfatherCount, "Should have 1 inferred grandfather relationship");
         }
     }

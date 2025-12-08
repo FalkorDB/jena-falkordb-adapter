@@ -162,50 +162,25 @@ The `grandfather_of_bwd.rule` file contains a backward-chaining rule that infers
 
 ### 4.1 Setup Inference Model with Rules
 
-To use inference rules with Fuseki, you need to configure an inference dataset. Here's how to query with inference:
+The repository includes a pre-configured file `config-falkordb-inference.ttl` that uses FalkorDB as the backend with grandfather inference rules. This configuration:
 
-**Create a configuration file** `config-fathers-inference.ttl`:
+- Uses FalkorDB (not in-memory) for persistent graph storage
+- Applies backward-chaining inference rules from `rules/grandfather_of_bwd.rule`
+- Provides all standard Fuseki endpoints at `/falkor`
 
-```turtle
-@prefix fuseki:  <http://jena.apache.org/fuseki#> .
-@prefix rdf:     <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
-@prefix rdfs:    <http://www.w3.org/2000/01/rdf-schema#> .
-@prefix ja:      <http://jena.hpl.hp.com/2005/11/Assembler#> .
-@prefix :        <#> .
-
-[] a fuseki:Server ;
-   fuseki:services (:service) .
-
-:service a fuseki:Service ;
-    fuseki:name "fathers" ;
-    fuseki:endpoint [ fuseki:operation fuseki:query ; ] ;
-    fuseki:endpoint [ fuseki:operation fuseki:update ; ] ;
-    fuseki:dataset :dataset .
-
-:dataset a ja:RDFDataset ;
-    ja:defaultGraph :model .
-
-:model a ja:InfModel ;
-    ja:baseModel :baseModel ;
-    ja:reasoner [
-        ja:reasonerURL <http://jena.hpl.hp.com/2003/GenericRuleReasoner> ;
-        ja:rulesFrom <file:rules/grandfather_of_bwd.rule>
-    ] .
-
-:baseModel a ja:MemoryModel .
-```
-
-**Start Fuseki with the inference configuration**:
+**Start Fuseki with the FalkorDB inference configuration**:
 
 ```bash
 java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
-  --config config-fathers-inference.ttl
+  --config jena-fuseki-falkordb/src/main/resources/config-falkordb-inference.ttl
 ```
+
+The configuration uses FalkorDB as the base model with inference layered on top, so your data is stored in FalkorDB and inference is computed on-demand.
 
 ### 4.2 Load the Data to the Inference Endpoint
 
 ```bash
-curl -X POST http://localhost:3330/fathers/data \
+curl -X POST http://localhost:3330/falkor/data \
   -H "Content-Type: text/turtle" \
   --data-binary @data/fathers_father_sample.ttl
 ```
@@ -215,7 +190,7 @@ curl -X POST http://localhost:3330/fathers/data \
 Now query for grandfather relationships - the rule will automatically infer that Abraham is the grandfather of Jacob:
 
 ```bash
-curl -G http://localhost:3330/fathers/query \
+curl -G http://localhost:3330/falkor/query \
   -H "Accept: application/sparql-results+json" \
   --data-urlencode 'query=
 PREFIX ff: <http://www.semanticweb.org/ontologies/2023/1/fathers_father#>

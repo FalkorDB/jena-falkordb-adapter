@@ -170,17 +170,22 @@ The repository includes a pre-configured file `config-falkordb-lazy-inference.tt
 
 **For this grandfather example, you can create a custom configuration based on the lazy inference pattern**:
 
-The repository includes `config-falkordb-lazy-inference.ttl` as a reference configuration for lazy inference. To use it with the grandfather example, you would create a similar configuration but reference `rules/grandfather_of_bwd.rule` instead of `rules/friend_of_friend_bwd.rule`.
+The repository includes `config-falkordb-lazy-inference.ttl` as a reference configuration for lazy inference. To use it with the grandfather example, copy the config file and modify the rule file reference:
 
-Here's how to start Fuseki with lazy inference for the grandfather example:
-
-```bash
-# Create a custom config file based on config-falkordb-lazy-inference.ttl
-# but change ja:rulesFrom to point to rules/grandfather_of_bwd.rule
-# Then run:
-java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
-  --config your-custom-grandfather-inference.ttl
-```
+1. Copy the config: `cp jena-fuseki-falkordb/src/main/resources/config-falkordb-lazy-inference.ttl my-grandfather-config.ttl`
+2. Edit `my-grandfather-config.ttl` and change this line:
+   ```turtle
+   ja:rulesFrom <file:rules/friend_of_friend_bwd.rule> ;
+   ```
+   to:
+   ```turtle
+   ja:rulesFrom <file:rules/grandfather_of_bwd.rule> ;
+   ```
+3. Start Fuseki with your custom config:
+   ```bash
+   java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
+     --config my-grandfather-config.ttl
+   ```
 
 The configuration uses FalkorDB as the base model with inference layered on top, so your data is stored in FalkorDB and inference is computed on-demand using backward chaining (lazy inference).
 

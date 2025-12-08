@@ -1,0 +1,207 @@
+# Example SPARQL queries demonstrating combined lazy inference and GeoSPARQL
+# Use these queries with the config-falkordb-lazy-inference-with-geosparql.ttl configuration
+
+# ===========================
+# Query 1: Find transitive friends with their locations
+# Demonstrates: Lazy inference (knows_transitively) + GeoSPARQL (locations)
+# ===========================
+
+PREFIX social: <http://example.org/social#>
+PREFIX geo:    <http://www.opengis.net/ont/geosparql#>
+PREFIX ex:     <http://example.org/>
+
+SELECT ?person1Name ?person2Name ?location
+WHERE {
+  ?person1 ex:name ?person1Name ;
+           social:knows_transitively ?person2 .  # Uses lazy inference rule
+  ?person2 ex:name ?person2Name ;
+           geo:hasGeometry ?geom .
+  ?geom geo:asWKT ?location .                     # GeoSPARQL location
+  FILTER(?person1 = ex:alice)                     # Find all of Alice's transitive friends
+}
+ORDER BY ?person2Name
+
+# Expected: Carol (friend-of-friend via Bob), Dave (friend-of-friend via Bob), Eve (friend-of-friend-of-friend)
+
+
+# ===========================
+# Query 2: Find people in extended network with their occupations and locations
+# Demonstrates: Complex inference + attribute retrieval + spatial data
+# ===========================
+
+PREFIX social: <http://example.org/social#>
+PREFIX geo:    <http://www.opengis.net/ont/geosparql#>
+PREFIX ex:     <http://example.org/>
+
+SELECT ?sourceName ?friendName ?occupation ?location
+WHERE {
+  ?source ex:name ?sourceName ;
+          social:knows_transitively ?friend .     # Transitive inference
+  ?friend ex:name ?friendName ;
+          ex:occupation ?occupation ;
+          geo:hasGeometry ?geom .
+  ?geom geo:asWKT ?location .                     # Geographic location
+}
+ORDER BY ?sourceName ?friendName
+
+# Expected: All transitive friend relationships with occupation and location data
+
+
+# ===========================
+# Query 3: Find all locations of people in Alice's extended network
+# Demonstrates: Inference + spatial point extraction
+# ===========================
+
+PREFIX social: <http://example.org/social#>
+PREFIX geo:    <http://www.opengis.net/ont/geosparql#>
+PREFIX ex:     <http://example.org/>
+
+SELECT DISTINCT ?personName ?wkt
+WHERE {
+  ex:alice social:knows_transitively ?person .   # All transitive friends
+  ?person ex:name ?personName ;
+          geo:hasGeometry ?geom .
+  ?geom geo:asWKT ?wkt .                          # Extract WKT coordinates
+}
+ORDER BY ?personName
+
+
+# ===========================
+# Query 4: Find people and their locations within geographic features
+# Demonstrates: GeoSPARQL features + people locations + inference potential
+# ===========================
+
+PREFIX social: <http://example.org/social#>
+PREFIX geo:    <http://www.opengis.net/ont/geosparql#>
+PREFIX sf:     <http://www.opengis.net/ont/sf#>
+PREFIX ex:     <http://example.org/>
+
+SELECT ?featureName ?personName ?personLocation
+WHERE {
+  ?feature a geo:Feature ;
+           ex:name ?featureName ;
+           geo:hasGeometry ?featureGeom .
+  ?person a social:Person ;
+          ex:name ?personName ;
+          geo:hasGeometry ?personGeom .
+  ?personGeom geo:asWKT ?personLocation .
+}
+ORDER BY ?featureName ?personName
+
+
+# ===========================
+# Query 5: Complex query - Find coworkers in same industry within extended network
+# Demonstrates: Multiple filters + inference + spatial data
+# ===========================
+
+PREFIX social: <http://example.org/social#>
+PREFIX geo:    <http://www.opengis.net/ont/geosparql#>
+PREFIX ex:     <http://example.org/>
+
+SELECT ?person1Name ?person1Occupation ?person2Name ?person2Occupation ?loc1 ?loc2
+WHERE {
+  ?person1 ex:name ?person1Name ;
+           ex:occupation ?person1Occupation ;
+           social:knows_transitively ?person2 ;   # Transitive connection
+           geo:hasGeometry ?geom1 .
+  ?person2 ex:name ?person2Name ;
+           ex:occupation ?person2Occupation ;
+           geo:hasGeometry ?geom2 .
+  ?geom1 geo:asWKT ?loc1 .
+  ?geom2 geo:asWKT ?loc2 .
+  FILTER(?person1 != ?person2)                    # Exclude self
+}
+ORDER BY ?person1Name ?person2Name
+
+
+# ===========================
+# Query 6: Find geographic features and count people in extended networks
+# Demonstrates: Aggregation + inference + spatial features
+# ===========================
+
+PREFIX social: <http://example.org/social#>
+PREFIX geo:    <http://www.opengis.net/ont/geosparql#>
+PREFIX ex:     <http://example.org/>
+
+SELECT ?featureName (COUNT(DISTINCT ?person) as ?peopleCount)
+WHERE {
+  ?feature a geo:Feature ;
+           ex:name ?featureName .
+  ?person a social:Person ;
+          geo:hasGeometry ?personGeom .
+}
+GROUP BY ?featureName
+ORDER BY DESC(?peopleCount)
+
+
+# ===========================
+# Query 7: Find people Alice knows (transitively) with their direct friends
+# Demonstrates: Nested inference patterns
+# ===========================
+
+PREFIX social: <http://example.org/social#>
+PREFIX ex:     <http://example.org/>
+
+SELECT ?indirectFriendName ?directFriendName
+WHERE {
+  ex:alice social:knows_transitively ?indirectFriend .  # Alice's transitive friends
+  ?indirectFriend ex:name ?indirectFriendName ;
+                  social:knows ?directFriend .           # Their direct friends
+  ?directFriend ex:name ?directFriendName .
+  FILTER(?indirectFriend != ex:alice)                    # Exclude Alice
+}
+ORDER BY ?indirectFriendName ?directFriendName
+
+
+# ===========================
+# Query 8: Check if specific people are transitively connected
+# Demonstrates: ASK query with inference
+# ===========================
+
+PREFIX social: <http://example.org/social#>
+PREFIX ex:     <http://example.org/>
+
+ASK {
+  ex:alice social:knows_transitively ex:eve .   # Is Eve in Alice's extended network?
+}
+
+# Expected: true (Alice -> Bob -> Dave -> Eve)
+
+
+# ===========================
+# Query 9: Find shortest inferred path with locations
+# Demonstrates: Path + spatial data combination
+# ===========================
+
+PREFIX social: <http://example.org/social#>
+PREFIX geo:    <http://www.opengis.net/ont/geosparql#>
+PREFIX ex:     <http://example.org/>
+
+SELECT ?intermediaryName ?intermediaryLocation
+WHERE {
+  ex:alice social:knows_transitively ?intermediary .
+  ?intermediary social:knows_transitively ex:carol ;
+                ex:name ?intermediaryName ;
+                geo:hasGeometry ?geom .
+  ?geom geo:asWKT ?intermediaryLocation .
+  FILTER(?intermediary != ex:alice && ?intermediary != ex:carol)
+}
+
+
+# ===========================
+# Query 10: Spatial features with descriptions
+# Demonstrates: Pure GeoSPARQL query (baseline for comparison)
+# ===========================
+
+PREFIX geo: <http://www.opengis.net/ont/geosparql#>
+PREFIX ex:  <http://example.org/>
+
+SELECT ?featureName ?description ?geometry
+WHERE {
+  ?feature a geo:Feature ;
+           ex:name ?featureName ;
+           ex:description ?description ;
+           geo:hasGeometry ?geom .
+  ?geom geo:asWKT ?geometry .
+}
+ORDER BY ?featureName

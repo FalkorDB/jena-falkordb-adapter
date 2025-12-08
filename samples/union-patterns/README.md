@@ -317,11 +317,153 @@ SELECT ?person ?email WHERE {
 }
 ```
 
+## Using curl with Fuseki
+
+You can use curl to load data and execute queries via the Fuseki SPARQL endpoint.
+
+### Prerequisites
+
+First, start FalkorDB and Fuseki:
+
+```bash
+# Start FalkorDB
+docker run -p 6379:6379 -it --rm falkordb/falkordb:latest
+
+# In another terminal, start Fuseki (from project root)
+mvn clean install -DskipTests
+java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar
+```
+
+The Fuseki server will start on `http://localhost:3330` with the default endpoint at `/falkor`.
+
+### Loading Data with curl
+
+**Load the sample data file (`data-example.ttl`):**
+
+```bash
+curl -X POST \
+  -H "Content-Type: text/turtle" \
+  --data-binary @samples/union-patterns/data-example.ttl \
+  http://localhost:3330/falkor/data
+```
+
+### Executing Queries with curl
+
+**Example 1: Basic UNION - Find all students or teachers**
+
+```bash
+curl -G \
+  --data-urlencode "query=PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX ex: <http://example.org/>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+
+SELECT ?person ?name WHERE {
+    { ?person rdf:type ex:Student }
+    UNION
+    { ?person rdf:type ex:Teacher }
+    ?person foaf:name ?name .
+}
+ORDER BY ?name" \
+  http://localhost:3330/falkor/query
+```
+
+**Example 2: UNION with relationships - Find all connections**
+
+```bash
+curl -G \
+  --data-urlencode "query=PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX ex: <http://example.org/>
+
+SELECT ?person ?connection WHERE {
+    { ?person foaf:knows ?connection }
+    UNION
+    { ?person ex:worksWith ?connection }
+}
+ORDER BY ?person" \
+  http://localhost:3330/falkor/query
+```
+
+**Example 3: UNION with concrete subjects - Friends of specific people**
+
+```bash
+curl -G \
+  --data-urlencode "query=PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT ?friend WHERE {
+    { <http://example.org/alice> foaf:knows ?friend }
+    UNION
+    { <http://example.org/bob> foaf:knows ?friend }
+}" \
+  http://localhost:3330/falkor/query
+```
+
+**Example 4: UNION with properties - Any contact method**
+
+```bash
+curl -G \
+  --data-urlencode "query=PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT ?person ?contact WHERE {
+    { ?person foaf:email ?contact }
+    UNION
+    { ?person foaf:phone ?contact }
+}
+ORDER BY ?person" \
+  http://localhost:3330/falkor/query
+```
+
+**Example 5: Multi-triple UNION with FILTER**
+
+```bash
+curl -G \
+  --data-urlencode "query=PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX ex: <http://example.org/>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+
+SELECT ?person WHERE {
+    { ?person rdf:type ex:Student . ?person foaf:age 20 }
+    UNION
+    { ?person rdf:type ex:Teacher . ?person foaf:age 30 }
+}" \
+  http://localhost:3330/falkor/query
+```
+
+**Example 6: Nested UNION**
+
+```bash
+curl -G \
+  --data-urlencode "query=PREFIX ex: <http://example.org/>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+
+SELECT ?person WHERE {
+    { ?person rdf:type ex:Student }
+    UNION
+    { { ?person rdf:type ex:Teacher } UNION { ?person rdf:type ex:Staff } }
+}" \
+  http://localhost:3330/falkor/query
+```
+
+**Example 7: UNION with DISTINCT to eliminate duplicates**
+
+```bash
+curl -G \
+  --data-urlencode "query=PREFIX ex: <http://example.org/>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+
+SELECT DISTINCT ?person WHERE {
+    { ?person rdf:type ex:Student }
+    UNION
+    { ?person rdf:type ex:Person }
+}" \
+  http://localhost:3330/falkor/query
+```
+
 ## See Also
 
 - [OPTIMIZATIONS.md](../../OPTIMIZATIONS.md#union-patterns) - Full documentation
 - [FalkorDBQueryPushdownTest.java](../../jena-falkordb-adapter/src/test/java/com/falkordb/jena/query/FalkorDBQueryPushdownTest.java) - Integration tests (`testUnion*` methods)
 - [SparqlToCypherCompilerTest.java](../../jena-falkordb-adapter/src/test/java/com/falkordb/jena/query/SparqlToCypherCompilerTest.java) - Unit tests (`testUnion*` methods)
+- [Fuseki GETTING_STARTED.md](../../jena-fuseki-falkordb/GETTING_STARTED.md) - Fuseki setup and usage
 
 ## Performance Monitoring
 

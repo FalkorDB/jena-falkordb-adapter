@@ -77,11 +77,142 @@ Integration tests: [`FalkorDBQueryPushdownTest.java`](../../jena-falkordb-adapte
 - `testVariableObjectOptimizationMixedResults()`
 - `testVariableObjectOptimizationVariableSubject()`
 
+## Using curl with Fuseki
+
+You can use curl to load data and execute queries via the Fuseki SPARQL endpoint.
+
+### Prerequisites
+
+First, start FalkorDB and Fuseki:
+
+```bash
+# Start FalkorDB
+docker run -p 6379:6379 -it --rm falkordb/falkordb:latest
+
+# In another terminal, start Fuseki (from project root)
+mvn clean install -DskipTests
+java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar
+```
+
+The Fuseki server will start on `http://localhost:3330` with the default endpoint at `/falkor`.
+
+### Loading Data with curl
+
+**Load the sample data file (`data-example.ttl`):**
+
+```bash
+curl -X POST \
+  -H "Content-Type: text/turtle" \
+  --data-binary @samples/variable-objects/data-example.ttl \
+  http://localhost:3330/falkor/data
+```
+
+### Executing Queries with curl
+
+**Example 1: Query all values for a specific predicate**
+
+```bash
+curl -G \
+  --data-urlencode "query=PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT ?value WHERE {
+    <http://example.org/person/alice> foaf:knows ?value .
+}" \
+  http://localhost:3330/falkor/query
+```
+
+**Example 2: Variable subject and object**
+
+```bash
+curl -G \
+  --data-urlencode "query=PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT ?person ?name WHERE {
+    ?person foaf:name ?name .
+}
+ORDER BY ?name" \
+  http://localhost:3330/falkor/query
+```
+
+**Example 3: Query relationships only**
+
+```bash
+curl -G \
+  --data-urlencode "query=PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT ?person ?friend WHERE {
+    ?person foaf:knows ?friend .
+}" \
+  http://localhost:3330/falkor/query
+```
+
+**Example 4: Mixed data types**
+
+```bash
+curl -G \
+  --data-urlencode "query=SELECT ?subject ?value WHERE {
+    ?subject <http://example.org/hasValue> ?value .
+}" \
+  http://localhost:3330/falkor/query
+```
+
+**Example 5: Combining with FILTER**
+
+```bash
+curl -G \
+  --data-urlencode "query=PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT ?person ?value WHERE {
+    ?person foaf:knows ?value .
+    FILTER(isLiteral(?value))
+}" \
+  http://localhost:3330/falkor/query
+```
+
+**Example 6: Multiple predicates**
+
+```bash
+curl -G \
+  --data-urlencode "query=PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX ex: <http://example.org/>
+
+SELECT ?person ?name ?friend WHERE {
+    ?person foaf:name ?name .
+    ?person foaf:knows ?friend .
+}" \
+  http://localhost:3330/falkor/query
+```
+
+**Example 7: Concrete subject with variable object**
+
+```bash
+curl -G \
+  --data-urlencode "query=PREFIX ex: <http://example.org/>
+
+SELECT ?value WHERE {
+    <http://example.org/person/alice> ex:property ?value .
+}" \
+  http://localhost:3330/falkor/query
+```
+
+**Example 8: Count results (aggregation over variable objects)**
+
+```bash
+curl -G \
+  --data-urlencode "query=PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT (COUNT(?friend) AS ?friendCount) WHERE {
+    <http://example.org/person/alice> foaf:knows ?friend .
+}" \
+  http://localhost:3330/falkor/query
+```
+
 ## Documentation
 
 For complete documentation, see:
 - [OPTIMIZATIONS.md](../../OPTIMIZATIONS.md#variable-object-support) - Detailed explanation
 - [README.md](../../README.md) - Project overview
+- [Fuseki GETTING_STARTED.md](../../jena-fuseki-falkordb/GETTING_STARTED.md) - Fuseki setup and usage
 
 ## Limitations
 

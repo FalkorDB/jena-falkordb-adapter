@@ -2,6 +2,8 @@
 
 The FalkorDB Jena adapter provides a "magic property" that allows you to execute native Cypher queries directly from within SPARQL queries. This feature complements the automatic query pushdown by giving you direct control over Cypher query generation for complex patterns.
 
+> **📖 Complete Demo Guide**: For hands-on curl examples and Jaeger tracing visualization, see [DEMO.md](DEMO.md#optimization-8-magic-property-direct-cypher)
+
 ## Query Pushdown vs. Magic Property
 
 The adapter provides **two** optimization mechanisms:

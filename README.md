@@ -37,6 +37,7 @@ This is a multi-module Maven project consisting of:
   - Closed-chain patterns (mutual references)
   - OPTIONAL patterns (returns all required matches with NULL for missing optional data)
   - UNION patterns (alternative query patterns in single database call)
+  - Aggregations (GROUP BY with COUNT, SUM, AVG, MIN, MAX - computed database-side)
 - ✅ **Magic property (falkor:cypher)** for direct Cypher execution within SPARQL
 - ✅ **Fuseki SPARQL server** with FalkorDB backend
 - ✅ **Inference support** with rule-based reasoning (RDFS/OWL rules)
@@ -574,6 +575,7 @@ Comprehensive examples for all optimizations are available in the [`samples/`](s
 - **[Query Pushdown](samples/query-pushdown/)**: SPARQL to Cypher translation (Nx-N²x improvement)
 - **[Variable Objects](samples/variable-objects/)**: Query both properties and relationships (2x fewer round trips)
 - **[OPTIONAL Patterns](samples/optional-patterns/)**: Efficient optional data retrieval (Nx fewer round trips)
+- **[Aggregations](samples/aggregations/)**: GROUP BY with COUNT, SUM, AVG, MIN, MAX (200-1000x less data transfer)
 - **[Magic Property](samples/magic-property/)**: Direct Cypher execution for maximum control
 
 Each example includes:

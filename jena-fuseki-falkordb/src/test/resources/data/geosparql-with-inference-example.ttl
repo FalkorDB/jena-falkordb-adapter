@@ -1,0 +1,103 @@
+# Example data demonstrating combined lazy inference and GeoSPARQL queries
+# This dataset contains:
+# - Social network with friendship relationships
+# - Geographic locations for people and places
+# - Demonstrates transitive inference + spatial queries
+
+@prefix social: <http://example.org/social#> .
+@prefix geo:    <http://www.opengis.net/ont/geosparql#> .
+@prefix sf:     <http://www.opengis.net/ont/sf#> .
+@prefix ex:     <http://example.org/> .
+@prefix rdf:    <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+
+# ===========================
+# Social Network Data
+# ===========================
+
+# Alice lives in Westminster and knows Bob
+ex:alice a social:Person ;
+    ex:name "Alice Johnson" ;
+    ex:occupation "Software Engineer" ;
+    social:knows ex:bob ;
+    geo:hasGeometry ex:aliceLocation .
+
+# Bob lives in Camden and knows both Carol and Dave
+ex:bob a social:Person ;
+    ex:name "Bob Smith" ;
+    ex:occupation "Data Scientist" ;
+    social:knows ex:carol, ex:dave ;
+    geo:hasGeometry ex:bobLocation .
+
+# Carol lives in Shoreditch
+ex:carol a social:Person ;
+    ex:name "Carol Williams" ;
+    ex:occupation "Designer" ;
+    geo:hasGeometry ex:carolLocation .
+
+# Dave lives in Kings Cross and knows Eve
+ex:dave a social:Person ;
+    ex:name "Dave Brown" ;
+    ex:occupation "Product Manager" ;
+    social:knows ex:eve ;
+    geo:hasGeometry ex:daveLocation .
+
+# Eve lives in Islington
+ex:eve a social:Person ;
+    ex:name "Eve Davis" ;
+    ex:occupation "Marketing Manager" ;
+    geo:hasGeometry ex:eveLocation .
+
+# ===========================
+# Geographic Location Data (London coordinates)
+# ===========================
+
+# Westminster - Central London
+ex:aliceLocation a sf:Point ;
+    geo:asWKT "POINT(-0.1278 51.5074)"^^geo:wktLiteral .
+
+# Camden - North London
+ex:bobLocation a sf:Point ;
+    geo:asWKT "POINT(-0.1426 51.5390)"^^geo:wktLiteral .
+
+# Shoreditch - East London
+ex:carolLocation a sf:Point ;
+    geo:asWKT "POINT(-0.0759 51.5255)"^^geo:wktLiteral .
+
+# Kings Cross - North Central London
+ex:daveLocation a sf:Point ;
+    geo:asWKT "POINT(-0.1234 51.5309)"^^geo:wktLiteral .
+
+# Islington - North London
+ex:eveLocation a sf:Point ;
+    geo:asWKT "POINT(-0.1030 51.5416)"^^geo:wktLiteral .
+
+# ===========================
+# Geographic Features (Areas/Regions)
+# ===========================
+
+# Central London area (Westminster and surrounding)
+ex:centralLondon a geo:Feature ;
+    ex:name "Central London" ;
+    ex:description "Core central area of London" ;
+    geo:hasGeometry ex:centralLondonArea .
+
+ex:centralLondonArea a sf:Polygon ;
+    geo:asWKT "POLYGON((-0.20 51.48, -0.20 51.52, -0.05 51.52, -0.05 51.48, -0.20 51.48))"^^geo:wktLiteral .
+
+# North London area (Camden, Islington, Kings Cross)
+ex:northLondon a geo:Feature ;
+    ex:name "North London" ;
+    ex:description "Northern districts of London" ;
+    geo:hasGeometry ex:northLondonArea .
+
+ex:northLondonArea a sf:Polygon ;
+    geo:asWKT "POLYGON((-0.20 51.52, -0.20 51.56, 0.00 51.56, 0.00 51.52, -0.20 51.52))"^^geo:wktLiteral .
+
+# Tech Hub area (Shoreditch and surrounding areas)
+ex:techHub a geo:Feature ;
+    ex:name "London Tech Hub" ;
+    ex:description "East London tech and startup district" ;
+    geo:hasGeometry ex:techHubArea .
+
+ex:techHubArea a sf:Polygon ;
+    geo:asWKT "POLYGON((-0.10 51.51, -0.10 51.54, -0.05 51.54, -0.05 51.51, -0.10 51.51))"^^geo:wktLiteral .

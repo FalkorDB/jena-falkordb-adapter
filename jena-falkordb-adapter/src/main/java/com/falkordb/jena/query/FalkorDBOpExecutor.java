@@ -18,9 +18,11 @@ import org.apache.jena.reasoner.InfGraph;
 import org.apache.jena.sparql.algebra.Op;
 import org.apache.jena.sparql.algebra.op.OpBGP;
 import org.apache.jena.sparql.algebra.op.OpFilter;
+import org.apache.jena.sparql.algebra.op.OpGroup;
 import org.apache.jena.sparql.algebra.op.OpLeftJoin;
 import org.apache.jena.sparql.algebra.op.OpUnion;
 import org.apache.jena.sparql.core.BasicPattern;
+import org.apache.jena.sparql.core.VarExprList;
 import org.apache.jena.sparql.expr.Expr;
 import org.apache.jena.sparql.core.Var;
 import org.apache.jena.sparql.engine.ExecutionContext;
@@ -571,6 +573,164 @@ public final class FalkorDBOpExecutor extends OpExecutor {
         } finally {
             span.end();
         }
+    }
+
+    /**
+     * Execute a GROUP operation with aggregations.
+     *
+     * <p>This method attempts to compile the underlying BGP with GROUP BY
+     * and aggregation expressions, executing them natively on FalkorDB using
+     * Cypher aggregation functions. If compilation fails, it falls back to
+     * standard Jena evaluation.</p>
+     *
+     * @param opGroup the group operation
+     * @param input the input query iterator
+     * @return the result query iterator
+     */
+    @Override
+    protected QueryIterator execute(final OpGroup opGroup,
+                                    final QueryIterator input) {
+        // If we don't have a FalkorDB graph, fall back to standard execution
+        if (falkorGraph == null) {
+            return super.execute(opGroup, input);
+        }
+
+        Span span = tracer.spanBuilder("FalkorDBOpExecutor.executeGroup")
+            .setSpanKind(SpanKind.INTERNAL)
+            .setAttribute(ATTR_OPTIMIZATION_TYPE, "GROUP_EXECUTION")
+            .startSpan();
+
+        try (Scope scope = span.makeCurrent()) {
+            // Check if the subOp is a BGP (we only support aggregation over BGPs)
+            Op subOp = opGroup.getSubOp();
+            if (!(subOp instanceof OpBGP)) {
+                span.setAttribute(ATTR_FALLBACK, true);
+                span.addEvent("SubOp is not BGP, falling back");
+                span.setStatus(StatusCode.OK);
+                return super.execute(opGroup, input);
+            }
+
+            BasicPattern bgp = ((OpBGP) subOp).getPattern();
+            VarExprList groupVars = opGroup.getGroupVars();
+            List<org.apache.jena.sparql.expr.ExprAggregator> aggregations = 
+                opGroup.getAggregators();
+
+            span.setAttribute(ATTR_TRIPLE_COUNT, (long) bgp.size());
+            span.setAttribute("falkordb.group_vars", 
+                groupVars != null ? groupVars.size() : 0);
+            span.setAttribute("falkordb.aggregations", 
+                aggregations != null ? aggregations.size() : 0);
+
+            if (LOGGER.isDebugEnabled()) {
+                LOGGER.debug("GROUP pushdown attempt: {} triples, {} group vars, {} aggregations",
+                    bgp.size(), 
+                    groupVars != null ? groupVars.size() : 0,
+                    aggregations != null ? aggregations.size() : 0);
+            }
+
+            // Compile the BGP
+            SparqlToCypherCompiler.CompilationResult bgpCompilation =
+                SparqlToCypherCompiler.translate(bgp);
+
+            // Translate aggregations
+            AggregationToCypherTranslator.AggregationResult aggResult =
+                AggregationToCypherTranslator.translate(
+                    aggregations,
+                    groupVars,
+                    bgpCompilation.variableMapping()
+                );
+
+            // Build the complete Cypher query with aggregation
+            String cypherQuery = buildAggregationQuery(
+                bgpCompilation.cypherQuery(),
+                aggResult.returnClause()
+            );
+
+            Map<String, Object> parameters = bgpCompilation.parameters();
+
+            span.setAttribute(ATTR_CYPHER_QUERY, cypherQuery);
+            span.setAttribute(ATTR_FALLBACK, false);
+
+            if (LOGGER.isDebugEnabled()) {
+                LOGGER.debug("GROUP pushdown: executing Cypher query:\n{}",
+                    cypherQuery);
+            }
+
+            // Execute on FalkorDB
+            ResultSet resultSet = falkorGraph.getTracedGraph()
+                .query(cypherQuery, parameters);
+
+            // Convert results to bindings
+            List<Binding> bindings = convertResultsToBindings(
+                resultSet, input);
+
+            span.setAttribute(ATTR_RESULT_COUNT, (long) bindings.size());
+            span.setStatus(StatusCode.OK);
+
+            if (LOGGER.isDebugEnabled()) {
+                LOGGER.debug("GROUP pushdown: returned {} results",
+                    bindings.size());
+            }
+
+            return QueryIterPlainWrapper.create(bindings.iterator(), execCxt);
+
+        } catch (SparqlToCypherCompiler.CannotCompileException
+                | AggregationToCypherTranslator.CannotTranslateAggregationException e) {
+            // Fall back to standard Jena execution
+            span.setAttribute(ATTR_FALLBACK, true);
+            span.addEvent("Falling back to standard execution: "
+                + e.getMessage());
+
+            if (LOGGER.isDebugEnabled()) {
+                LOGGER.debug("GROUP pushdown failed, falling back: {}",
+                    e.getMessage());
+            }
+
+            span.setStatus(StatusCode.OK);
+            return super.execute(opGroup, input);
+
+        } catch (Exception e) {
+            span.setStatus(StatusCode.ERROR, e.getMessage());
+            span.recordException(e);
+
+            if (LOGGER.isWarnEnabled()) {
+                LOGGER.warn("Error during GROUP pushdown, falling back: {}",
+                    e.getMessage());
+            }
+
+            // Fall back to standard execution on any error
+            return super.execute(opGroup, input);
+
+        } finally {
+            span.end();
+        }
+    }
+
+    /**
+     * Build a complete Cypher query with aggregation.
+     *
+     * <p>Takes a base BGP query and replaces or adds a RETURN clause
+     * with aggregations.</p>
+     *
+     * @param baseQuery the base Cypher query from BGP compilation
+     * @param returnClause the aggregation RETURN clause
+     * @return the complete Cypher query with aggregation
+     */
+    private String buildAggregationQuery(
+            final String baseQuery,
+            final String returnClause) {
+        
+        // Remove the existing RETURN clause from base query
+        // Base query typically ends with "RETURN var1 AS x, var2 AS y, ..."
+        int returnIndex = baseQuery.lastIndexOf("RETURN");
+        if (returnIndex == -1) {
+            // No RETURN clause, just append it
+            return baseQuery + "\nRETURN " + returnClause;
+        }
+
+        // Replace the RETURN clause
+        String matchPart = baseQuery.substring(0, returnIndex).trim();
+        return matchPart + "\nRETURN " + returnClause;
     }
 
     /**

@@ -86,9 +86,9 @@ export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
 export OTEL_SERVICE_NAME=jena-falkordb
 export OTEL_TRACING_ENABLED=true
 
-# Run with inference config
+# Run with lazy inference config
 java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
-  --config jena-fuseki-falkordb/src/main/resources/config-falkordb-inference.ttl
+  --config jena-fuseki-falkordb/src/main/resources/config-falkordb-lazy-inference.ttl
 ```
 
 ### 4. Query for Inferred Grandfather Relationships

@@ -311,9 +311,9 @@ curl -X POST http://localhost:3030/falkor/data \
 - 3 geographic features representing London districts
 - Social network creates transitive paths (e.g., Alice → Bob → Carol)
 
-### 5.4 Query: Find Transitive Friends with Their Locations
+### 5.4 Query: Find Friend-of-Friend with Their Locations
 
-Query for all people Alice knows transitively (via lazy inference) along with their geographic locations:
+Query for all people Alice knows through a 2-hop relationship (friend-of-friend) along with their geographic locations:
 
 ```bash
 curl -G http://localhost:3030/falkor/query \
@@ -333,17 +333,19 @@ ORDER BY ?friendName'
 ```
 
 **Expected Result:**
-- Returns Carol, Dave, and Eve (all transitive friends of Alice)
+- Returns Carol and Dave (friends-of-friends via Bob)
 - Includes their WKT point coordinates in London
 
 **What happened:**
-1. The inference rule computed transitive `knows` relationships on-demand
-2. GeoSPARQL extracted the geographic location for each friend
+1. The inference rule computed 2-hop `knows_transitively` relationships on-demand
+2. GeoSPARQL extracted the geographic location for each friend-of-friend
 3. Both features worked together seamlessly
 
-### 5.5 Query: Check Transitive Connection (ASK Query)
+**Note:** The current rule supports 2-hop relationships (friend-of-friend). For arbitrary-length transitive paths, additional rules or Cypher queries with variable-length paths would be needed.
 
-Check if Eve is in Alice's extended network using an ASK query with inference:
+### 5.5 Query: Check Friend-of-Friend Connection (ASK Query)
+
+Check if Carol is in Alice's 2-hop network using an ASK query with inference:
 
 ```bash
 curl -G http://localhost:3030/falkor/query \
@@ -352,7 +354,7 @@ curl -G http://localhost:3030/falkor/query \
 PREFIX social: <http://example.org/social#>
 PREFIX ex: <http://example.org/>
 ASK {
-  ex:alice social:knows_transitively ex:eve .
+  ex:alice social:knows_transitively ex:carol .
 }'
 ```
 
@@ -363,11 +365,11 @@ ASK {
 }
 ```
 
-Eve is reachable via the path: Alice → Bob → Dave → Eve
+Carol is reachable via the path: Alice → Bob → Carol (2 hops)
 
-### 5.6 Query: Find People with Occupations and Locations
+### 5.6 Query: Find Friends-of-Friends with Occupations and Locations
 
-Query for people in Bob's extended network with their occupations and geographic locations:
+Query for people in Bob's 2-hop network with their occupations and geographic locations:
 
 ```bash
 curl -G http://localhost:3030/falkor/query \
@@ -388,8 +390,8 @@ ORDER BY ?friendName'
 ```
 
 **Expected Result:**
-- Returns Carol, Dave, and Eve with their occupations and coordinates
-- Demonstrates combining inference, standard properties, and spatial data
+- Returns Eve (friend-of-friend via Dave) with occupation and coordinates
+- Demonstrates combining 2-hop inference, standard properties, and spatial data
 
 ### 5.7 Query: Geographic Features with People
 

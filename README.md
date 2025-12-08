@@ -8,19 +8,95 @@
 [![Discuss the project](https://img.shields.io/badge/discussions-FalkorDB-brightgreen.svg)](https://github.com/FalkorDB/FalkorDB/discussions)
 [![codecov](https://codecov.io/gh/FalkorDB/jena-falkordb-adapter/graph/badge.svg?token=kQg1yvyp0u)](https://codecov.io/gh/FalkorDB/jena-falkordb-adapter)
 
-# Jena-FalkorDB
+# Jena-FalkorDB Adapter
 
 [![Try Free](https://img.shields.io/badge/Try%20Free-FalkorDB%20Cloud-FF8101?labelColor=FDE900&style=for-the-badge&link=https://app.falkordb.cloud)](https://app.falkordb.cloud)
 
+## What is Jena-FalkorDB Adapter?
 
-A Java adapter that enables Apache Jena to work with FalkorDB graph database, allowing you to use SPARQL queries on data stored in FalkorDB.
+The Jena-FalkorDB Adapter is a high-performance integration layer that bridges the Apache Jena RDF framework with FalkorDB, a graph database powered by GraphBLAS. This adapter enables you to:
+
+- **Execute SPARQL queries** on data stored in FalkorDB graph database
+- **Use Apache Jena's RDF API** with FalkorDB as the backend storage
+- **Leverage automatic query optimization** with SPARQL-to-Cypher translation
+- **Deploy production-ready SPARQL endpoints** with the included Fuseki server integration
+
+The adapter provides an efficient mapping between RDF triples and property graph structures, with features like automatic URI indexing, efficient literal storage as node properties, and native support for rdf:type as graph labels.
+
+## Table of Contents
+
+- [What is Jena-FalkorDB Adapter?](#what-is-jena-falkordb-adapter)
+- [Project Structure](#project-structure)
+  - [Module Overview](#module-overview)
+  - [Module Details](#module-details)
+- [Features](#features)
+- [Quick Start](#quick-start)
+- [Prerequisites](#prerequisites)
+- [Setup](#setup)
+- [Using from Maven](#using-from-maven)
+- [How to Run Locally](#how-to-run-locally)
+- [Deploying to Standalone Fuseki Server](#deploying-to-standalone-fuseki-server)
+- [Usage Examples](#usage-examples)
+- [Examples and Samples](#examples-and-samples)
+- [How to Run the Examples](#how-to-run-the-examples)
+- [Documentation](#documentation)
+- [Performance Tips](#performance-tips)
+- [Troubleshooting](#troubleshooting)
+- [Advanced Usage](#advanced-usage)
+- [Testing](#testing)
+- [Contributing](#contributing)
+- [Releasing to Maven Central](#releasing-to-maven-central)
+- [CI/CD](#cicd)
+- [License](#license)
+- [Support](#support)
 
 ## Project Structure
 
-This is a multi-module Maven project consisting of:
+This is a multi-module Maven project consisting of four main modules:
 
-- **jena-falkordb-adapter** - Core adapter library that integrates Apache Jena with FalkorDB
-- **jena-fuseki-falkordb** - Apache Jena Fuseki server with FalkorDB backend for SPARQL endpoint
+### Module Overview
+
+| Module | Description | Use Case |
+|--------|-------------|----------|
+| **[jena-falkordb-adapter](jena-falkordb-adapter/)** | Core adapter library that integrates Apache Jena with FalkorDB | Use this as a dependency in your Java applications to work with RDF data stored in FalkorDB |
+| **[jena-falkordb-assembler](jena-falkordb-assembler/)** | Jena Assembler integration for FalkorDB | Enables declarative configuration of FalkorDB models using Jena Assembler configuration files (TTL format) |
+| **[jena-geosparql](jena-geosparql/)** | GeoSPARQL support module | Bundles Apache Jena's GeoSPARQL implementation with all dependencies for spatial queries on geographic data |
+| **[jena-fuseki-falkordb](jena-fuseki-falkordb/)** | Apache Jena Fuseki server with FalkorDB backend | Deploy as a standalone SPARQL endpoint server for querying FalkorDB via HTTP |
+
+### Module Details
+
+#### jena-falkordb-adapter (Core Library)
+
+The core adapter library that provides:
+- `FalkorDBGraph` - Custom Jena `Graph` implementation backed by FalkorDB
+- `FalkorDBModelFactory` - Factory methods for creating RDF models
+- Query pushdown engine for SPARQL-to-Cypher translation
+- Transaction support with batch write optimizations
+- Magic property (`falkor:cypher`) for direct Cypher execution
+
+**When to use:** Include this as a Maven dependency when building Java applications that need to work with RDF data in FalkorDB.
+
+#### jena-falkordb-assembler (Configuration)
+
+Provides Jena Assembler vocabulary and assembler for FalkorDB models, allowing you to configure FalkorDB-backed models declaratively using Turtle (TTL) configuration files instead of programmatic configuration.
+
+**When to use:** Use this when you want to configure your FalkorDB models using declarative configuration files, especially in Fuseki server deployments.
+
+#### jena-geosparql (Spatial Queries)
+
+Bundles Apache Jena's GeoSPARQL implementation with all dependencies, enabling spatial queries on geographic data using SPARQL. Supports WKT (Well-Known Text) format for geometric data and spatial functions like `sfContains`, `sfWithin`, `sfIntersects`, etc.
+
+**When to use:** Include this module when you need to perform spatial queries on geographic data stored in FalkorDB.
+
+#### jena-fuseki-falkordb (SPARQL Server)
+
+A standalone SPARQL endpoint server built on Apache Jena Fuseki with FalkorDB as the backend. Provides:
+- Web-based UI for query execution at `http://localhost:3330/`
+- REST API endpoints for SPARQL query, update, and Graph Store Protocol
+- Support for rule-based inference and reasoning
+- Environment variable and TTL file-based configuration
+
+**When to use:** Deploy this when you need a production-ready SPARQL endpoint that can be accessed via HTTP by multiple clients.
 
 ## Features
 
@@ -155,6 +231,233 @@ dependencies {
 
 Note: snapshots live in the OSSRH snapshots repository; once a release is published to Maven Central you can rely on `mavenCentral()` without adding extra repositories.
 
+## How to Run Locally
+
+### Option 1: Quick Start (3 Steps)
+
+The fastest way to get started with the Jena-FalkorDB Adapter:
+
+**Step 1:** Start FalkorDB
+```bash
+docker run -p 6379:6379 -it --rm falkordb/falkordb:latest
+```
+
+**Step 2:** Clone and build the project
+```bash
+git clone https://github.com/FalkorDB/jena-falkordb-adapter.git
+cd jena-falkordb-adapter
+mvn clean install -DskipTests
+```
+
+**Step 3:** Run the demo or Fuseki server
+```bash
+# Run the adapter demo
+java -jar jena-falkordb-adapter/target/jena-falkordb-adapter-0.2.0-SNAPSHOT.jar
+
+# OR run the Fuseki SPARQL server
+java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar
+```
+
+The Fuseki server will start at http://localhost:3330/ with the SPARQL endpoint at `/falkor`.
+
+### Option 2: Using the Setup Script
+
+For Linux/Mac users, use the included setup script:
+
+```bash
+chmod +x setup.sh
+./setup.sh
+```
+
+The script will:
+- Check prerequisites (Java, Maven, Docker)
+- Start FalkorDB if Docker is available
+- Build the project
+- Provide instructions for running
+
+### Option 3: Development Setup
+
+For development work with tests:
+
+```bash
+# 1. Start FalkorDB
+docker run -p 6379:6379 -d --name falkordb falkordb/falkordb:latest
+
+# 2. Clone and build
+git clone https://github.com/FalkorDB/jena-falkordb-adapter.git
+cd jena-falkordb-adapter
+
+# 3. Build and run tests
+mvn clean install
+
+# 4. Run specific tests
+mvn test -pl jena-falkordb-adapter
+```
+
+See [GETTING_STARTED.md](GETTING_STARTED.md) for detailed setup instructions, troubleshooting, and more examples.
+
+## Deploying to Standalone Fuseki Server
+
+The `jena-fuseki-falkordb` module can be deployed as a standalone SPARQL endpoint server. There are several deployment options:
+
+### Deployment Option 1: Using the Bundled JAR
+
+The simplest deployment method using the pre-built executable JAR:
+
+```bash
+# Build the JAR
+mvn clean package -pl jena-fuseki-falkordb -am
+
+# Run with environment variables
+export FALKORDB_HOST=localhost
+export FALKORDB_PORT=6379
+export FALKORDB_GRAPH=my_knowledge_graph
+export FUSEKI_PORT=3330
+
+java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar
+```
+
+Access the server:
+- **Web UI:** http://localhost:3330/
+- **SPARQL Query Endpoint:** http://localhost:3330/falkor/query
+- **SPARQL Update Endpoint:** http://localhost:3330/falkor/update
+
+### Deployment Option 2: Using Configuration File
+
+For more control, use a TTL configuration file:
+
+**Step 1:** Create `config-falkordb.ttl`:
+```turtle
+@prefix :        <#> .
+@prefix falkor:  <http://falkordb.com/jena/assembler#> .
+@prefix fuseki:  <http://jena.apache.org/fuseki#> .
+@prefix ja:      <http://jena.hpl.hp.com/2005/11/Assembler#> .
+@prefix rdf:     <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+
+[] rdf:type fuseki:Server ;
+   fuseki:services ( :service ) .
+
+:service rdf:type fuseki:Service ;
+    fuseki:name "dataset" ;
+    fuseki:endpoint [ fuseki:operation fuseki:query ; ] ;
+    fuseki:endpoint [ fuseki:operation fuseki:update ; ] ;
+    fuseki:dataset :dataset_rdf .
+
+:dataset_rdf rdf:type ja:RDFDataset ;
+    ja:defaultGraph :falkor_db_model .
+
+:falkor_db_model rdf:type falkor:FalkorDBModel ;
+    falkor:host "localhost" ;
+    falkor:port 6379 ;
+    falkor:graphName "my_graph" .
+```
+
+**Step 2:** Start the server with config:
+```bash
+java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
+  --config config-falkordb.ttl
+```
+
+### Deployment Option 3: Integrating with Existing Fuseki
+
+To integrate with an existing Apache Jena Fuseki installation:
+
+**Step 1:** Copy the required JARs to Fuseki's lib directory:
+```bash
+# Copy the adapter and its dependencies
+cp jena-falkordb-adapter/target/jena-falkordb-adapter-0.2.0-SNAPSHOT.jar \
+   /path/to/fuseki/lib/
+
+cp jena-falkordb-assembler/target/jena-falkordb-assembler-0.2.0-SNAPSHOT.jar \
+   /path/to/fuseki/lib/
+
+# Copy JFalkorDB dependency
+cp ~/.m2/repository/com/falkordb/jfalkordb/0.6.0/jfalkordb-0.6.0.jar \
+   /path/to/fuseki/lib/
+```
+
+**Step 2:** Create assembler configuration (same as Option 2)
+
+**Step 3:** Start Fuseki with the configuration:
+```bash
+cd /path/to/fuseki
+./fuseki-server --config config-falkordb.ttl
+```
+
+### Deployment Option 4: Docker Deployment
+
+Create a `Dockerfile` for containerized deployment:
+
+```dockerfile
+FROM openjdk:21-slim
+
+# Install FalkorDB client tools (optional)
+RUN apt-get update && apt-get install -y redis-tools && rm -rf /var/lib/apt/lists/*
+
+# Copy the JAR
+COPY jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar /app/fuseki.jar
+
+# Environment variables
+ENV FALKORDB_HOST=falkordb
+ENV FALKORDB_PORT=6379
+ENV FALKORDB_GRAPH=knowledge_graph
+ENV FUSEKI_PORT=3330
+
+EXPOSE 3330
+
+CMD ["java", "-jar", "/app/fuseki.jar"]
+```
+
+**Docker Compose** example with FalkorDB:
+
+```yaml
+version: '3.8'
+
+services:
+  falkordb:
+    image: falkordb/falkordb:latest
+    ports:
+      - "6379:6379"
+    volumes:
+      - falkordb-data:/data
+
+  fuseki:
+    build: .
+    ports:
+      - "3330:3330"
+    environment:
+      - FALKORDB_HOST=falkordb
+      - FALKORDB_PORT=6379
+      - FALKORDB_GRAPH=knowledge_graph
+      - FUSEKI_PORT=3330
+    depends_on:
+      - falkordb
+
+volumes:
+  falkordb-data:
+```
+
+Run with:
+```bash
+docker-compose up -d
+```
+
+### Testing Your Deployment
+
+After deployment, test the endpoint:
+
+```bash
+# Insert data
+curl -X POST http://localhost:3330/falkor/update \
+  -H "Content-Type: application/sparql-update" \
+  --data 'INSERT DATA { <http://example/s> <http://example/p> "value" }'
+
+# Query data
+curl -G http://localhost:3330/falkor/query \
+  --data-urlencode 'query=SELECT * WHERE { ?s ?p ?o } LIMIT 10'
+```
+
+See [jena-fuseki-falkordb/GETTING_STARTED.md](jena-fuseki-falkordb/GETTING_STARTED.md) for more deployment examples, configuration options, and troubleshooting.
 
 ## Usage Examples
 
@@ -579,6 +882,8 @@ Comprehensive examples for all optimizations are available in the [`samples/`](s
 - **[Query Pushdown](samples/query-pushdown/)**: SPARQL to Cypher translation (Nx-N²x improvement)
 - **[Variable Objects](samples/variable-objects/)**: Query both properties and relationships (2x fewer round trips)
 - **[OPTIONAL Patterns](samples/optional-patterns/)**: Efficient optional data retrieval (Nx fewer round trips)
+- **[UNION Patterns](samples/union-patterns/)**: Alternative query patterns (Nx fewer round trips)
+- **[Filter Expressions](samples/filter-expressions/)**: Database-side filtering (reduces data transfer)
 - **[Aggregations](samples/aggregations/)**: GROUP BY with COUNT, SUM, AVG, MIN, MAX (200-1000x less data transfer)
 - **[Magic Property](samples/magic-property/)**: Direct Cypher execution for maximum control
 
@@ -589,6 +894,227 @@ Each example includes:
 - ✅ Detailed README with explanations
 
 See [`samples/README.md`](samples/README.md) for quick start guide.
+
+## How to Run the Examples
+
+The examples demonstrate all the optimization features of the adapter. Follow these steps to run them:
+
+### Prerequisites
+
+1. **Start FalkorDB:**
+   ```bash
+   docker run -p 6379:6379 -d falkordb/falkordb:latest
+   ```
+
+2. **Build the project:**
+   ```bash
+   cd jena-falkordb-adapter
+   mvn clean install
+   ```
+
+### Running Individual Examples
+
+Each example can be run using Maven exec plugin:
+
+```bash
+# Batch Writes Example
+mvn exec:java -Dexec.mainClass="com.falkordb.samples.BatchWriteExample"
+
+# Query Pushdown Example
+mvn exec:java -Dexec.mainClass="com.falkordb.samples.QueryPushdownExample"
+
+# Variable Objects Example
+mvn exec:java -Dexec.mainClass="com.falkordb.samples.VariableObjectExample"
+
+# OPTIONAL Patterns Example
+mvn exec:java -Dexec.mainClass="com.falkordb.samples.OptionalPatternsExample"
+
+# UNION Patterns Example
+mvn exec:java -Dexec.mainClass="com.falkordb.samples.UnionPatternsExample"
+
+# Filter Expressions Example
+mvn exec:java -Dexec.mainClass="com.falkordb.samples.FilterExpressionsExample"
+
+# Aggregations Example
+mvn exec:java -Dexec.mainClass="com.falkordb.samples.AggregationsExample"
+
+# Magic Property Example
+mvn exec:java -Dexec.mainClass="com.falkordb.samples.MagicPropertyExample"
+```
+
+### Loading Sample Data
+
+Each example directory contains sample data files (`data-example.ttl`). To load them:
+
+```java
+import org.apache.jena.riot.RDFDataMgr;
+import org.apache.jena.rdf.model.Model;
+import com.falkordb.jena.FalkorDBModelFactory;
+
+Model model = FalkorDBModelFactory.createDefaultModel();
+model.begin(ReadWrite.WRITE);
+try {
+    RDFDataMgr.read(model, "samples/batch-writes/data-example.ttl");
+    model.commit();
+} finally {
+    model.end();
+}
+```
+
+### Running with Fuseki Server
+
+You can also run examples via the Fuseki server:
+
+**Step 1:** Start Fuseki with FalkorDB backend:
+```bash
+java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar
+```
+
+**Step 2:** Load sample data via HTTP:
+```bash
+curl -X POST http://localhost:3330/falkor/update \
+  -H "Content-Type: text/turtle" \
+  --data-binary @samples/batch-writes/data-example.ttl
+```
+
+**Step 3:** Execute SPARQL queries from the samples:
+```bash
+# Example: Query from optional-patterns sample
+curl -G http://localhost:3330/falkor/query \
+  --data-urlencode "query=$(cat samples/optional-patterns/queries.sparql | head -n 20)"
+```
+
+### Example Output
+
+Each example will output:
+- Description of what it's demonstrating
+- The SPARQL query being executed
+- The generated Cypher query (if applicable)
+- Query results
+- Performance metrics (execution time, number of database calls)
+
+**Example output from Query Pushdown:**
+```
+=== Query Pushdown Example ===
+
+Running query: Find all people and their ages
+SPARQL:
+  SELECT ?person ?age WHERE {
+    ?person a <http://xmlns.com/foaf/0.1/Person> .
+    ?person <http://xmlns.com/foaf/0.1/age> ?age .
+  }
+
+Generated Cypher:
+  MATCH (s:Resource:Person) 
+  RETURN s.uri AS s, s.`foaf:age` AS age
+
+Results:
+  Person: http://example.org/alice, Age: 30
+  Person: http://example.org/bob, Age: 35
+
+Database calls: 1 (instead of N+1 without optimization)
+Execution time: 15ms
+```
+
+### Interactive Exploration
+
+For interactive exploration, use the Fuseki web UI:
+
+1. Start Fuseki: `java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar`
+2. Open browser: http://localhost:3330/
+3. Navigate to the query editor
+4. Load queries from `samples/*/queries.sparql`
+5. Execute and view results
+
+### Tracing and Observability
+
+To see how queries are optimized with detailed tracing:
+
+1. Start Jaeger for tracing:
+   ```bash
+   docker-compose -f docker-compose-tracing.yaml up -d
+   ```
+
+2. Run examples with tracing enabled:
+   ```bash
+   export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
+   mvn exec:java -Dexec.mainClass="com.falkordb.samples.QueryPushdownExample"
+   ```
+
+3. View traces in Jaeger UI: http://localhost:16686/
+
+See [DEMO.md](DEMO.md) for complete step-by-step demo with curl commands and [TRACING.md](TRACING.md) for observability documentation.
+
+## Documentation
+
+This project includes comprehensive documentation covering all aspects of the adapter:
+
+### Core Documentation
+
+| Document | Description |
+|----------|-------------|
+| **[README.md](README.md)** (this file) | Project overview, quick start, features, and usage examples |
+| **[GETTING_STARTED.md](GETTING_STARTED.md)** | Detailed setup guide, installation, first program, use cases, and troubleshooting |
+| **[DEMO.md](DEMO.md)** | Complete hands-on demo with curl commands, Jaeger tracing, and step-by-step examples for all optimizations |
+
+### Optimization & Performance
+
+| Document | Description |
+|----------|-------------|
+| **[OPTIMIZATIONS.md](OPTIMIZATIONS.md)** | Comprehensive guide to all performance optimizations: batch writes, query pushdown, variable objects, OPTIONAL patterns, UNION patterns, filter expressions, and aggregations |
+| **[MAGIC_PROPERTY.md](MAGIC_PROPERTY.md)** | Documentation for the `falkor:cypher` magic property that allows direct Cypher execution within SPARQL queries |
+
+### Technical Documentation
+
+| Document | Description |
+|----------|-------------|
+| **[MAPPING.md](MAPPING.md)** | Detailed explanation of how RDF triples are mapped to property graph structures in FalkorDB |
+| **[TRACING.md](TRACING.md)** | OpenTelemetry integration for observability, tracing, and performance monitoring with Jaeger |
+
+### Module-Specific Documentation
+
+| Document | Description |
+|----------|-------------|
+| **[jena-fuseki-falkordb/GETTING_STARTED.md](jena-fuseki-falkordb/GETTING_STARTED.md)** | Guide for deploying and using the Fuseki SPARQL server with FalkorDB backend |
+| **[samples/README.md](samples/README.md)** | Overview of all code examples with performance metrics and usage patterns |
+
+### Examples by Optimization
+
+Each optimization has dedicated examples in the `samples/` directory with complete code:
+
+| Example Directory | What It Demonstrates | Performance Gain |
+|-------------------|---------------------|------------------|
+| **[samples/batch-writes/](samples/batch-writes/)** | Transaction batching for bulk operations | 100-1000x faster |
+| **[samples/query-pushdown/](samples/query-pushdown/)** | SPARQL to Cypher translation | Nx-N²x improvement |
+| **[samples/variable-objects/](samples/variable-objects/)** | Querying both properties and relationships | 2x fewer round trips |
+| **[samples/optional-patterns/](samples/optional-patterns/)** | Efficient optional data retrieval | Nx fewer round trips |
+| **[samples/union-patterns/](samples/union-patterns/)** | Alternative query patterns with UNION | Nx fewer round trips |
+| **[samples/filter-expressions/](samples/filter-expressions/)** | Database-side filtering | Reduces data transfer |
+| **[samples/aggregations/](samples/aggregations/)** | GROUP BY with aggregation functions | 200-1000x less data transfer |
+| **[samples/magic-property/](samples/magic-property/)** | Direct Cypher execution | Maximum control |
+
+### Quick Links to Key Topics
+
+- **Getting Started**: [GETTING_STARTED.md](GETTING_STARTED.md)
+- **How to Deploy**: [Deploying to Standalone Fuseki](#deploying-to-standalone-fuseki-server)
+- **Running Examples**: [How to Run the Examples](#how-to-run-the-examples)
+- **Performance Tuning**: [OPTIMIZATIONS.md](OPTIMIZATIONS.md)
+- **Troubleshooting**: [GETTING_STARTED.md#troubleshooting](GETTING_STARTED.md#troubleshooting)
+- **API Reference**: [Javadocs](https://www.javadoc.io/doc/com.falkordb/jena-falkordb-adapter)
+- **Storage Architecture**: [MAPPING.md](MAPPING.md)
+- **Observability**: [TRACING.md](TRACING.md)
+- **Magic Property**: [MAGIC_PROPERTY.md](MAGIC_PROPERTY.md)
+- **Complete Demo**: [DEMO.md](DEMO.md)
+
+### External Resources
+
+- [Apache Jena Documentation](https://jena.apache.org/documentation/)
+- [FalkorDB Documentation](https://docs.falkordb.com/)
+- [SPARQL 1.1 Query Language](https://www.w3.org/TR/sparql11-query/)
+- [Cypher Query Language](https://neo4j.com/docs/cypher-manual/current/)
+- [GitHub Repository](https://github.com/FalkorDB/jena-falkordb-adapter)
+- [Issue Tracker](https://github.com/FalkorDB/jena-falkordb-adapter/issues)
+- [Discussions](https://github.com/FalkorDB/FalkorDB/discussions)
 
 ## Performance Tips
 

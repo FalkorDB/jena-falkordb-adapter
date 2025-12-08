@@ -3,6 +3,8 @@
 This document describes how to set up and use OpenTelemetry tracing with Jena-FalkorDB.
 Traces are exported via OTLP protocol to Jaeger for visualization.
 
+> **📖 Complete Demo Guide**: For hands-on examples showing Jaeger traces for each optimization, see [DEMO.md](DEMO.md)
+
 ## Overview
 
 The tracing implementation provides visibility into three levels of the system:

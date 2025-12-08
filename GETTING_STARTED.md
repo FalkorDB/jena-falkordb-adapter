@@ -2,6 +2,8 @@
 
 This guide will help you set up and start using the Jena-FalkorDB project in under 10 minutes.
 
+> **📖 Complete Demo Guide**: For a comprehensive walkthrough with curl commands, Jaeger tracing, and all optimizations, see [DEMO.md](DEMO.md)
+
 > **Note**: This is a multi-module project containing:
 > - **jena-falkordb-adapter** - Core adapter library for integrating Jena with FalkorDB
 > - **jena-fuseki-falkordb** - Fuseki SPARQL server with FalkorDB backend

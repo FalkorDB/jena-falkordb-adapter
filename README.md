@@ -46,9 +46,13 @@ This is a multi-module Maven project consisting of:
 - ✅ Continuous integration with Java 25 testing
 - ✅ Automated publishing to Maven Central
 
+## Quick Start
+
+> **📖 Complete Demo Guide**: For a comprehensive walkthrough of all optimizations with curl commands and Jaeger tracing, see [DEMO.md](DEMO.md)
+
 ## Prerequisites
 
-- Java 17 or newer (tested with 25)
+- Java 17 or newer (tested with 21 and 25)
 - Maven 3.6 or newer
 - FalkorDB running (via Docker or direct installation)
 

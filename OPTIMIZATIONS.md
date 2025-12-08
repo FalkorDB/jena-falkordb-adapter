@@ -2,6 +2,8 @@
 
 This document describes the performance optimizations implemented in the FalkorDB Jena Adapter to improve both read and write operations.
 
+> **📖 Complete Demo Guide**: For hands-on examples with curl commands, Jaeger tracing, and step-by-step setup, see [DEMO.md](DEMO.md)
+
 ## Overview
 
 The adapter implements three major optimization strategies:

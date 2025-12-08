@@ -176,11 +176,139 @@ The FILTER is translated to a Cypher WHERE clause and executed at the database l
 - Very deeply nested OPTIONAL patterns may fall back to standard evaluation
 - FILTER clauses within OPTIONAL blocks (not in required part) may not fully push down
 
+## Using curl with Fuseki
+
+You can use curl to load data and execute queries via the Fuseki SPARQL endpoint.
+
+### Prerequisites
+
+First, start FalkorDB and Fuseki:
+
+```bash
+# Start FalkorDB
+docker run -p 6379:6379 -it --rm falkordb/falkordb:latest
+
+# In another terminal, start Fuseki (from project root)
+mvn clean install -DskipTests
+java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar
+```
+
+The Fuseki server will start on `http://localhost:3330` with the default endpoint at `/falkor`.
+
+### Loading Data with curl
+
+**Load the sample data file (`data-example.ttl`):**
+
+```bash
+curl -X POST \
+  -H "Content-Type: text/turtle" \
+  --data-binary @samples/optional-patterns/data-example.ttl \
+  http://localhost:3330/falkor/data
+```
+
+### Executing Queries with curl
+
+**Example 1: Basic OPTIONAL - Find people with optional email**
+
+```bash
+curl -G \
+  --data-urlencode "query=PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT ?person ?name ?email WHERE {
+    ?person a foaf:Person .
+    ?person foaf:name ?name .
+    OPTIONAL { ?person foaf:email ?email }
+}
+ORDER BY ?name" \
+  http://localhost:3330/falkor/query
+```
+
+**Example 2: Multiple OPTIONAL clauses - Contact information**
+
+```bash
+curl -G \
+  --data-urlencode "query=PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT ?person ?name ?email ?phone WHERE {
+    ?person a foaf:Person .
+    ?person foaf:name ?name .
+    OPTIONAL { ?person foaf:email ?email }
+    OPTIONAL { ?person foaf:phone ?phone }
+}
+ORDER BY ?name" \
+  http://localhost:3330/falkor/query
+```
+
+**Example 3: OPTIONAL with literal property**
+
+```bash
+curl -G \
+  --data-urlencode "query=PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT ?person ?name ?age WHERE {
+    ?person a foaf:Person .
+    ?person foaf:name ?name .
+    OPTIONAL { ?person foaf:age ?age }
+}
+ORDER BY ?name" \
+  http://localhost:3330/falkor/query
+```
+
+**Example 4: OPTIONAL with multiple triples - Friend information**
+
+```bash
+curl -G \
+  --data-urlencode "query=PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT ?person ?name ?friend ?friendName WHERE {
+    ?person a foaf:Person .
+    ?person foaf:name ?name .
+    OPTIONAL { 
+        ?person foaf:knows ?friend .
+        ?friend foaf:name ?friendName .
+    }
+}
+ORDER BY ?name" \
+  http://localhost:3330/falkor/query
+```
+
+**Example 5: Concrete subject with OPTIONAL**
+
+```bash
+curl -G \
+  --data-urlencode "query=PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT ?email ?phone WHERE {
+    <http://example.org/person/alice> a foaf:Person .
+    OPTIONAL { <http://example.org/person/alice> foaf:email ?email }
+    OPTIONAL { <http://example.org/person/alice> foaf:phone ?phone }
+}" \
+  http://localhost:3330/falkor/query
+```
+
+**Example 6: OPTIONAL with FILTER**
+
+```bash
+curl -G \
+  --data-urlencode "query=PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT ?person ?name ?age ?email WHERE {
+    ?person a foaf:Person .
+    ?person foaf:name ?name .
+    ?person foaf:age ?age .
+    FILTER(?age >= 18 && ?age < 65)
+    OPTIONAL { ?person foaf:email ?email }
+}
+ORDER BY ?age" \
+  http://localhost:3330/falkor/query
+```
+
 ## See Also
 
 - [OPTIMIZATIONS.md](../../OPTIMIZATIONS.md#optional-patterns) - Full documentation
 - [FalkorDBQueryPushdownTest.java](../../jena-falkordb-adapter/src/test/java/com/falkordb/jena/query/FalkorDBQueryPushdownTest.java) - Integration tests
 - [SparqlToCypherCompilerTest.java](../../jena-falkordb-adapter/src/test/java/com/falkordb/jena/query/SparqlToCypherCompilerTest.java) - Unit tests
+- [Fuseki GETTING_STARTED.md](../../jena-fuseki-falkordb/GETTING_STARTED.md) - Fuseki setup and usage
 
 ## Performance Monitoring
 

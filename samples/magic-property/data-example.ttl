@@ -1,9 +1,9 @@
 @prefix ex: <http://example.org/> .
 @prefix foaf: <http://xmlns.com/foaf/0.1/> .
 
-ex:person/alice foaf:name "Alice" ; foaf:age 30 .
-ex:person/bob foaf:name "Bob" ; foaf:age 35 .
-ex:person/charlie foaf:name "Charlie" ; foaf:age 28 .
+<http://example.org/person/alice> foaf:name "Alice" ; foaf:age 30 .
+<http://example.org/person/bob> foaf:name "Bob" ; foaf:age 35 .
+<http://example.org/person/charlie> foaf:name "Charlie" ; foaf:age 28 .
 
-ex:person/alice foaf:knows ex:person/bob .
-ex:person/bob foaf:knows ex:person/charlie .
+<http://example.org/person/alice> foaf:knows <http://example.org/person/bob> .
+<http://example.org/person/bob> foaf:knows <http://example.org/person/charlie> .

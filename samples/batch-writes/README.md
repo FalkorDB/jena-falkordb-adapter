@@ -196,11 +196,151 @@ try {
 }
 ```
 
+## Using curl with Fuseki
+
+You can use curl to load data and execute queries via the Fuseki SPARQL endpoint.
+
+### Prerequisites
+
+First, start FalkorDB and Fuseki:
+
+```bash
+# Start FalkorDB
+docker run -p 6379:6379 -it --rm falkordb/falkordb:latest
+
+# In another terminal, start Fuseki (from project root)
+mvn clean install -DskipTests
+java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar
+```
+
+The Fuseki server will start on `http://localhost:3330` with the default endpoint at `/falkor`.
+
+### Loading Data with curl
+
+**Load the sample data file (`data-example.ttl`):**
+
+```bash
+curl -X POST \
+  -H "Content-Type: text/turtle" \
+  --data-binary @samples/batch-writes/data-example.ttl \
+  http://localhost:3330/falkor/data
+```
+
+This loads all ~180 triples from the sample file in a single efficient batch operation.
+
+### Executing Queries with curl
+
+**Example 1: Insert multiple triples**
+
+```bash
+curl -X POST \
+  -H "Content-Type: application/sparql-update" \
+  --data 'PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX ex: <http://example.org/>
+
+INSERT DATA {
+    ex:person1 a foaf:Person ;
+               foaf:name "Alice" ;
+               foaf:age 30 .
+    
+    ex:person2 a foaf:Person ;
+               foaf:name "Bob" ;
+               foaf:age 35 .
+    
+    ex:person3 a foaf:Person ;
+               foaf:name "Charlie" ;
+               foaf:age 28 .
+    
+    ex:person1 foaf:knows ex:person2 , ex:person3 .
+    ex:person2 foaf:knows ex:person3 .
+}' \
+  http://localhost:3330/falkor/update
+```
+
+**Example 2: Delete multiple triples**
+
+```bash
+curl -X POST \
+  -H "Content-Type: application/sparql-update" \
+  --data 'PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX ex: <http://example.org/>
+
+DELETE DATA {
+    ex:person1 foaf:knows ex:person2 .
+    ex:person1 foaf:knows ex:person3 .
+    ex:person1 foaf:name "Alice" .
+}' \
+  http://localhost:3330/falkor/update
+```
+
+**Example 3: Update operation (delete + insert)**
+
+```bash
+curl -X POST \
+  -H "Content-Type: application/sparql-update" \
+  --data 'PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX ex: <http://example.org/>
+
+DELETE {
+    ex:person1 foaf:name ?oldName .
+}
+INSERT {
+    ex:person1 foaf:name "Alice Smith" .
+}
+WHERE {
+    ex:person1 foaf:name ?oldName .
+}' \
+  http://localhost:3330/falkor/update
+```
+
+**Example 4: Bulk construction query**
+
+```bash
+curl -X POST \
+  -H "Content-Type: application/sparql-update" \
+  --data 'PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX ex: <http://example.org/>
+
+INSERT {
+    ?person1 foaf:knows ?person2 .
+}
+WHERE {
+    ?person1 a foaf:Person .
+    ?person2 a foaf:Person .
+    FILTER(?person1 != ?person2)
+}' \
+  http://localhost:3330/falkor/update
+```
+
+**Query the loaded data:**
+
+```bash
+curl -G \
+  --data-urlencode "query=PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+SELECT ?person ?name ?age
+WHERE {
+    ?person a foaf:Person ;
+            foaf:name ?name ;
+            foaf:age ?age .
+}
+ORDER BY ?name" \
+  http://localhost:3330/falkor/query
+```
+
+**Count all triples:**
+
+```bash
+curl -G \
+  --data-urlencode "query=SELECT (COUNT(*) AS ?count) WHERE { ?s ?p ?o }" \
+  http://localhost:3330/falkor/query
+```
+
 ## Documentation
 
 For complete documentation, see:
 - [OPTIMIZATIONS.md](../../OPTIMIZATIONS.md#batch-writes-via-transactions) - Detailed explanation
 - [README.md](../../README.md) - Project overview
+- [Fuseki GETTING_STARTED.md](../../jena-fuseki-falkordb/GETTING_STARTED.md) - Fuseki setup and usage
 
 ## Related Optimizations
 

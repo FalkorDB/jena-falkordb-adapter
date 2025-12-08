@@ -6,34 +6,34 @@
 # Some people have complete information, others have partial data
 
 # Alice - has all information
-ex:person/alice 
+<http://example.org/person/alice> 
     a foaf:Person ;
     foaf:name "Alice" ;
     foaf:age 30 ;
     foaf:email <mailto:alice@example.org> ;
     foaf:phone "+1-555-0101" ;
-    foaf:knows ex:person/bob .
+    foaf:knows <http://example.org/person/bob> .
 
 # Bob - has name and age, but no email or phone
-ex:person/bob 
+<http://example.org/person/bob> 
     a foaf:Person ;
     foaf:name "Bob" ;
     foaf:age 35 ;
-    foaf:knows ex:person/charlie .
+    foaf:knows <http://example.org/person/charlie> .
 
 # Charlie - has only name
-ex:person/charlie 
+<http://example.org/person/charlie> 
     a foaf:Person ;
     foaf:name "Charlie" .
 
 # Diana - has name and email, but no age
-ex:person/diana 
+<http://example.org/person/diana> 
     a foaf:Person ;
     foaf:name "Diana" ;
     foaf:email <mailto:diana@example.org> .
 
 # Eve - has name, email, and phone
-ex:person/eve 
+<http://example.org/person/eve> 
     a foaf:Person ;
     foaf:name "Eve" ;
     foaf:email <mailto:eve@example.org> ;

@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.apache.jena.datatypes.TypeMapper;
 import org.apache.jena.graph.Node;
 import org.apache.jena.graph.TransactionHandler;
 import org.apache.jena.graph.Triple;
@@ -278,9 +279,21 @@ public final class FalkorDBGraph extends GraphBase {
 
             // Sanitize predicate to prevent Cypher injection
             String sanitizedPredicate = sanitizeCypherIdentifier(predicate);
-            cypher = """
-                MERGE (s:Resource {uri: $subjectUri}) \
-                SET s.`%s` = $objectValue""".formatted(sanitizedPredicate);
+            
+            // Store datatype URI for non-string literals to preserve type information
+            // This is critical for geometry literals (e.g., geo:wktLiteral) and other custom types
+            var datatypeURI = literal.getDatatypeURI();
+            if (datatypeURI != null && !datatypeURI.equals("http://www.w3.org/2001/XMLSchema#string")) {
+                params.put("datatypeValue", datatypeURI);
+                cypher = """
+                    MERGE (s:Resource {uri: $subjectUri}) \
+                    SET s.`%s` = $objectValue, s.`%s__datatype` = $datatypeValue""".formatted(
+                        sanitizedPredicate, sanitizedPredicate);
+            } else {
+                cypher = """
+                    MERGE (s:Resource {uri: $subjectUri}) \
+                    SET s.`%s` = $objectValue""".formatted(sanitizedPredicate);
+            }
         } else if (predicate.equals(RDF.type.getURI())) {
             // Special handling for rdf:type - create node with type as label
             var object = nodeToString(triple.getObject());
@@ -364,14 +377,15 @@ public final class FalkorDBGraph extends GraphBase {
 
         if (triple.getObject().isLiteral()) {
             // Remove property from the subject node
-            // Use backticks to allow URIs as property names directly
+            // Also remove the associated __datatype property if it exists
             params.put("subjectUri", subject);
 
             // Sanitize predicate to prevent Cypher injection
             String sanitizedPredicate = sanitizeCypherIdentifier(predicate);
             cypher = """
                 MATCH (s:Resource {uri: $subjectUri}) \
-                REMOVE s.`%s`""".formatted(sanitizedPredicate);
+                REMOVE s.`%s`, s.`%s__datatype`""".formatted(
+                    sanitizedPredicate, sanitizedPredicate);
         } else if (predicate.equals(RDF.type.getURI())) {
             // Special handling for rdf:type - remove label from node
             var object = nodeToString(triple.getObject());
@@ -547,6 +561,11 @@ public final class FalkorDBGraph extends GraphBase {
                 if ("uri".equals(predicateUri)) {
                     continue;
                 }
+                
+                // Skip datatype properties - they're metadata, not RDF triples
+                if (predicateUri.endsWith("__datatype")) {
+                    continue;
+                }
 
                 // Check if predicate matches pattern
                 if (pattern.getPredicate().isConcrete()) {
@@ -559,9 +578,18 @@ public final class FalkorDBGraph extends GraphBase {
                 var rawValue = entry.getValue();
                 var predicateNode = NodeFactory.createURI(predicateUri);
                 
-                // Create properly typed literal based on value type from FalkorDB
+                // Check if there's a stored datatype for this property
+                var datatypeKey = predicateUri + "__datatype";
+                var storedDatatype = properties.get(datatypeKey);
+                
+                // Create properly typed literal based on stored datatype or value type from FalkorDB
                 org.apache.jena.graph.Node object;
-                if (rawValue instanceof Long) {
+                if (storedDatatype != null && storedDatatype instanceof String) {
+                    // Use the stored datatype to reconstruct the typed literal
+                    String datatypeURI = (String) storedDatatype;
+                    var datatype = TypeMapper.getInstance().getSafeTypeByName(datatypeURI);
+                    object = NodeFactory.createLiteral(rawValue.toString(), datatype);
+                } else if (rawValue instanceof Long) {
                     // FalkorDB returns integers as Long
                     object = NodeFactory.createLiteralByValue(((Long) rawValue).intValue(), 
                         org.apache.jena.datatypes.xsd.XSDDatatype.XSDint);
@@ -833,11 +861,11 @@ public final class FalkorDBGraph extends GraphBase {
     private int graphBaseSizeInternal() {
         long count = 0;
 
-        // Count literal properties (excluding 'uri' property)
+        // Count literal properties (excluding 'uri' and '__datatype' metadata properties)
         var propsResult = graph.query("""
             MATCH (s:Resource)
             UNWIND keys(s) AS key
-            WITH key WHERE key <> 'uri'
+            WITH key WHERE key <> 'uri' AND NOT key ENDS WITH '__datatype'
             RETURN count(key) AS cnt""");
         for (var record : propsResult) {
             Object value = record.getValue("cnt");

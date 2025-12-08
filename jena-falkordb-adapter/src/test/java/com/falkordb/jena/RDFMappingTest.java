@@ -662,4 +662,58 @@ public class RDFMappingTest {
         }
         assertEquals(3, count, "Should have 3 properties");
     }
+    
+    /**
+     * Tests preservation of custom datatypes (e.g., GeoSPARQL geometry types).
+     * This is critical for ensuring geometry literals like geo:wktLiteral
+     * maintain their datatype information when stored and retrieved.
+     */
+    @Test
+    @DisplayName("Custom datatype preservation (e.g., geo:wktLiteral)")
+    public void testCustomDatatypePreservation() {
+        // Arrange
+        String wktLiteralURI = "http://www.opengis.net/ont/geosparql#wktLiteral";
+        org.apache.jena.datatypes.RDFDatatype wktDatatype = 
+            org.apache.jena.datatypes.TypeMapper.getInstance().getSafeTypeByName(wktLiteralURI);
+        
+        Resource geometry = model.createResource("http://example.org/geometry1");
+        Property hasGeometry = model.createProperty("http://www.opengis.net/ont/geosparql#asWKT");
+        
+        // Create a WKT literal with proper datatype
+        String wktValue = "POINT(-0.118 51.509)";
+        Literal wktLiteral = model.createTypedLiteral(wktValue, wktDatatype);
+        
+        // Act - Add and retrieve
+        geometry.addProperty(hasGeometry, wktLiteral);
+        
+        // Assert - Verify the literal was stored
+        assertEquals(1, model.size(), "Model should contain one triple");
+        assertTrue(model.contains(geometry, hasGeometry), "Model should contain the geometry property");
+        
+        // Assert - Verify datatype is preserved
+        Statement stmt = geometry.getProperty(hasGeometry);
+        assertNotNull(stmt, "Geometry property should be retrievable");
+        Literal retrievedLiteral = stmt.getLiteral();
+        assertEquals(wktValue, retrievedLiteral.getLexicalForm(), "WKT value should match");
+        assertEquals(wktLiteralURI, retrievedLiteral.getDatatypeURI(), 
+            "Datatype URI should be preserved as geo:wktLiteral, not xsd:string");
+        
+        // Assert - Verify via SPARQL query
+        String query = """
+            PREFIX geo: <http://www.opengis.net/ont/geosparql#>
+            PREFIX ex: <http://example.org/>
+            SELECT ?wkt WHERE {
+                ex:geometry1 geo:asWKT ?wkt .
+            }
+            """;
+        try (var qexec = QueryExecutionFactory.create(query, model)) {
+            ResultSet results = qexec.execSelect();
+            assertTrue(results.hasNext(), "SPARQL query should return results");
+            var solution = results.next();
+            Literal resultLiteral = solution.getLiteral("wkt");
+            assertEquals(wktValue, resultLiteral.getLexicalForm());
+            assertEquals(wktLiteralURI, resultLiteral.getDatatypeURI(),
+                "SPARQL query should also return correct datatype");
+        }
+    }
 }

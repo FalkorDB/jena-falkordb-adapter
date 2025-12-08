@@ -24,7 +24,7 @@ import static org.junit.jupiter.api.Assertions.*;
  *
  * <p>This test demonstrates the complete workflow from POC.md:</p>
  * <ul>
- *   <li>Starting a Fuseki server with FalkorDB backend and inference using the existing config file</li>
+ *   <li>Starting a Fuseki server with FalkorDB backend and lazy inference using the existing config file pattern</li>
  *   <li>Loading fathers_father_sample.ttl data file</li>
  *   <li>Querying for grandfather_of relationships using backward chaining rules</li>
  * </ul>
@@ -45,8 +45,8 @@ import static org.junit.jupiter.api.Assertions.*;
  * <p>This test uses the existing config-falkordb-lazy-inference.ttl file which configures:</p>
  * <ul>
  *   <li>FalkorDB as the backend (not in-memory)</li>
- *   <li>Generic Rule Reasoner with backward chaining</li>
- *   <li>Grandfather inference rule from rules/grandfather_of_bwd.rule</li>
+ *   <li>Generic Rule Reasoner with backward chaining (lazy inference)</li>
+ *   <li>Custom configuration using rules/grandfather_of_bwd.rule for this specific test</li>
  * </ul>
  *
  * <p>Prerequisites: FalkorDB must be running on localhost:6379</p>

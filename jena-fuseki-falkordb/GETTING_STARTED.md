@@ -431,13 +431,13 @@ The rule will infer:
 
 ### Using Inference Configuration
 
-Use the inference configuration file to enable rule-based reasoning:
+Use the lazy inference configuration file to enable rule-based reasoning:
 
 ```bash
 java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar --config jena-fuseki-falkordb/src/main/resources/config-falkordb-lazy-inference.ttl
 ```
 
-**Example inference configuration (`config-falkordb-lazy-inference.ttl`):**
+**Example lazy inference configuration (`config-falkordb-lazy-inference.ttl`):**
 
 ```turtle
 @prefix :        <#> .

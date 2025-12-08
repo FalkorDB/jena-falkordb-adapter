@@ -22,6 +22,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.HashSet;
@@ -80,7 +81,7 @@ public class FusekiLazyInferenceWithGeoSPARQLIntegrationTest {
     }
 
     @BeforeEach
-    public void setUp() throws Exception {
+    public void setUp() throws IOException {
         // Initialize GeoSPARQL - this enables spatial query capabilities
         // GeoSPARQLConfig.setupMemoryIndex() registers spatial functions and property functions
         // that will be available when querying the dataset
@@ -127,8 +128,18 @@ public class FusekiLazyInferenceWithGeoSPARQLIntegrationTest {
      *
      * @param resourcePath path to the rule file in classpath
      * @return list of parsed rules
+     * @throws IOException if the rule file cannot be read
+     * @throws IllegalArgumentException if the rule file is not found or path is invalid
      */
-    private List<Rule> loadRulesFromClasspath(String resourcePath) throws Exception {
+    private List<Rule> loadRulesFromClasspath(String resourcePath) throws IOException {
+        // Validate resource path to prevent path traversal attacks
+        if (resourcePath == null || resourcePath.isEmpty()) {
+            throw new IllegalArgumentException("Resource path cannot be null or empty");
+        }
+        if (resourcePath.contains("..") || resourcePath.startsWith("/")) {
+            throw new IllegalArgumentException("Invalid resource path: " + resourcePath);
+        }
+        
         try (InputStream is = getClass().getClassLoader().getResourceAsStream(resourcePath)) {
             if (is == null) {
                 throw new IllegalArgumentException("Rule file not found: " + resourcePath);

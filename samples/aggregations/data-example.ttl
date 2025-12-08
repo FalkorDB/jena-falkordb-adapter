@@ -10,7 +10,7 @@
 # People with Ages (for AVG, COUNT by type)
 # ==========================================
 
-# Students (ages 18-25)
+# Students (ages 19-23)
 ex:student1 a ex:Student ;
     foaf:name "Alice Smith" ;
     ex:age 20 .
@@ -31,7 +31,7 @@ ex:student5 a ex:Student ;
     foaf:name "Eve Wilson" ;
     ex:age 23 .
 
-# Teachers (ages 35-50)
+# Teachers (ages 38-45)
 ex:teacher1 a ex:Teacher ;
     foaf:name "Prof. Frank Miller" ;
     ex:age 45 .

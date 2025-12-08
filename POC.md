@@ -135,15 +135,15 @@ curl -G http://localhost:3330/falkor/query \
   -H "Accept: application/sparql-results+json" \
   --data-urlencode 'query=
 PREFIX ff: <http://www.semanticweb.org/ontologies/2023/1/fathers_father#>
-SELECT ?person ?father
+SELECT ?father ?child
 WHERE {
-  ?person ff:father_of ?father .
+  ?father ff:father_of ?child .
 }'
 ```
 
 **Expected Result:**
-- Abraham → Isaac
-- Isaac → Jacob
+- Abraham → Isaac (Abraham is the father of Isaac)
+- Isaac → Jacob (Isaac is the father of Jacob)
 
 ---
 

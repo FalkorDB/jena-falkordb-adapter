@@ -10,7 +10,8 @@
 #
 # The configuration uses the Generic Rule Reasoner with backward chaining rules
 # that can infer new triples based on existing data. This example includes
-# the friend_of_friend rule which infers transitive "knows" relationships.
+# the grandfather_of rule which infers grandfather relationships from
+# father_of relationships.
 #
 # To use this configuration:
 # 1. Start FalkorDB: docker run -p 6379:6379 -it --rm falkordb/falkordb:latest
@@ -18,10 +19,10 @@
 #    java -jar jena-fuseki-falkordb.jar --config config-falkordb-lazy-inference.ttl
 #
 # Example: If you have:
-#   - social:person1 social:knows social:person2
-#   - social:person2 social:knows social:person3
+#   - Abraham ff:father_of Isaac
+#   - Isaac ff:father_of Jacob
 # The rule will lazily infer (when queried):
-#   - social:person1 social:knows_transitively social:person3
+#   - Abraham ff:grandfather_of Jacob
 
 @prefix :        <#> .
 @prefix falkor:  <http://falkordb.com/jena/assembler#> .
@@ -88,7 +89,7 @@ falkor:FalkorDBModel rdfs:subClassOf ja:Model .
         # See: https://jena.apache.org/documentation/inference/
         ja:reasonerURL <http://jena.hpl.hp.com/2003/GenericRuleReasoner> ;
         # Load backward chaining rules from file for lazy inference
-        ja:rulesFrom <file:rules/friend_of_friend_bwd.rule> ;
+        ja:rulesFrom <file:rules/grandfather_of_bwd.rule> ;
     ] .
 
 # FalkorDB-backed model configuration (base model)

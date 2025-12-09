@@ -48,6 +48,8 @@ The Jena-FalkorDB adapter maps RDF triples to FalkorDB's property graph model us
 
 4. **Backtick Notation**: URIs are used directly as property names and relationship types using Cypher's backtick notation.
 
+5. **Datatype Preservation**: Custom datatypes (e.g., `geo:wktLiteral`, `xsd:dateTime`) are preserved using metadata properties with the suffix `__datatype`. These metadata properties are automatically excluded from triple counts and SPARQL query results.
+
 ---
 
 ## 1. Basic Resource with Literal Property
@@ -682,7 +684,7 @@ See: [`RDFMappingTest.testMultipleTypes()`](jena-falkordb-adapter/src/test/java/
 
 ## 6. Typed Literals
 
-RDF supports typed literals (e.g., integers, dates). These are stored with type information preserved.
+RDF supports typed literals (e.g., integers, dates, geometry data). Type information is preserved by storing the datatype URI alongside the literal value.
 
 ### RDF Triple Notation
 
@@ -708,21 +710,29 @@ ex:person1
 
 ```cypher
 MERGE (s:Resource {uri: "http://example.org/person1"})
-SET s.`http://example.org/age` = "30"
-SET s.`http://example.org/height` = "1.75"
-SET s.`http://example.org/active` = "true"
+SET s.`http://example.org/age` = 30
+SET s.`http://example.org/height` = 1.75
+SET s.`http://example.org/active` = true
 ```
 
-> **Note**: Currently, typed literals are stored as their lexical string representation. Type information is preserved through the Jena API but stored as strings in FalkorDB.
+> **Datatype Preservation**: For primitive types (integers, doubles, booleans), values are stored natively in FalkorDB. For custom datatypes (e.g., `geo:wktLiteral`, `xsd:dateTime`), the datatype URI is stored as a metadata property `<predicate>__datatype` alongside the lexical value, enabling accurate round-trip preservation.
 
 **Result Structure:**
 ```cypher
 (:Resource {
   uri: "http://example.org/person1",
-  `http://example.org/age`: "30",
-  `http://example.org/height`: "1.75",
-  `http://example.org/active`: "true"
+  `http://example.org/age`: 30,
+  `http://example.org/height`: 1.75,
+  `http://example.org/active`: true
 })
+```
+
+**Example with custom datatype (GeoSPARQL geometry):**
+```cypher
+# Storing WKT geometry literal with geo:wktLiteral datatype
+MERGE (s:Resource {uri: "http://example.org/location1"})
+SET s.`http://www.opengis.net/ont/geosparql#asWKT` = "POINT(-0.118 51.509)"
+SET s.`http://www.opengis.net/ont/geosparql#asWKT__datatype` = "http://www.opengis.net/ont/geosparql#wktLiteral"
 ```
 
 ### Fuseki curl Expression
@@ -786,24 +796,49 @@ try {
 
 | Aspect | Analysis |
 |--------|----------|
-| **Space** | ✅ Stored as string, minimal overhead |
-| **Performance** | ⚠️ Type conversion happens at read time |
-| **Indexing** | ⚠️ String comparison may not work for numeric ranges |
-| **Query** | ⚠️ FILTER comparisons may require type casting |
-| **Fidelity** | ✅ Original type information preserved through Jena |
+| **Space** | ✅ Primitive types stored natively; custom datatypes add metadata property |
+| **Performance** | ✅ Primitive types (int, double, boolean) stored as native FalkorDB types |
+| **Indexing** | ✅ Numeric types support proper ordering and range queries |
+| **Query** | ✅ Type-aware comparisons work correctly for primitive types |
+| **Fidelity** | ✅ Custom datatypes fully preserved (e.g., geo:wktLiteral, xsd:dateTime) |
+| **Custom Types** | ✅ GeoSPARQL and other custom datatypes work correctly |
 
-#### Cons Elaboration
+#### Implementation Details
 
-**Performance - Type Conversion**: Since typed literals are stored as strings, type conversion occurs on every read:
+**Primitive Type Storage**: Common XSD types (int, double, float, boolean) are stored as their native FalkorDB equivalents:
 
 ```java
-// Each call parses the string "30" to integer
-int age = person.getProperty(ageProperty).getInt();  // Conversion happens here
+// Integer stored as FalkorDB integer (not string)
+person.addProperty(age, model.createTypedLiteral(30));
+// Stored in FalkorDB as: `http://example.org/age` = 30 (integer type)
+
+// Boolean stored as FalkorDB boolean
+person.addProperty(active, model.createTypedLiteral(true));
+// Stored in FalkorDB as: `http://example.org/active` = true (boolean type)
 ```
 
-For performance-critical applications with many numeric operations, consider caching converted values.
+**Custom Datatype Preservation**: For non-primitive datatypes (geometry literals, dates, etc.), the datatype URI is stored as metadata:
 
-**Indexing - Numeric Range Queries**: String-based storage breaks numeric ordering:
+```java
+// GeoSPARQL WKT literal with geo:wktLiteral datatype
+String wktLiteralURI = "http://www.opengis.net/ont/geosparql#wktLiteral";
+RDFDatatype wktDatatype = TypeMapper.getInstance().getSafeTypeByName(wktLiteralURI);
+Literal wktLiteral = model.createTypedLiteral("POINT(-0.118 51.509)", wktDatatype);
+geometry.addProperty(hasGeometry, wktLiteral);
+
+// Stored in FalkorDB as:
+// `http://www.opengis.net/ont/geosparql#asWKT` = "POINT(-0.118 51.509)"
+// `http://www.opengis.net/ont/geosparql#asWKT__datatype` = "http://www.opengis.net/ont/geosparql#wktLiteral"
+```
+
+On retrieval, the adapter automatically reconstructs the typed literal:
+- Checks for `<predicate>__datatype` property
+- Uses `TypeMapper` to get the correct datatype
+- Creates properly typed literal with preserved datatype URI
+
+This ensures custom datatypes like `geo:wktLiteral` are preserved exactly, preventing errors during GeoSPARQL spatial index initialization.
+
+**Indexing - Numeric Range Queries**: Primitive numeric types now support proper ordering:
 
 ```turtle
 ex:product1 ex:price "9.99"^^xsd:decimal .
@@ -812,35 +847,49 @@ ex:product3 ex:price "100.00"^^xsd:decimal .
 ```
 
 ```sparql
-# This may not work as expected - string comparison!
+# Numeric comparisons work correctly
 SELECT ?product WHERE {
   ?product ex:price ?price .
-  FILTER(?price > "10.00"^^xsd:decimal)
+  FILTER(?price > 10.00)
 }
-# String "9.99" > "10.00" is TRUE (string comparison), but numerically it's FALSE
-```
-
-Workaround: Use SPARQL's numeric casting or store pre-formatted strings with zero-padding.
-
-**Query - Type Casting**: FILTER expressions may need explicit casting:
-
-```sparql
-# May fail without proper casting
-SELECT ?person WHERE {
-  ?person ex:age ?age .
-  FILTER(?age > 25)  # Comparing string to integer
-}
-
-# Correct approach with explicit cast
-SELECT ?person WHERE {
-  ?person ex:age ?age .
-  FILTER(xsd:integer(?age) > 25)
-}
+# Returns product2 and product3 correctly
 ```
 
 ### System Test
 
-See: [`RDFMappingTest.testTypedLiterals()`](jena-falkordb-adapter/src/test/java/com/falkordb/jena/RDFMappingTest.java#L332)
+See: 
+- [`RDFMappingTest.testTypedLiterals()`](jena-falkordb-adapter/src/test/java/com/falkordb/jena/RDFMappingTest.java#L332) - Tests primitive datatype preservation
+- [`RDFMappingTest.testCustomDatatypePreservation()`](jena-falkordb-adapter/src/test/java/com/falkordb/jena/RDFMappingTest.java#L677) - Tests GeoSPARQL geometry datatype preservation
+
+### GeoSPARQL Geometry Literals Example
+
+A common use case for custom datatypes is GeoSPARQL geometry data:
+
+```turtle
+@prefix geo: <http://www.opengis.net/ont/geosparql#> .
+@prefix ex: <http://example.org/> .
+
+ex:location1 geo:asWKT "POINT(-0.118 51.509)"^^geo:wktLiteral .
+```
+
+**Stored in FalkorDB:**
+```cypher
+(:Resource {
+  uri: "http://example.org/location1",
+  `http://www.opengis.net/ont/geosparql#asWKT`: "POINT(-0.118 51.509)",
+  `http://www.opengis.net/ont/geosparql#asWKT__datatype`: "http://www.opengis.net/ont/geosparql#wktLiteral"
+})
+```
+
+**Retrieved via Jena API:**
+```java
+Statement stmt = location.getProperty(hasGeometry);
+Literal wktLiteral = stmt.getLiteral();
+// wktLiteral.getDatatypeURI() returns "http://www.opengis.net/ont/geosparql#wktLiteral"
+// NOT "http://www.w3.org/2001/XMLSchema#string"
+```
+
+This preservation is critical for GeoSPARQL functionality, as the spatial index initialization scans for geometry literals and requires them to have proper geometry datatypes (not `xsd:string`).
 
 ---
 

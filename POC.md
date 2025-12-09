@@ -278,7 +278,7 @@ java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
   --config jena-fuseki-falkordb/src/main/resources/config-falkordb-lazy-inference-with-geosparql.ttl
 ```
 
-The server will start on port 3030 with the service available at `/falkor`.
+The server will start on port 3330 with the service available at `/falkor`.
 
 ### 5.3 Load Example Data (Social Network with Geographic Locations)
 

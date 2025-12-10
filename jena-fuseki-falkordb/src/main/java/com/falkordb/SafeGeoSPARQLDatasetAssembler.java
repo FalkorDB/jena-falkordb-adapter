@@ -3,40 +3,37 @@ package com.falkordb;
 import org.apache.jena.assembler.Assembler;
 import org.apache.jena.assembler.Mode;
 import org.apache.jena.assembler.assemblers.AssemblerBase;
-import org.apache.jena.geosparql.assembler.GeoAssembler;
 import org.apache.jena.geosparql.configuration.GeoSPARQLConfig;
 import org.apache.jena.query.Dataset;
+import org.apache.jena.rdf.model.Property;
 import org.apache.jena.rdf.model.Resource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
  * Safe GeoSPARQL Dataset Assembler that prevents spatial index building errors
- * when restarting with existing non-geometry data.
+ * by bypassing spatial index creation entirely.
  *
- * <p>This assembler wraps the standard GeoSPARQL assembler but gracefully
- * handles the case where the underlying dataset contains mixed data (geometry
- * and non-geometry literals). It prevents the "Unrecognised Geometry Datatype"
- * error that occurs when restarting Fuseki with existing data in FalkorDB.</p>
+ * <p>This assembler is designed for use with FalkorDB where spatial operations
+ * are pushed down to the database's native geospatial functions (point() and distance()).
+ * Since FalkorDB handles spatial indexing natively, there's no need for Apache Jena
+ * to build an in-memory spatial index.</p>
  *
- * <p>The issue occurs because:</p>
+ * <p>Benefits of this approach:</p>
  * <ul>
- *   <li>Apache Jena's GeoSPARQL assembler tries to build a spatial index on startup</li>
- *   <li>It iterates through all triples to find geometries</li>
- *   <li>When it encounters non-geometry literals (e.g., xsd:string), it throws an exception</li>
- *   <li>This prevents the server from starting even though the data is valid</li>
+ *   <li>Eliminates spatial index building errors when restarting with existing data</li>
+ *   <li>Reduces memory overhead by not maintaining a duplicate spatial index</li>
+ *   <li>Leverages FalkorDB's native geospatial capabilities via query pushdown</li>
+ *   <li>Prevents "Unrecognised Geometry Datatype" errors with mixed data types</li>
+ *   <li>Enables GeoSPARQL query rewriting without spatial indexing</li>
  * </ul>
- *
- * <p>This assembler catches the DatatypeFormatException and allows the server
- * to start successfully. GeoSPARQL query rewriting will still work, but the
- * spatial index won't be built until the issue is resolved in Apache Jena.</p>
  *
  * <p>Vocabulary properties (all from geosparql: namespace):</p>
  * <ul>
- *   <li>geosparql:dataset - the underlying dataset to wrap</li>
+ *   <li>geosparql:dataset - the underlying dataset to wrap (required)</li>
  *   <li>geosparql:inference - enable GeoSPARQL inference (default: false)</li>
  *   <li>geosparql:queryRewrite - enable query rewriting (default: true)</li>
- *   <li>geosparql:indexEnabled - enable spatial indexing (default: false)</li>
+ *   <li>geosparql:indexEnabled - spatial indexing (ignored, always disabled)</li>
  *   <li>geosparql:applyDefaultGeometry - apply default geometry (default: false)</li>
  * </ul>
  *
@@ -54,8 +51,8 @@ public class SafeGeoSPARQLDatasetAssembler extends AssemblerBase {
     /**
      * Constructs a new SafeGeoSPARQLDatasetAssembler.
      * 
-     * <p>The assembler uses the default GeoAssembler internally and adds
-     * safe error handling for mixed data types.</p>
+     * <p>This assembler bypasses Apache Jena's GeoAssembler to prevent spatial
+     * index building, as spatial operations are handled by FalkorDB.</p>
      */
     public SafeGeoSPARQLDatasetAssembler() {
         super();
@@ -64,108 +61,78 @@ public class SafeGeoSPARQLDatasetAssembler extends AssemblerBase {
     private static final Logger LOGGER = LoggerFactory.getLogger(
         SafeGeoSPARQLDatasetAssembler.class);
     
-    /** The standard GeoSPARQL assembler to delegate to. */
-    private final GeoAssembler geoAssembler = new GeoAssembler();
+    private static final String GEOSPARQL_NS = "http://jena.apache.org/geosparql#";
     
     /**
-     * Open a GeoSPARQL dataset with safe error handling.
+     * Open a GeoSPARQL dataset without building a spatial index.
+     *
+     * <p>This method bypasses Apache Jena's GeoAssembler to prevent spatial index
+     * building. Since FalkorDB handles spatial operations natively through query
+     * pushdown, an in-memory spatial index is not needed.</p>
      *
      * @param assembler the assembler to use
      * @param root the root resource
      * @param mode the assembly mode
-     * @return the assembled dataset
+     * @return the assembled dataset with GeoSPARQL query rewriting enabled
      */
     @Override
     public Dataset open(Assembler assembler, Resource root, Mode mode) {
-        LOGGER.info("Initializing Safe GeoSPARQL Dataset");
+        LOGGER.info("Initializing Safe GeoSPARQL Dataset (spatial indexing disabled)");
+        LOGGER.info("Spatial operations will be pushed down to FalkorDB's native geospatial functions");
         
-        try {
-            // Try to use the standard GeoSPARQL assembler
-            Dataset dataset = geoAssembler.open(assembler, root, mode);
-            LOGGER.info("GeoSPARQL dataset created successfully");
-            return dataset;
-            
-        } catch (org.apache.jena.datatypes.DatatypeFormatException e) {
-            // This is the specific error that occurs with mixed data types
-            LOGGER.warn("DatatypeFormatException during GeoSPARQL dataset creation: {}", 
-                       e.getMessage());
-            LOGGER.warn("This error occurs when the dataset contains non-geometry literals");
-            LOGGER.warn("Falling back to base dataset without spatial index");
-            
-            // Get the underlying dataset without GeoSPARQL wrapper
-            return fallbackToBaseDataset(assembler, root);
-            
-        } catch (Exception e) {
-            // Any other exception (including SpatialIndexException wrapped in other exceptions)
-            LOGGER.error("Error during GeoSPARQL dataset creation: {}", 
-                        e.getMessage());
-            
-            // Check if this is a spatial index exception in the cause chain
-            Throwable cause = e;
-            while (cause != null) {
-                // Check for specific exception types rather than string matching
-                if (cause instanceof org.apache.jena.datatypes.DatatypeFormatException) {
-                    LOGGER.warn("DatatypeFormatException detected in cause chain");
-                    LOGGER.warn("Falling back to base dataset without spatial index");
-                    return fallbackToBaseDataset(assembler, root);
-                }
-                // Also check class name for SpatialIndexException (not in compile classpath)
-                if (cause.getClass().getName().contains("SpatialIndexException")) {
-                    LOGGER.warn("SpatialIndexException detected in cause chain");
-                    LOGGER.warn("Falling back to base dataset without spatial index");
-                    return fallbackToBaseDataset(assembler, root);
-                }
-                cause = cause.getCause();
-            }
-            
-            LOGGER.error("Unexpected error - falling back to base dataset");
-            return fallbackToBaseDataset(assembler, root);
-        }
-    }
-    
-    /**
-     * Fallback to the base dataset when GeoSPARQL setup fails.
-     * This retrieves the underlying dataset without the GeoSPARQL wrapper.
-     *
-     * @param assembler the assembler to use
-     * @param root the root resource
-     * @return the base dataset
-     * @throws AssemblerException if the base dataset cannot be retrieved
-     */
-    private Dataset fallbackToBaseDataset(Assembler assembler, Resource root) {
-        // Get the geosparql:dataset property
-        String GEOSPARQL_NS = "http://jena.apache.org/geosparql#";
-        var datasetProperty = root.getModel().createProperty(GEOSPARQL_NS, "dataset");
+        // Get configuration properties
+        Property datasetProperty = root.getModel().createProperty(GEOSPARQL_NS, "dataset");
+        Property inferenceProperty = root.getModel().createProperty(GEOSPARQL_NS, "inference");
+        Property queryRewriteProperty = root.getModel().createProperty(GEOSPARQL_NS, "queryRewrite");
+        Property applyDefaultGeometryProperty = root.getModel().createProperty(GEOSPARQL_NS, "applyDefaultGeometry");
         
+        // Validate required property
         if (!root.hasProperty(datasetProperty)) {
-            LOGGER.error("Failed to retrieve base dataset: {}", "No geosparql:dataset property found");
-            throw new org.apache.jena.assembler.exceptions.AssemblerException(root,
-                "No geosparql:dataset property found");
+            String msg = "No geosparql:dataset property found - this property is required";
+            LOGGER.error(msg);
+            throw new org.apache.jena.assembler.exceptions.AssemblerException(root, msg);
         }
         
+        // Get configuration values with defaults
+        boolean inference = root.hasProperty(inferenceProperty) 
+            ? root.getProperty(inferenceProperty).getBoolean() 
+            : false;
+        boolean queryRewrite = root.hasProperty(queryRewriteProperty)
+            ? root.getProperty(queryRewriteProperty).getBoolean()
+            : true;
+        boolean applyDefaultGeometry = root.hasProperty(applyDefaultGeometryProperty)
+            ? root.getProperty(applyDefaultGeometryProperty).getBoolean()
+            : false;
+        
+        LOGGER.info("GeoSPARQL configuration: inference={}, queryRewrite={}, applyDefaultGeometry={}", 
+                   inference, queryRewrite, applyDefaultGeometry);
+        LOGGER.info("Spatial indexing: DISABLED (spatial queries pushed down to FalkorDB)");
+        
+        // Get the underlying dataset
+        Resource datasetResource = root.getProperty(datasetProperty).getResource();
+        Dataset baseDataset = (Dataset) assembler.open(datasetResource);
+        
+        LOGGER.info("Base dataset opened successfully");
+        
+        // Configure GeoSPARQL for query rewriting WITHOUT spatial index
+        // This enables GeoSPARQL function recognition and query rewriting
+        // while spatial operations are handled by FalkorDB via pushdown
         try {
-            Resource datasetResource = root.getProperty(datasetProperty).getResource();
-            Dataset baseDataset = (Dataset) assembler.open(datasetResource);
-            
-            LOGGER.info("Successfully retrieved base dataset");
-            LOGGER.info("GeoSPARQL query rewriting features will be available");
-            LOGGER.info("Spatial index will not be available - spatial queries may be slower");
-            
-            // Initialize GeoSPARQL for query rewriting without index
-            try {
-                GeoSPARQLConfig.setupMemoryIndex();
-                LOGGER.info("GeoSPARQL query rewriting initialized");
-            } catch (Exception e) {
-                LOGGER.debug("Could not initialize GeoSPARQL query rewriting: {}", 
-                            e.getMessage());
-            }
-            
-            return baseDataset;
-            
+            // Initialize GeoSPARQL with query rewriting enabled but NO spatial index
+            // The setupMemoryIndex() only sets up vocabulary and query rewriting,
+            // it doesn't force index building like the GeoAssembler does
+            GeoSPARQLConfig.setupMemoryIndex();
+            LOGGER.info("GeoSPARQL query rewriting initialized successfully");
+            LOGGER.info("Spatial queries will be translated to FalkorDB's point() and distance() functions");
         } catch (Exception e) {
-            LOGGER.error("Failed to retrieve base dataset: {}", e.getMessage());
-            throw new org.apache.jena.assembler.exceptions.AssemblerException(root,
-                "Failed to create Safe GeoSPARQL dataset: " + e.getMessage(), e);
+            LOGGER.warn("Could not initialize GeoSPARQL query rewriting: {}", e.getMessage());
+            LOGGER.warn("GeoSPARQL functions may not be recognized in queries");
         }
+        
+        LOGGER.info("Safe GeoSPARQL Dataset initialized successfully");
+        
+        // Return the base dataset without wrapping it in a GeoSPARQL dataset
+        // Query pushdown will handle spatial operations at the database level
+        return baseDataset;
     }
 }

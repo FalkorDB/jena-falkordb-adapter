@@ -35,9 +35,15 @@ import java.util.regex.Pattern;
  *
  * <h2>Supported Geometry Types:</h2>
  * <ul>
- *   <li>POINT - Translated to {@code point({latitude: lat, longitude: lon})}</li>
- *   <li>POLYGON - Bounding box extracted for range queries</li>
+ *   <li>POINT - Exact coordinates translated to {@code point({latitude: lat, longitude: lon})}</li>
+ *   <li>POLYGON - Bounding box center point used as approximation</li>
+ *   <li>LINESTRING - Bounding box center point used as approximation</li>
+ *   <li>MULTIPOINT - Bounding box center point used as approximation</li>
  * </ul>
+ * 
+ * <p><b>Note:</b> For complex geometries (POLYGON, LINESTRING, MULTIPOINT), the adapter calculates
+ * the complete bounding box (min/max latitude/longitude) and uses the center point as a representative
+ * location. The bounding box parameters are stored and can be used for range queries.</p>
  *
  * <h2>Example Translations:</h2>
  * <pre>{@code
@@ -90,6 +96,16 @@ public final class GeoSPARQLToCypherTranslator {
     /** Pattern for extracting POLYGON bounding box from WKT. */
     private static final Pattern POLYGON_PATTERN =
         Pattern.compile("POLYGON\\s*\\(\\s*\\((.+?)\\)\\s*\\)",
+            Pattern.CASE_INSENSITIVE);
+
+    /** Pattern for extracting LINESTRING coordinates from WKT. */
+    private static final Pattern LINESTRING_PATTERN =
+        Pattern.compile("LINESTRING\\s*\\((.+?)\\)",
+            Pattern.CASE_INSENSITIVE);
+
+    /** Pattern for extracting MULTIPOINT coordinates from WKT. */
+    private static final Pattern MULTIPOINT_PATTERN =
+        Pattern.compile("MULTIPOINT\\s*\\((.+?)\\)",
             Pattern.CASE_INSENSITIVE);
 
     /**
@@ -325,6 +341,9 @@ public final class GeoSPARQLToCypherTranslator {
 
     /**
      * Parses a WKT string and returns a Cypher point() expression.
+     * 
+     * <p>For complex geometries (POLYGON, LINESTRING, MULTIPOINT), this method
+     * calculates the center point of the bounding box as an approximation.</p>
      *
      * @param wkt the WKT string
      * @param varPrefix variable prefix for parameter names
@@ -333,74 +352,330 @@ public final class GeoSPARQLToCypherTranslator {
      */
     public static String parseWKTToPoint(String wkt, String varPrefix,
                                          java.util.Map<String, Object> params) {
-        // Try to parse as POINT
-        Matcher pointMatcher = POINT_PATTERN.matcher(wkt);
-        if (pointMatcher.find()) {
-            double lon = Double.parseDouble(pointMatcher.group(1));
-            double lat = Double.parseDouble(pointMatcher.group(2));
+        Span span = TRACER.spanBuilder("GeoSPARQLToCypherTranslator.parseWKTToPoint")
+            .setSpanKind(SpanKind.INTERNAL)
+            .startSpan();
 
-            String latParam = varPrefix + "_lat";
-            String lonParam = varPrefix + "_lon";
+        try (Scope scope = span.makeCurrent()) {
+            // Try to parse as POINT
+            Matcher pointMatcher = POINT_PATTERN.matcher(wkt);
+            if (pointMatcher.find()) {
+                double lon = Double.parseDouble(pointMatcher.group(1));
+                double lat = Double.parseDouble(pointMatcher.group(2));
 
-            params.put(latParam, lat);
-            params.put(lonParam, lon);
+                span.setAttribute(ATTR_GEOMETRY_TYPE, "POINT");
+                return createPointExpression(lat, lon, varPrefix, params, span);
+            }
 
-            return "point({latitude: $" + latParam + ", longitude: $" + lonParam + "})";
+            // Try to parse as POLYGON and extract bounding box center
+            Matcher polygonMatcher = POLYGON_PATTERN.matcher(wkt);
+            if (polygonMatcher.find()) {
+                String coords = polygonMatcher.group(1);
+                BoundingBox bbox = calculateBoundingBox(coords);
+                
+                if (bbox != null) {
+                    span.setAttribute(ATTR_GEOMETRY_TYPE, "POLYGON");
+                    double centerLat = (bbox.minLat + bbox.maxLat) / 2.0;
+                    double centerLon = (bbox.minLon + bbox.maxLon) / 2.0;
+                    
+                    // Store bounding box parameters for potential range queries
+                    params.put(varPrefix + "_minLat", bbox.minLat);
+                    params.put(varPrefix + "_maxLat", bbox.maxLat);
+                    params.put(varPrefix + "_minLon", bbox.minLon);
+                    params.put(varPrefix + "_maxLon", bbox.maxLon);
+                    
+                    return createPointExpression(centerLat, centerLon, varPrefix, params, span);
+                }
+            }
+
+            // Try to parse as LINESTRING and extract bounding box center
+            Matcher linestringMatcher = LINESTRING_PATTERN.matcher(wkt);
+            if (linestringMatcher.find()) {
+                String coords = linestringMatcher.group(1);
+                BoundingBox bbox = calculateBoundingBox(coords);
+                
+                if (bbox != null) {
+                    span.setAttribute(ATTR_GEOMETRY_TYPE, "LINESTRING");
+                    double centerLat = (bbox.minLat + bbox.maxLat) / 2.0;
+                    double centerLon = (bbox.minLon + bbox.maxLon) / 2.0;
+                    
+                    // Store bounding box parameters
+                    params.put(varPrefix + "_minLat", bbox.minLat);
+                    params.put(varPrefix + "_maxLat", bbox.maxLat);
+                    params.put(varPrefix + "_minLon", bbox.minLon);
+                    params.put(varPrefix + "_maxLon", bbox.maxLon);
+                    
+                    return createPointExpression(centerLat, centerLon, varPrefix, params, span);
+                }
+            }
+
+            // Try to parse as MULTIPOINT and extract bounding box center
+            Matcher multipointMatcher = MULTIPOINT_PATTERN.matcher(wkt);
+            if (multipointMatcher.find()) {
+                String coords = multipointMatcher.group(1);
+                // MULTIPOINT format can be: (lon1 lat1), (lon2 lat2) or lon1 lat1, lon2 lat2
+                // Remove parentheses for uniform parsing
+                coords = coords.replaceAll("[()]", "");
+                BoundingBox bbox = calculateBoundingBox(coords);
+                
+                if (bbox != null) {
+                    span.setAttribute(ATTR_GEOMETRY_TYPE, "MULTIPOINT");
+                    double centerLat = (bbox.minLat + bbox.maxLat) / 2.0;
+                    double centerLon = (bbox.minLon + bbox.maxLon) / 2.0;
+                    
+                    // Store bounding box parameters
+                    params.put(varPrefix + "_minLat", bbox.minLat);
+                    params.put(varPrefix + "_maxLat", bbox.maxLat);
+                    params.put(varPrefix + "_minLon", bbox.minLon);
+                    params.put(varPrefix + "_maxLon", bbox.maxLon);
+                    
+                    return createPointExpression(centerLat, centerLon, varPrefix, params, span);
+                }
+            }
+
+            LOGGER.warn("Failed to parse WKT geometry: {}", wkt);
+            span.setStatus(StatusCode.ERROR, "Unsupported WKT format");
+            return null;
+            
+        } catch (Exception e) {
+            span.recordException(e);
+            span.setStatus(StatusCode.ERROR, e.getMessage());
+            LOGGER.error("Error parsing WKT geometry: {}", wkt, e);
+            return null;
+        } finally {
+            span.end();
+        }
+    }
+
+    /**
+     * Creates a Cypher point() expression with parameters.
+     *
+     * @param lat latitude
+     * @param lon longitude
+     * @param varPrefix variable prefix for parameter names
+     * @param params parameter map to populate
+     * @param span tracing span to add attributes to
+     * @return Cypher point() expression
+     */
+    private static String createPointExpression(double lat, double lon, String varPrefix,
+                                               java.util.Map<String, Object> params, Span span) {
+        String latParam = varPrefix + "_lat";
+        String lonParam = varPrefix + "_lon";
+
+        params.put(latParam, lat);
+        params.put(lonParam, lon);
+
+        span.setAttribute("falkordb.geospatial.latitude", lat);
+        span.setAttribute("falkordb.geospatial.longitude", lon);
+        span.setStatus(StatusCode.OK);
+
+        return "point({latitude: $" + latParam + ", longitude: $" + lonParam + "})";
+    }
+
+    /**
+     * Calculates the bounding box from a coordinate string.
+     * 
+     * <p>The coordinate string should contain space-separated lon/lat pairs,
+     * with pairs separated by commas.</p>
+     *
+     * @param coords coordinate string (e.g., "lon1 lat1, lon2 lat2, lon3 lat3")
+     * @return bounding box with min/max lat/lon, or null if parsing fails
+     */
+    private static BoundingBox calculateBoundingBox(String coords) {
+        String[] points = coords.split(",");
+        if (points.length == 0) {
+            return null;
         }
 
-        // Try to parse as POLYGON and extract center point
-        Matcher polygonMatcher = POLYGON_PATTERN.matcher(wkt);
-        if (polygonMatcher.find()) {
-            String coords = polygonMatcher.group(1);
-            String[] points = coords.split(",");
+        double minLat = Double.MAX_VALUE;
+        double maxLat = Double.MIN_VALUE;
+        double minLon = Double.MAX_VALUE;
+        double maxLon = Double.MIN_VALUE;
 
-            if (points.length > 0) {
-                // Extract first point as approximation
-                String[] firstPoint = points[0].trim().split("\\s+");
-                if (firstPoint.length >= 2) {
-                    double lon = Double.parseDouble(firstPoint[0]);
-                    double lat = Double.parseDouble(firstPoint[1]);
+        for (String point : points) {
+            String[] parts = point.trim().split("\\s+");
+            if (parts.length >= 2) {
+                try {
+                    double lon = Double.parseDouble(parts[0]);
+                    double lat = Double.parseDouble(parts[1]);
 
-                    String latParam = varPrefix + "_lat";
-                    String lonParam = varPrefix + "_lon";
-
-                    params.put(latParam, lat);
-                    params.put(lonParam, lon);
-
-                    return "point({latitude: $" + latParam + ", longitude: $" + lonParam + "})";
+                    minLat = Math.min(minLat, lat);
+                    maxLat = Math.max(maxLat, lat);
+                    minLon = Math.min(minLon, lon);
+                    maxLon = Math.max(maxLon, lon);
+                } catch (NumberFormatException e) {
+                    LOGGER.warn("Failed to parse coordinate pair: {}", point);
                 }
             }
         }
 
-        LOGGER.warn("Failed to parse WKT geometry: {}", wkt);
-        return null;
+        // Validate we found at least one valid point
+        if (minLat == Double.MAX_VALUE || maxLat == Double.MIN_VALUE) {
+            return null;
+        }
+
+        return new BoundingBox(minLat, maxLat, minLon, maxLon);
     }
 
     /**
-     * Extracts latitude from a WKT POINT string.
+     * Represents a geographic bounding box.
+     */
+    private static class BoundingBox {
+        final double minLat;
+        final double maxLat;
+        final double minLon;
+        final double maxLon;
+
+        BoundingBox(double minLat, double maxLat, double minLon, double maxLon) {
+            this.minLat = minLat;
+            this.maxLat = maxLat;
+            this.minLon = minLon;
+            this.maxLon = maxLon;
+        }
+    }
+
+    /**
+     * Extracts latitude from a WKT geometry string.
+     * 
+     * <p>For POINT geometries, returns the exact latitude.
+     * For complex geometries (POLYGON, LINESTRING, MULTIPOINT), returns
+     * the center latitude of the bounding box.</p>
      *
      * @param wkt the WKT string
-     * @return the latitude, or null if parsing fails
+     * @return the latitude (or center latitude for complex geometries), or null if parsing fails
      */
     public static Double extractLatitude(String wkt) {
+        // Try POINT first
         Matcher matcher = POINT_PATTERN.matcher(wkt);
         if (matcher.find()) {
             return Double.parseDouble(matcher.group(2));
         }
+
+        // Try POLYGON
+        Matcher polygonMatcher = POLYGON_PATTERN.matcher(wkt);
+        if (polygonMatcher.find()) {
+            BoundingBox bbox = calculateBoundingBox(polygonMatcher.group(1));
+            if (bbox != null) {
+                return (bbox.minLat + bbox.maxLat) / 2.0;
+            }
+        }
+
+        // Try LINESTRING
+        Matcher linestringMatcher = LINESTRING_PATTERN.matcher(wkt);
+        if (linestringMatcher.find()) {
+            BoundingBox bbox = calculateBoundingBox(linestringMatcher.group(1));
+            if (bbox != null) {
+                return (bbox.minLat + bbox.maxLat) / 2.0;
+            }
+        }
+
+        // Try MULTIPOINT
+        Matcher multipointMatcher = MULTIPOINT_PATTERN.matcher(wkt);
+        if (multipointMatcher.find()) {
+            String coords = multipointMatcher.group(1).replaceAll("[()]", "");
+            BoundingBox bbox = calculateBoundingBox(coords);
+            if (bbox != null) {
+                return (bbox.minLat + bbox.maxLat) / 2.0;
+            }
+        }
+
         return null;
     }
 
     /**
-     * Extracts longitude from a WKT POINT string.
+     * Extracts longitude from a WKT geometry string.
+     * 
+     * <p>For POINT geometries, returns the exact longitude.
+     * For complex geometries (POLYGON, LINESTRING, MULTIPOINT), returns
+     * the center longitude of the bounding box.</p>
      *
      * @param wkt the WKT string
-     * @return the longitude, or null if parsing fails
+     * @return the longitude (or center longitude for complex geometries), or null if parsing fails
      */
     public static Double extractLongitude(String wkt) {
+        // Try POINT first
         Matcher matcher = POINT_PATTERN.matcher(wkt);
         if (matcher.find()) {
             return Double.parseDouble(matcher.group(1));
         }
+
+        // Try POLYGON
+        Matcher polygonMatcher = POLYGON_PATTERN.matcher(wkt);
+        if (polygonMatcher.find()) {
+            BoundingBox bbox = calculateBoundingBox(polygonMatcher.group(1));
+            if (bbox != null) {
+                return (bbox.minLon + bbox.maxLon) / 2.0;
+            }
+        }
+
+        // Try LINESTRING
+        Matcher linestringMatcher = LINESTRING_PATTERN.matcher(wkt);
+        if (linestringMatcher.find()) {
+            BoundingBox bbox = calculateBoundingBox(linestringMatcher.group(1));
+            if (bbox != null) {
+                return (bbox.minLon + bbox.maxLon) / 2.0;
+            }
+        }
+
+        // Try MULTIPOINT
+        Matcher multipointMatcher = MULTIPOINT_PATTERN.matcher(wkt);
+        if (multipointMatcher.find()) {
+            String coords = multipointMatcher.group(1).replaceAll("[()]", "");
+            BoundingBox bbox = calculateBoundingBox(coords);
+            if (bbox != null) {
+                return (bbox.minLon + bbox.maxLon) / 2.0;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Extracts the bounding box from a WKT geometry string.
+     * 
+     * <p>Returns a double array with [minLat, maxLat, minLon, maxLon].</p>
+     *
+     * @param wkt the WKT string
+     * @return bounding box as [minLat, maxLat, minLon, maxLon], or null if parsing fails
+     */
+    public static double[] extractBoundingBox(String wkt) {
+        BoundingBox bbox = null;
+
+        // Try POINT
+        Matcher pointMatcher = POINT_PATTERN.matcher(wkt);
+        if (pointMatcher.find()) {
+            double lon = Double.parseDouble(pointMatcher.group(1));
+            double lat = Double.parseDouble(pointMatcher.group(2));
+            return new double[]{lat, lat, lon, lon};
+        }
+
+        // Try POLYGON
+        Matcher polygonMatcher = POLYGON_PATTERN.matcher(wkt);
+        if (polygonMatcher.find()) {
+            bbox = calculateBoundingBox(polygonMatcher.group(1));
+        }
+
+        // Try LINESTRING
+        if (bbox == null) {
+            Matcher linestringMatcher = LINESTRING_PATTERN.matcher(wkt);
+            if (linestringMatcher.find()) {
+                bbox = calculateBoundingBox(linestringMatcher.group(1));
+            }
+        }
+
+        // Try MULTIPOINT
+        if (bbox == null) {
+            Matcher multipointMatcher = MULTIPOINT_PATTERN.matcher(wkt);
+            if (multipointMatcher.find()) {
+                String coords = multipointMatcher.group(1).replaceAll("[()]", "");
+                bbox = calculateBoundingBox(coords);
+            }
+        }
+
+        if (bbox != null) {
+            return new double[]{bbox.minLat, bbox.maxLat, bbox.minLon, bbox.maxLon};
+        }
+
         return null;
     }
 }

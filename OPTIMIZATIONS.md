@@ -945,8 +945,8 @@ The magic property unwraps the InfGraph to access the underlying FalkorDB graph,
 ### Testing
 
 Inference integration is tested in:
-- [FusekiInferenceIntegrationTest.java](jena-fuseki-falkordb/src/test/java/com/falkordb/FusekiInferenceIntegrationTest.java)
-- [FusekiLazyInferenceIntegrationTest.java](jena-fuseki-falkordb/src/test/java/com/falkordb/FusekiLazyInferenceIntegrationTest.java)
+- [GrandfatherInferenceSystemTest.java](jena-fuseki-falkordb/src/test/java/com/falkordb/GrandfatherInferenceSystemTest.java) - Forward chaining inference
+- [FusekiLazyInferenceGeoSPARQLConfigTest.java](jena-fuseki-falkordb/src/test/java/com/falkordb/FusekiLazyInferenceGeoSPARQLConfigTest.java) - GeoSPARQL with forward inference
 
 ## Best Practices
 

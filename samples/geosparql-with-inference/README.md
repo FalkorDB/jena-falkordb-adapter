@@ -92,7 +92,7 @@ Or use Fuseki's web UI at `http://localhost:3030` to upload the file.
 
 The `queries.sparql` file contains 10 example queries demonstrating different combinations of inference and spatial queries.
 
-#### Example 1: Find Transitive Friends with Locations
+#### Example 1: Find Direct Friends with Locations
 
 ```sparql
 PREFIX social: <http://example.org/social#>
@@ -102,7 +102,7 @@ PREFIX ex:     <http://example.org/>
 SELECT ?person1Name ?person2Name ?location
 WHERE {
   ?person1 ex:name ?person1Name ;
-           social:knows_transitively ?person2 .  # Uses lazy inference
+           social:knows ?person2 .  # Direct relationships
   ?person2 ex:name ?person2Name ;
            geo:hasGeometry ?geom .
   ?geom geo:asWKT ?location .                     # GeoSPARQL location
@@ -111,22 +111,22 @@ WHERE {
 ORDER BY ?person2Name
 ```
 
-**Result**: Returns all of Alice's transitive friends (Carol, Dave, Eve) with their geographic locations.
+**Result**: Returns Alice's direct friends (Bob) with their geographic locations.
 
-#### Example 2: Check Transitive Connection
+#### Example 2: Check Direct Connection
 
 ```sparql
 PREFIX social: <http://example.org/social#>
 PREFIX ex:     <http://example.org/>
 
 ASK {
-  ex:alice social:knows_transitively ex:eve .
+  ex:alice social:knows ex:bob .
 }
 ```
 
-**Result**: `true` - Eve is in Alice's extended network via Bob and Dave.
+**Result**: `true` - Bob is Alice's direct friend.
 
-#### Example 3: People in Extended Network with Occupations
+#### Example 3: People with Occupations and Locations
 
 ```sparql
 PREFIX social: <http://example.org/social#>
@@ -136,7 +136,7 @@ PREFIX ex:     <http://example.org/>
 SELECT ?sourceName ?friendName ?occupation ?location
 WHERE {
   ?source ex:name ?sourceName ;
-          social:knows_transitively ?friend .
+          social:knows ?friend .
   ?friend ex:name ?friendName ;
           ex:occupation ?occupation ;
           geo:hasGeometry ?geom .
@@ -145,7 +145,7 @@ WHERE {
 ORDER BY ?sourceName ?friendName
 ```
 
-**Result**: All transitive relationships with occupation and location information.
+**Result**: Direct relationships with occupation and location information.
 
 ### Query via HTTP
 
@@ -160,15 +160,15 @@ curl -X POST http://localhost:3030/falkor/query \
 
 ## Key Features Demonstrated
 
-### 1. Lazy Inference (Backward Chaining)
+### 1. Forward Inference (Eager Materialization)
 
-The `friend_of_friend_bwd.rule` enables transitive queries:
+The `grandfather_of_fwd.rule` enables eager materialization of inferred relationships:
 
 ```
-[rule: (?a social:knows ?b), (?b social:knows ?c) -> (?a social:knows_transitively ?c)]
+[rule: (?a :father_of ?b), (?b :father_of ?c) -> (?a :grandfather_of ?c)]
 ```
 
-This computes transitive relationships **on-demand** when queried, not upfront.
+Relationships are materialized **immediately** when base triples are added (forward chaining).
 
 ### 2. GeoSPARQL Capabilities
 
@@ -182,14 +182,14 @@ This computes transitive relationships **on-demand** when queried, not upfront.
 Queries can mix both paradigms:
 
 ```sparql
-# Find friends (inference) with their locations (spatial)
-?person1 social:knows_transitively ?person2 .  # Inference
-?person2 geo:hasGeometry ?geom .                # Spatial
+# Find friends with their locations (spatial)
+?person1 social:knows ?person2 .  # Direct relationships
+?person2 geo:hasGeometry ?geom .  # Spatial
 ```
 
 ## Performance Considerations
 
-- **Lazy inference**: Rules are evaluated only when the `knows_transitively` predicate is queried
+- **Forward inference**: Inferred relationships are materialized immediately when data is inserted
 - **Spatial indexing**: Enabled for efficient geometric operations
 - **FalkorDB backend**: Provides persistent storage and graph query optimization
 
@@ -197,7 +197,7 @@ Queries can mix both paradigms:
 
 ### Custom Rules
 
-You can modify `rules/friend_of_friend_bwd.rule` to add custom inference rules:
+You can modify `rules/grandfather_of_fwd.rule` or add custom forward chaining rules:
 
 ```
 # Example: Infer colleague relationships
@@ -230,6 +230,8 @@ The system test `FusekiLazyInferenceGeoSPARQLConfigTest.java` provides additiona
 ```bash
 mvn test -pl jena-fuseki-falkordb -Dtest=FusekiLazyInferenceGeoSPARQLConfigTest
 ```
+
+> **Note**: Despite the test name containing "Lazy", it has been updated to test forward chaining inference with the unified config-falkordb.ttl configuration.
 
 ## Troubleshooting
 

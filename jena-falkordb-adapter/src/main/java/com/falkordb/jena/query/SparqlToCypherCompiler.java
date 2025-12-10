@@ -291,8 +291,10 @@ public final class SparqlToCypherCompiler {
             .anyMatch(t -> t.getPredicate().isVariable());
         
         if (hasVariablePredicate) {
-            throw new CannotCompileException(
-                "Variable predicates in OPTIONAL patterns not yet supported");
+            // Support variable predicates in OPTIONAL using UNION-based approach
+            return translateWithOptionalVariablePredicates(
+                requiredBGP, optionalBGP, filterExpr, requiredResult, 
+                parameters, variableMapping, allVariables, nodeVariables, declaredNodes);
         }
         
         // Identify which variables in the optional pattern are resources (used as subjects)
@@ -1638,6 +1640,275 @@ public final class SparqlToCypherCompiler {
                 query);
         }
 
+        return new CompilationResult(query, parameters, variableMapping);
+    }
+
+    /**
+     * Translate OPTIONAL pattern with variable predicates to Cypher.
+     * 
+     * <p>This method handles SPARQL OPTIONAL patterns that contain variable predicates
+     * by creating a UNION query that matches relationships, properties, and types
+     * using OPTIONAL MATCH clauses.</p>
+     * 
+     * <h3>Example:</h3>
+     * <pre>{@code
+     * // SPARQL:
+     * // SELECT ?person ?p ?o WHERE {
+     * //   ?person rdf:type foaf:Person .
+     * //   OPTIONAL { ?person ?p ?o }
+     * // }
+     * 
+     * // Compiled Cypher (three-part UNION):
+     * // MATCH (person:Resource:`http://xmlns.com/foaf/0.1/Person`)
+     * // OPTIONAL MATCH (person)-[_r]->(o:Resource)
+     * // RETURN person.uri AS person, type(_r) AS p, o.uri AS o
+     * // UNION ALL
+     * // MATCH (person:Resource:`http://xmlns.com/foaf/0.1/Person`)
+     * // OPTIONAL MATCH (person)
+     * // UNWIND keys(person) AS _propKey
+     * // WITH person, _propKey WHERE _propKey <> 'uri'
+     * // RETURN person.uri AS person, _propKey AS p, person[_propKey] AS o
+     * // UNION ALL
+     * // MATCH (person:Resource:`http://xmlns.com/foaf/0.1/Person`)
+     * // OPTIONAL MATCH (person)
+     * // UNWIND labels(person) AS _label
+     * // WITH person, _label WHERE _label <> 'Resource'
+     * // RETURN person.uri AS person, 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type' AS p, _label AS o
+     * }</pre>
+     *
+     * @param requiredBGP the required basic graph pattern
+     * @param optionalBGP the optional basic graph pattern with variable predicates
+     * @param filterExpr optional filter expression (may be null)
+     * @param requiredResult the compiled result for the required pattern
+     * @param parameters the parameters map to add to
+     * @param variableMapping the variable mapping to add to
+     * @param allVariables all variables from both patterns
+     * @param nodeVariables variables that represent nodes
+     * @param declaredNodes nodes that have been declared
+     * @return the compilation result containing Cypher query and metadata
+     * @throws CannotCompileException if the pattern cannot be compiled
+     */
+    private static CompilationResult translateWithOptionalVariablePredicates(
+            final BasicPattern requiredBGP,
+            final BasicPattern optionalBGP,
+            final Expr filterExpr,
+            final CompilationResult requiredResult,
+            final Map<String, Object> parameters,
+            final Map<String, String> variableMapping,
+            final Set<String> allVariables,
+            final Set<String> nodeVariables,
+            final Set<String> declaredNodes)
+            throws CannotCompileException {
+        
+        List<Triple> optionalTriples = optionalBGP.getList();
+        
+        // For now, only support single triple with variable predicate in OPTIONAL
+        if (optionalTriples.size() != 1) {
+            throw new CannotCompileException(
+                "Multiple triples with variable predicates in OPTIONAL not yet supported");
+        }
+        
+        Triple triple = optionalTriples.get(0);
+        
+        // Ensure predicate is variable
+        if (!triple.getPredicate().isVariable()) {
+            throw new CannotCompileException(
+                "Expected variable predicate in OPTIONAL pattern");
+        }
+        
+        // Get required query parts (remove RETURN clause)
+        String requiredQuery = requiredResult.cypherQuery();
+        int returnIndex = requiredQuery.lastIndexOf("\nRETURN");
+        if (returnIndex < 0) {
+            throw new CannotCompileException(
+                "Could not find RETURN clause in required pattern");
+        }
+        String requiredMatches = requiredQuery.substring(0, returnIndex);
+        
+        // Add FILTER clause if present
+        if (filterExpr != null) {
+            int paramCounter = parameters.size();
+            String filterCypher = translateFilterExpr(filterExpr, variableMapping, nodeVariables, parameters, paramCounter);
+            if (filterCypher != null && !filterCypher.isEmpty()) {
+                if (requiredMatches.contains("\nWHERE ")) {
+                    requiredMatches = requiredMatches + " AND " + filterCypher;
+                } else {
+                    requiredMatches = requiredMatches + "\nWHERE " + filterCypher;
+                }
+            }
+        }
+        
+        int paramCounter = parameters.size();
+        String subjectVar = getNodeVariable(triple.getSubject());
+        String predicateVar = triple.getPredicate().getName();
+        String objectVar = getNodeVariable(triple.getObject());
+        
+        // Add optional triple's variables to the sets
+        allVariables.add(predicateVar);
+        if (triple.getObject().isVariable()) {
+            allVariables.add(triple.getObject().getName());
+            nodeVariables.add(objectVar);
+        }
+        if (triple.getSubject().isVariable()) {
+            allVariables.add(triple.getSubject().getName());
+        }
+        
+        // Store parameter name for reuse in Parts 2 and 3
+        String subjectParamName = null;
+        
+        StringBuilder cypher = new StringBuilder();
+        
+        // Part 1: Query relationships with OPTIONAL MATCH
+        cypher.append(requiredMatches);
+        cypher.append("\nOPTIONAL MATCH ");
+        
+        // Subject (should already be declared from required pattern)
+        if (triple.getSubject().isVariable()) {
+            cypher.append("(").append(subjectVar).append(")");
+        } else {
+            subjectParamName = "p" + paramCounter++;
+            parameters.put(subjectParamName, triple.getSubject().getURI());
+            cypher.append("(").append(subjectVar)
+                  .append(":Resource {uri: $").append(subjectParamName).append("})");
+        }
+        
+        // Relationship with variable type
+        cypher.append("-[_r]->");
+        
+        // Object
+        if (triple.getObject().isVariable()) {
+            cypher.append("(").append(objectVar).append(":Resource)");
+            nodeVariables.add(objectVar);
+        } else if (triple.getObject().isURI()) {
+            String paramName = "p" + paramCounter++;
+            parameters.put(paramName, triple.getObject().getURI());
+            cypher.append("(").append(objectVar)
+                  .append(":Resource {uri: $").append(paramName).append("})");
+            nodeVariables.add(objectVar);
+        } else {
+            throw new CannotCompileException(
+                "Literal objects with variable predicates not supported in OPTIONAL");
+        }
+        
+        cypher.append("\nRETURN ");
+        
+        // Build return clause for relationships part
+        List<String> returnParts1 = new ArrayList<>();
+        for (String varName : allVariables) {
+            if (varName.equals(predicateVar)) {
+                returnParts1.add("type(_r) AS " + predicateVar);
+            } else if (variableMapping.containsKey(varName)) {
+                returnParts1.add(variableMapping.get(varName) + " AS " + varName);
+            } else if (nodeVariables.contains(varName)) {
+                returnParts1.add(sanitizeVariableName(varName) + ".uri AS " + varName);
+            }
+        }
+        
+        // Ensure predicate variable is in return
+        if (!returnParts1.stream().anyMatch(p -> p.contains(" AS " + predicateVar))) {
+            returnParts1.add("type(_r) AS " + predicateVar);
+        }
+        
+        cypher.append(String.join(", ", returnParts1));
+        
+        // Part 2: Query properties with OPTIONAL MATCH
+        cypher.append("\nUNION ALL\n");
+        cypher.append(requiredMatches);
+        cypher.append("\nOPTIONAL MATCH ");
+        
+        // Subject
+        if (triple.getSubject().isVariable()) {
+            cypher.append("(").append(subjectVar).append(")");
+        } else {
+            // Reuse the parameter from Part 1
+            cypher.append("(").append(subjectVar)
+                  .append(":Resource {uri: $").append(subjectParamName).append("})");
+        }
+        
+        cypher.append("\nUNWIND keys(").append(subjectVar).append(") AS _propKey");
+        cypher.append("\nWITH ");
+        
+        // Include all required variables in WITH clause
+        List<String> withParts = new ArrayList<>();
+        for (String varName : allVariables) {
+            if (!varName.equals(predicateVar) && !varName.equals(triple.getObject().getName())) {
+                if (nodeVariables.contains(varName)) {
+                    withParts.add(sanitizeVariableName(varName));
+                }
+            }
+        }
+        if (!withParts.isEmpty()) {
+            cypher.append(String.join(", ", withParts)).append(", ");
+        }
+        
+        cypher.append("_propKey WHERE _propKey <> 'uri'");
+        
+        cypher.append("\nRETURN ");
+        
+        // Build return clause for properties part
+        List<String> returnParts2 = new ArrayList<>();
+        for (String varName : allVariables) {
+            if (varName.equals(predicateVar)) {
+                returnParts2.add("_propKey AS " + predicateVar);
+            } else if (varName.equals(triple.getObject().getName())) {
+                returnParts2.add(subjectVar + "[_propKey] AS " + varName);
+            } else if (variableMapping.containsKey(varName)) {
+                returnParts2.add(variableMapping.get(varName) + " AS " + varName);
+            } else if (nodeVariables.contains(varName)) {
+                returnParts2.add(sanitizeVariableName(varName) + ".uri AS " + varName);
+            }
+        }
+        
+        cypher.append(String.join(", ", returnParts2));
+        
+        // Part 3: Query types (rdf:type from labels) with OPTIONAL MATCH
+        cypher.append("\nUNION ALL\n");
+        cypher.append(requiredMatches);
+        cypher.append("\nOPTIONAL MATCH ");
+        
+        // Subject
+        if (triple.getSubject().isVariable()) {
+            cypher.append("(").append(subjectVar).append(")");
+        } else {
+            // Reuse the parameter from Part 1
+            cypher.append("(").append(subjectVar)
+                  .append(":Resource {uri: $").append(subjectParamName).append("})");
+        }
+        
+        cypher.append("\nUNWIND labels(").append(subjectVar).append(") AS _label");
+        cypher.append("\nWITH ");
+        
+        // Include all required variables in WITH clause
+        if (!withParts.isEmpty()) {
+            cypher.append(String.join(", ", withParts)).append(", ");
+        }
+        
+        cypher.append("_label WHERE _label <> 'Resource'");
+        
+        cypher.append("\nRETURN ");
+        
+        // Build return clause for types part
+        List<String> returnParts3 = new ArrayList<>();
+        for (String varName : allVariables) {
+            if (varName.equals(predicateVar)) {
+                returnParts3.add("'" + RDF_TYPE_URI + "' AS " + predicateVar);
+            } else if (varName.equals(triple.getObject().getName())) {
+                returnParts3.add("_label AS " + varName);
+            } else if (variableMapping.containsKey(varName)) {
+                returnParts3.add(variableMapping.get(varName) + " AS " + varName);
+            } else if (nodeVariables.contains(varName)) {
+                returnParts3.add(sanitizeVariableName(varName) + ".uri AS " + varName);
+            }
+        }
+        
+        cypher.append(String.join(", ", returnParts3));
+        
+        String query = cypher.toString();
+        if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug("Compiled OPTIONAL with variable predicate to Cypher:\n{}", 
+                query);
+        }
+        
         return new CompilationResult(query, parameters, variableMapping);
     }
 

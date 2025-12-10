@@ -644,8 +644,8 @@ public class SparqlToCypherCompilerTest {
     }
 
     @Test
-    @DisplayName("Test OPTIONAL throws exception for variable predicate in optional part")
-    public void testOptionalThrowsForVariablePredicate() {
+    @DisplayName("Test OPTIONAL with variable predicate compiles with UNION")
+    public void testOptionalWithVariablePredicateCompilesWithUnion() throws Exception {
         BasicPattern required = new BasicPattern();
         required.add(Triple.create(
             NodeFactory.createVariable("person"),
@@ -660,8 +660,37 @@ public class SparqlToCypherCompilerTest {
             NodeFactory.createVariable("o")
         ));
 
-        assertThrows(SparqlToCypherCompiler.CannotCompileException.class,
-            () -> SparqlToCypherCompiler.translateWithOptional(required, optional));
+        SparqlToCypherCompiler.CompilationResult result = 
+            SparqlToCypherCompiler.translateWithOptional(required, optional);
+        
+        assertNotNull(result);
+        String cypher = result.cypherQuery();
+        
+        // Should use UNION ALL for three parts: relationships, properties, types
+        assertTrue(cypher.contains("UNION ALL"), "Should use UNION ALL for multiple parts");
+        
+        // Count UNION ALL occurrences (should be 2 for 3-part UNION)
+        int unionCount = cypher.split("UNION ALL", -1).length - 1;
+        assertEquals(2, unionCount, "Should have 2 UNION ALL (3 parts total)");
+        
+        // Should have OPTIONAL MATCH clauses
+        assertTrue(cypher.contains("OPTIONAL MATCH"), "Should have OPTIONAL MATCH");
+        
+        // Should handle relationships (type(_r))
+        assertTrue(cypher.contains("type(_r)"), "Should query relationship types");
+        
+        // Should handle properties (keys())
+        assertTrue(cypher.contains("keys("), "Should query node properties");
+        assertTrue(cypher.contains("_propKey"), "Should use property key variable");
+        
+        // Should handle types (labels())
+        assertTrue(cypher.contains("labels("), "Should query node labels");
+        assertTrue(cypher.contains("_label"), "Should use label variable");
+        
+        // Should return correct variables
+        assertTrue(cypher.contains("AS p"), "Should return predicate variable");
+        assertTrue(cypher.contains("AS o"), "Should return object variable");
+        assertTrue(cypher.contains("AS person"), "Should return person variable");
     }
 
     @Test
@@ -1430,5 +1459,303 @@ public class SparqlToCypherCompilerTest {
             .anyMatch(v -> v.toString().contains("bob"));
         assertTrue(hasAlice, "Should have alice URI");
         assertTrue(hasBob, "Should have bob URI");
+    }
+
+    // ===== Variable Predicate in OPTIONAL Tests =====
+
+    @Test
+    @DisplayName("Test OPTIONAL with variable predicate generates three UNION parts")
+    public void testOptionalVariablePredicateThreePartUnion() throws Exception {
+        BasicPattern required = new BasicPattern();
+        required.add(Triple.create(
+            NodeFactory.createVariable("person"),
+            NodeFactory.createURI("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/Person")
+        ));
+
+        BasicPattern optional = new BasicPattern();
+        optional.add(Triple.create(
+            NodeFactory.createVariable("person"),
+            NodeFactory.createVariable("predicate"),
+            NodeFactory.createVariable("value")
+        ));
+
+        SparqlToCypherCompiler.CompilationResult result = 
+            SparqlToCypherCompiler.translateWithOptional(required, optional);
+        
+        assertNotNull(result);
+        String cypher = result.cypherQuery();
+        
+        // Verify three-part UNION structure
+        int unionCount = cypher.split("UNION ALL", -1).length - 1;
+        assertEquals(2, unionCount, "Should have exactly 2 UNION ALL (3 parts)");
+        
+        // Part 1: Relationships
+        assertTrue(cypher.contains("-[_r]->"), "Should have relationship pattern");
+        assertTrue(cypher.contains("type(_r)"), "Should extract relationship type");
+        
+        // Part 2: Properties
+        assertTrue(cypher.contains("UNWIND keys("), "Should unwind node keys");
+        assertTrue(cypher.contains("_propKey <> 'uri'"), "Should filter out uri property");
+        
+        // Part 3: Types (rdf:type from labels)
+        assertTrue(cypher.contains("UNWIND labels("), "Should unwind node labels");
+        assertTrue(cypher.contains("_label <> 'Resource'"), "Should filter out Resource label");
+        assertTrue(cypher.contains("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), 
+            "Should use rdf:type URI for labels");
+    }
+
+    @Test
+    @DisplayName("Test OPTIONAL with variable predicate and concrete subject")
+    public void testOptionalVariablePredicateConcreteSubject() throws Exception {
+        BasicPattern required = new BasicPattern();
+        required.add(Triple.create(
+            NodeFactory.createURI("http://example.org/alice"),
+            NodeFactory.createURI("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/Person")
+        ));
+
+        BasicPattern optional = new BasicPattern();
+        optional.add(Triple.create(
+            NodeFactory.createURI("http://example.org/alice"),
+            NodeFactory.createVariable("p"),
+            NodeFactory.createVariable("o")
+        ));
+
+        SparqlToCypherCompiler.CompilationResult result = 
+            SparqlToCypherCompiler.translateWithOptional(required, optional);
+        
+        assertNotNull(result);
+        String cypher = result.cypherQuery();
+        
+        // Should use parameters for concrete URIs
+        assertTrue(result.parameters().size() >= 1, "Should have parameters for concrete URIs");
+        assertTrue(cypher.contains("$p"), "Should use parameterized queries");
+        
+        // All three parts should use OPTIONAL MATCH
+        int optionalMatchCount = cypher.split("OPTIONAL MATCH", -1).length - 1;
+        assertEquals(3, optionalMatchCount, "Should have 3 OPTIONAL MATCH clauses");
+    }
+
+    @Test
+    @DisplayName("Test OPTIONAL with variable predicate returns correct variables")
+    public void testOptionalVariablePredicateReturnsCorrectVariables() throws Exception {
+        BasicPattern required = new BasicPattern();
+        required.add(Triple.create(
+            NodeFactory.createVariable("s"),
+            NodeFactory.createURI("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
+            NodeFactory.createURI("http://example.org/MyType")
+        ));
+
+        BasicPattern optional = new BasicPattern();
+        optional.add(Triple.create(
+            NodeFactory.createVariable("s"),
+            NodeFactory.createVariable("predicate"),
+            NodeFactory.createVariable("object")
+        ));
+
+        SparqlToCypherCompiler.CompilationResult result = 
+            SparqlToCypherCompiler.translateWithOptional(required, optional);
+        
+        String cypher = result.cypherQuery();
+        
+        // Each RETURN clause should include all three variables
+        String[] parts = cypher.split("RETURN");
+        assertEquals(4, parts.length, "Should have 3 RETURN clauses (parts array has 4 elements)");
+        
+        // Verify each RETURN includes the required variables
+        for (int i = 1; i < parts.length; i++) {
+            String returnPart = parts[i].split("UNION ALL|$")[0];
+            assertTrue(returnPart.contains(" AS s") || returnPart.contains(" s"), 
+                "RETURN should include subject variable s");
+            assertTrue(returnPart.contains(" AS predicate") || returnPart.contains(" predicate"), 
+                "RETURN should include predicate variable");
+            assertTrue(returnPart.contains(" AS object") || returnPart.contains(" object"), 
+                "RETURN should include object variable");
+        }
+    }
+
+    @Test
+    @DisplayName("Test OPTIONAL with variable predicate and FILTER")
+    public void testOptionalVariablePredicateWithFilter() throws Exception {
+        BasicPattern required = new BasicPattern();
+        required.add(Triple.create(
+            NodeFactory.createVariable("person"),
+            NodeFactory.createURI("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/Person")
+        ));
+        required.add(Triple.create(
+            NodeFactory.createVariable("person"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/age"),
+            NodeFactory.createVariable("age")
+        ));
+
+        BasicPattern optional = new BasicPattern();
+        optional.add(Triple.create(
+            NodeFactory.createVariable("person"),
+            NodeFactory.createVariable("p"),
+            NodeFactory.createVariable("o")
+        ));
+
+        // FILTER: ?age >= 18
+        org.apache.jena.sparql.expr.Expr filterExpr = 
+            new org.apache.jena.sparql.expr.E_GreaterThanOrEqual(
+                new org.apache.jena.sparql.expr.ExprVar("age"),
+                org.apache.jena.sparql.expr.NodeValue.makeInteger(18)
+            );
+
+        SparqlToCypherCompiler.CompilationResult result = 
+            SparqlToCypherCompiler.translateWithOptional(required, optional, filterExpr);
+        
+        assertNotNull(result);
+        String cypher = result.cypherQuery();
+        
+        // Should have WHERE clause for FILTER in all three parts
+        assertTrue(cypher.contains("WHERE"), "Should have WHERE clause for filter");
+        assertTrue(cypher.contains(">="), "Should have >= operator");
+        assertTrue(cypher.contains("18"), "Should have age value 18");
+        
+        // Should still have UNION structure
+        assertTrue(cypher.contains("UNION ALL"), "Should have UNION ALL");
+        assertTrue(cypher.contains("OPTIONAL MATCH"), "Should have OPTIONAL MATCH");
+    }
+
+    @Test
+    @DisplayName("Test OPTIONAL with variable predicate throws for multiple optional triples")
+    public void testOptionalVariablePredicateThrowsForMultipleTriples() {
+        BasicPattern required = new BasicPattern();
+        required.add(Triple.create(
+            NodeFactory.createVariable("person"),
+            NodeFactory.createURI("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/Person")
+        ));
+
+        BasicPattern optional = new BasicPattern();
+        optional.add(Triple.create(
+            NodeFactory.createVariable("person"),
+            NodeFactory.createVariable("p"),
+            NodeFactory.createVariable("o")
+        ));
+        optional.add(Triple.create(
+            NodeFactory.createVariable("person"),
+            NodeFactory.createVariable("p2"),
+            NodeFactory.createVariable("o2")
+        ));
+
+        assertThrows(SparqlToCypherCompiler.CannotCompileException.class,
+            () -> SparqlToCypherCompiler.translateWithOptional(required, optional),
+            "Should throw for multiple triples with variable predicates in OPTIONAL");
+    }
+
+    @Test
+    @DisplayName("Test OPTIONAL with variable predicate query structure")
+    public void testOptionalVariablePredicateQueryStructure() throws Exception {
+        BasicPattern required = new BasicPattern();
+        required.add(Triple.create(
+            NodeFactory.createVariable("x"),
+            NodeFactory.createURI("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
+            NodeFactory.createURI("http://example.org/Type")
+        ));
+
+        BasicPattern optional = new BasicPattern();
+        optional.add(Triple.create(
+            NodeFactory.createVariable("x"),
+            NodeFactory.createVariable("prop"),
+            NodeFactory.createVariable("val")
+        ));
+
+        SparqlToCypherCompiler.CompilationResult result = 
+            SparqlToCypherCompiler.translateWithOptional(required, optional);
+        
+        String cypher = result.cypherQuery();
+        String[] lines = cypher.split("\n");
+        
+        // Verify overall structure
+        boolean hasRequiredMatch = false;
+        int optionalMatchCount = 0;
+        int unionAllCount = 0;
+        int returnCount = 0;
+        
+        for (String line : lines) {
+            String trimmed = line.trim();
+            if (trimmed.startsWith("MATCH ")) hasRequiredMatch = true;
+            if (trimmed.startsWith("OPTIONAL MATCH")) optionalMatchCount++;
+            if (trimmed.equals("UNION ALL")) unionAllCount++;
+            if (trimmed.startsWith("RETURN")) returnCount++;
+        }
+        
+        assertTrue(hasRequiredMatch, "Should have required MATCH clause");
+        assertEquals(3, optionalMatchCount, "Should have 3 OPTIONAL MATCH clauses");
+        assertEquals(2, unionAllCount, "Should have 2 UNION ALL");
+        assertEquals(3, returnCount, "Should have 3 RETURN clauses");
+    }
+
+    @Test
+    @DisplayName("Test OPTIONAL with variable predicate handles variable mapping")
+    public void testOptionalVariablePredicateVariableMapping() throws Exception {
+        BasicPattern required = new BasicPattern();
+        required.add(Triple.create(
+            NodeFactory.createVariable("resource"),
+            NodeFactory.createURI("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
+            NodeFactory.createURI("http://example.org/Resource")
+        ));
+
+        BasicPattern optional = new BasicPattern();
+        optional.add(Triple.create(
+            NodeFactory.createVariable("resource"),
+            NodeFactory.createVariable("predicate"),
+            NodeFactory.createVariable("value")
+        ));
+
+        SparqlToCypherCompiler.CompilationResult result = 
+            SparqlToCypherCompiler.translateWithOptional(required, optional);
+        
+        assertNotNull(result.variableMapping(), "Variable mapping should not be null");
+        
+        // The query should compile successfully and return valid Cypher
+        assertNotNull(result.cypherQuery(), "Cypher query should not be null");
+        assertFalse(result.cypherQuery().isEmpty(), "Cypher query should not be empty");
+        assertTrue(result.cypherQuery().length() > 100, "Cypher query should be substantial");
+    }
+
+    @Test
+    @DisplayName("Test OPTIONAL with variable predicate preserves required variables")
+    public void testOptionalVariablePredicatePreservesRequiredVariables() throws Exception {
+        BasicPattern required = new BasicPattern();
+        required.add(Triple.create(
+            NodeFactory.createVariable("person"),
+            NodeFactory.createURI("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/Person")
+        ));
+        required.add(Triple.create(
+            NodeFactory.createVariable("person"),
+            NodeFactory.createURI("http://xmlns.com/foaf/0.1/name"),
+            NodeFactory.createVariable("name")
+        ));
+
+        BasicPattern optional = new BasicPattern();
+        optional.add(Triple.create(
+            NodeFactory.createVariable("person"),
+            NodeFactory.createVariable("p"),
+            NodeFactory.createVariable("o")
+        ));
+
+        SparqlToCypherCompiler.CompilationResult result = 
+            SparqlToCypherCompiler.translateWithOptional(required, optional);
+        
+        String cypher = result.cypherQuery();
+        
+        // All RETURN clauses should include both required and optional variables
+        String[] parts = cypher.split("RETURN");
+        for (int i = 1; i < parts.length; i++) {
+            String returnPart = parts[i].split("UNION ALL|$")[0];
+            assertTrue(returnPart.contains(" person"), "Should return person variable");
+            assertTrue(returnPart.contains(" name") || returnPart.contains(".`http://xmlns.com/foaf/0.1/name`"), 
+                "Should return name variable");
+            assertTrue(returnPart.contains(" p") || returnPart.contains(" AS p"), 
+                "Should return predicate variable");
+            assertTrue(returnPart.contains(" o") || returnPart.contains(" AS o"), 
+                "Should return object variable");
+        }
     }
 }

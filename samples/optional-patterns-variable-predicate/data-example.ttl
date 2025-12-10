@@ -1,0 +1,44 @@
+@prefix : <http://example.org/> .
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Sample data demonstrating various property types for variable predicate in OPTIONAL
+
+# Alice: Full profile with relationships, literals, and types
+:person/alice
+    a foaf:Person ;
+    foaf:name "Alice" ;
+    foaf:age 25 ;
+    foaf:email "alice@example.org" ;
+    foaf:knows :person/bob .
+
+# Bob: Person and Student with name and age
+:person/bob
+    a foaf:Person, :Student ;
+    foaf:name "Bob" ;
+    foaf:age 30 .
+
+# Charlie: Minimal data - only type
+:person/charlie
+    a foaf:Person .
+
+# Diana: Person with email but no name
+:person/diana
+    a foaf:Person ;
+    foaf:email "diana@example.org" .
+
+# Edward: Person with multiple relationships
+:person/edward
+    a foaf:Person ;
+    foaf:name "Edward" ;
+    foaf:knows :person/alice, :person/bob, :person/charlie .
+
+# This dataset demonstrates:
+# 1. Relationships (edges): foaf:knows connections between persons
+# 2. Literal properties: foaf:name (string), foaf:age (integer), foaf:email (string)
+# 3. Types (labels): foaf:Person, :Student
+# 4. Varying data completeness: some persons have all properties, others have minimal data
+#
+# When querying with variable predicates in OPTIONAL, all three types of data
+# (relationships, properties, types) are retrieved in a single optimized query.

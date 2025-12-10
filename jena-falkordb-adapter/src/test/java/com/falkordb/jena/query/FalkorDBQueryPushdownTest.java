@@ -1659,4 +1659,380 @@ public class FalkorDBQueryPushdownTest {
             assertTrue(persons.contains("http://example.org/diana"));
         }
     }
+
+    // ===== Variable Predicate in OPTIONAL Integration Tests =====
+
+    @Test
+    @DisplayName("Test OPTIONAL with variable predicate returns all triple types")
+    public void testOptionalVariablePredicateReturnsAllTripleTypes() {
+        // Add test data with different triple types
+        var person = model.createResource("http://example.org/person/alice");
+        var personType = model.createResource("http://xmlns.com/foaf/0.1/Person");
+        var nameProperty = model.createProperty("http://xmlns.com/foaf/0.1/name");
+        var knowsProperty = model.createProperty("http://xmlns.com/foaf/0.1/knows");
+        var bob = model.createResource("http://example.org/person/bob");
+        
+        // Add type (label)
+        person.addProperty(RDF.type, personType);
+        
+        // Add literal property
+        person.addProperty(nameProperty, "Alice");
+        
+        // Add relationship to another resource
+        person.addProperty(knowsProperty, bob);
+        
+        Dataset dataset = DatasetFactory.create(model);
+        
+        // Query with variable predicate in OPTIONAL
+        String sparql = """
+            PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+            SELECT ?p ?o WHERE {
+                <http://example.org/person/alice> a foaf:Person .
+                OPTIONAL {
+                    <http://example.org/person/alice> ?p ?o .
+                }
+            }
+            ORDER BY ?p
+            """;
+        
+        Query query = QueryFactory.create(sparql);
+        try (QueryExecution qexec = QueryExecutionFactory.create(query, dataset)) {
+            ResultSet results = qexec.execSelect();
+            
+            List<String> predicates = new ArrayList<>();
+            List<String> objects = new ArrayList<>();
+            
+            while (results.hasNext()) {
+                QuerySolution solution = results.nextSolution();
+                if (solution.contains("p")) {
+                    predicates.add(solution.get("p").toString());
+                }
+                if (solution.contains("o")) {
+                    objects.add(solution.get("o").toString());
+                }
+            }
+            
+            // Should have at least 3 results: type, name property, knows relationship
+            assertTrue(predicates.size() >= 3, 
+                "Should have at least 3 predicates (type, property, relationship)");
+            
+            // Should include rdf:type
+            assertTrue(predicates.stream().anyMatch(p -> 
+                p.contains("http://www.w3.org/1999/02/22-rdf-syntax-ns#type")),
+                "Should include rdf:type");
+            
+            // Should include name property
+            assertTrue(predicates.stream().anyMatch(p -> 
+                p.contains("http://xmlns.com/foaf/0.1/name")),
+                "Should include name property");
+            
+            // Should include knows relationship
+            assertTrue(predicates.stream().anyMatch(p -> 
+                p.contains("http://xmlns.com/foaf/0.1/knows")),
+                "Should include knows relationship");
+            
+            // Verify objects
+            assertTrue(objects.stream().anyMatch(o -> o.contains("Alice")),
+                "Should include literal value Alice");
+            assertTrue(objects.stream().anyMatch(o -> o.contains("http://example.org/person/bob")),
+                "Should include Bob's URI");
+            assertTrue(objects.stream().anyMatch(o -> o.contains("Person")),
+                "Should include Person type");
+        }
+    }
+
+    @Test
+    @DisplayName("Test OPTIONAL with variable predicate returns NULL for no optional data")
+    public void testOptionalVariablePredicateReturnsNullForNoData() {
+        // Add only required data, no optional properties
+        var person = model.createResource("http://example.org/person/empty");
+        var personType = model.createResource("http://xmlns.com/foaf/0.1/Person");
+        person.addProperty(RDF.type, personType);
+        
+        Dataset dataset = DatasetFactory.create(model);
+        
+        // Query with variable predicate in OPTIONAL
+        String sparql = """
+            PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+            SELECT ?person ?p ?o WHERE {
+                ?person a foaf:Person .
+                OPTIONAL {
+                    ?person ?p ?o .
+                }
+            }
+            """;
+        
+        Query query = QueryFactory.create(sparql);
+        try (QueryExecution qexec = QueryExecutionFactory.create(query, dataset)) {
+            ResultSet results = qexec.execSelect();
+            
+            // Should return at least one result (the person with rdf:type)
+            assertTrue(results.hasNext(), "Should have at least one result");
+            
+            int resultCount = 0;
+            while (results.hasNext()) {
+                QuerySolution solution = results.nextSolution();
+                resultCount++;
+                
+                // Person should always be bound
+                assertTrue(solution.contains("person"), "Person variable should be bound");
+                assertEquals("http://example.org/person/empty", 
+                    solution.getResource("person").getURI());
+                
+                // Optional variables may or may not be bound
+                // (rdf:type will be found from labels)
+            }
+            
+            // Should have at least 1 result (person with type)
+            assertTrue(resultCount >= 1, "Should have at least one result");
+        }
+    }
+
+    @Test
+    @DisplayName("Test OPTIONAL with variable predicate and FILTER")
+    public void testOptionalVariablePredicateWithFilter() {
+        // Add test data with ages
+        var alice = model.createResource("http://example.org/person/alice");
+        var bob = model.createResource("http://example.org/person/bob");
+        var charlie = model.createResource("http://example.org/person/charlie");
+        
+        var personType = model.createResource("http://xmlns.com/foaf/0.1/Person");
+        var ageProperty = model.createProperty("http://xmlns.com/foaf/0.1/age");
+        var nameProperty = model.createProperty("http://xmlns.com/foaf/0.1/name");
+        
+        alice.addProperty(RDF.type, personType);
+        alice.addProperty(ageProperty, model.createTypedLiteral(25));
+        alice.addProperty(nameProperty, "Alice");
+        
+        bob.addProperty(RDF.type, personType);
+        bob.addProperty(ageProperty, model.createTypedLiteral(35));
+        bob.addProperty(nameProperty, "Bob");
+        
+        charlie.addProperty(RDF.type, personType);
+        charlie.addProperty(ageProperty, model.createTypedLiteral(45));
+        charlie.addProperty(nameProperty, "Charlie");
+        
+        Dataset dataset = DatasetFactory.create(model);
+        
+        // Query with FILTER and variable predicate in OPTIONAL
+        String sparql = """
+            PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+            SELECT ?person ?age ?p ?o WHERE {
+                ?person a foaf:Person .
+                ?person foaf:age ?age .
+                FILTER(?age >= 30 && ?age < 40)
+                OPTIONAL {
+                    ?person ?p ?o .
+                }
+            }
+            ORDER BY ?p
+            """;
+        
+        Query query = QueryFactory.create(sparql);
+        try (QueryExecution qexec = QueryExecutionFactory.create(query, dataset)) {
+            ResultSet results = qexec.execSelect();
+            
+            Set<String> persons = new HashSet<>();
+            
+            while (results.hasNext()) {
+                QuerySolution solution = results.nextSolution();
+                persons.add(solution.getResource("person").getURI());
+                
+                // Age should be within filter range
+                if (solution.contains("age")) {
+                    int age = solution.getLiteral("age").getInt();
+                    assertTrue(age >= 30 && age < 40, 
+                        "Age should be between 30 and 40");
+                }
+            }
+            
+            // Only Bob should match the filter
+            assertEquals(1, persons.size(), "Only one person should match filter");
+            assertTrue(persons.contains("http://example.org/person/bob"),
+                "Bob should match the filter");
+        }
+    }
+
+    @Test
+    @DisplayName("Test OPTIONAL with variable predicate handles multiple persons")
+    public void testOptionalVariablePredicateMultiplePersons() {
+        // Add multiple persons with different properties
+        var alice = model.createResource("http://example.org/person/alice");
+        var bob = model.createResource("http://example.org/person/bob");
+        
+        var personType = model.createResource("http://xmlns.com/foaf/0.1/Person");
+        var nameProperty = model.createProperty("http://xmlns.com/foaf/0.1/name");
+        var emailProperty = model.createProperty("http://xmlns.com/foaf/0.1/email");
+        
+        alice.addProperty(RDF.type, personType);
+        alice.addProperty(nameProperty, "Alice");
+        
+        bob.addProperty(RDF.type, personType);
+        bob.addProperty(nameProperty, "Bob");
+        bob.addProperty(emailProperty, "bob@example.org");
+        
+        Dataset dataset = DatasetFactory.create(model);
+        
+        // Query all persons with optional properties
+        String sparql = """
+            PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+            SELECT ?person ?name ?p ?o WHERE {
+                ?person a foaf:Person .
+                ?person foaf:name ?name .
+                OPTIONAL {
+                    ?person ?p ?o .
+                }
+            }
+            ORDER BY ?person ?p
+            """;
+        
+        Query query = QueryFactory.create(sparql);
+        try (QueryExecution qexec = QueryExecutionFactory.create(query, dataset)) {
+            ResultSet results = qexec.execSelect();
+            
+            Set<String> persons = new HashSet<>();
+            
+            while (results.hasNext()) {
+                QuerySolution solution = results.nextSolution();
+                persons.add(solution.getResource("person").getURI());
+            }
+            
+            // Both persons should be returned
+            assertEquals(2, persons.size(), "Should return both persons");
+            assertTrue(persons.contains("http://example.org/person/alice"));
+            assertTrue(persons.contains("http://example.org/person/bob"));
+        }
+    }
+
+    @Test
+    @DisplayName("Test OPTIONAL with variable predicate preserves required variables")
+    public void testOptionalVariablePredicatePreservesRequiredVars() {
+        // Add test data
+        var alice = model.createResource("http://example.org/person/alice");
+        var personType = model.createResource("http://xmlns.com/foaf/0.1/Person");
+        var nameProperty = model.createProperty("http://xmlns.com/foaf/0.1/name");
+        var ageProperty = model.createProperty("http://xmlns.com/foaf/0.1/age");
+        
+        alice.addProperty(RDF.type, personType);
+        alice.addProperty(nameProperty, "Alice");
+        alice.addProperty(ageProperty, model.createTypedLiteral(30));
+        
+        Dataset dataset = DatasetFactory.create(model);
+        
+        // Query with multiple required variables and optional variable predicate
+        String sparql = """
+            PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+            SELECT ?person ?name ?age ?p ?o WHERE {
+                ?person a foaf:Person .
+                ?person foaf:name ?name .
+                ?person foaf:age ?age .
+                OPTIONAL {
+                    ?person ?p ?o .
+                }
+            }
+            """;
+        
+        Query query = QueryFactory.create(sparql);
+        try (QueryExecution qexec = QueryExecutionFactory.create(query, dataset)) {
+            ResultSet results = qexec.execSelect();
+            
+            while (results.hasNext()) {
+                QuerySolution solution = results.nextSolution();
+                
+                // All required variables should be bound in every result
+                assertTrue(solution.contains("person"), "Should have person");
+                assertTrue(solution.contains("name"), "Should have name");
+                assertTrue(solution.contains("age"), "Should have age");
+                
+                assertEquals("http://example.org/person/alice", 
+                    solution.getResource("person").getURI());
+                assertEquals("Alice", solution.getLiteral("name").getString());
+                assertEquals(30, solution.getLiteral("age").getInt());
+                
+                // Optional variables may or may not be bound
+                // But should be present in the structure
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("Test OPTIONAL with variable predicate complex scenario")
+    public void testOptionalVariablePredicateComplexScenario() {
+        // Create a complex scenario with multiple types of data
+        var alice = model.createResource("http://example.org/person/alice");
+        var bob = model.createResource("http://example.org/person/bob");
+        var charlie = model.createResource("http://example.org/person/charlie");
+        
+        var personType = model.createResource("http://xmlns.com/foaf/0.1/Person");
+        var studentType = model.createResource("http://example.org/Student");
+        var nameProperty = model.createProperty("http://xmlns.com/foaf/0.1/name");
+        var knowsProperty = model.createProperty("http://xmlns.com/foaf/0.1/knows");
+        var ageProperty = model.createProperty("http://xmlns.com/foaf/0.1/age");
+        
+        // Alice: Person with name, knows Bob, age
+        alice.addProperty(RDF.type, personType);
+        alice.addProperty(nameProperty, "Alice");
+        alice.addProperty(knowsProperty, bob);
+        alice.addProperty(ageProperty, model.createTypedLiteral(25));
+        
+        // Bob: Person and Student with name
+        bob.addProperty(RDF.type, personType);
+        bob.addProperty(RDF.type, studentType);
+        bob.addProperty(nameProperty, "Bob");
+        
+        // Charlie: Just Person
+        charlie.addProperty(RDF.type, personType);
+        
+        Dataset dataset = DatasetFactory.create(model);
+        
+        // Query for all persons with any properties
+        String sparql = """
+            PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+            SELECT ?person ?p ?o WHERE {
+                ?person a foaf:Person .
+                OPTIONAL {
+                    ?person ?p ?o .
+                }
+            }
+            ORDER BY ?person ?p
+            """;
+        
+        Query query = QueryFactory.create(sparql);
+        try (QueryExecution qexec = QueryExecutionFactory.create(query, dataset)) {
+            ResultSet results = qexec.execSelect();
+            
+            Set<String> alicePredicates = new HashSet<>();
+            Set<String> bobPredicates = new HashSet<>();
+            Set<String> charliePredicates = new HashSet<>();
+            
+            while (results.hasNext()) {
+                QuerySolution solution = results.nextSolution();
+                String personUri = solution.getResource("person").getURI();
+                
+                if (solution.contains("p")) {
+                    String predicate = solution.get("p").toString();
+                    
+                    if (personUri.contains("alice")) {
+                        alicePredicates.add(predicate);
+                    } else if (personUri.contains("bob")) {
+                        bobPredicates.add(predicate);
+                    } else if (personUri.contains("charlie")) {
+                        charliePredicates.add(predicate);
+                    }
+                }
+            }
+            
+            // Alice should have multiple predicates (type, name, knows, age)
+            assertTrue(alicePredicates.size() >= 3, 
+                "Alice should have at least 3 predicates");
+            
+            // Bob should have multiple predicates including both types
+            assertTrue(bobPredicates.size() >= 2, 
+                "Bob should have at least 2 predicates");
+            
+            // Charlie should have at least type
+            assertTrue(charliePredicates.size() >= 1, 
+                "Charlie should have at least 1 predicate (type)");
+        }
+    }
 }

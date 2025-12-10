@@ -63,6 +63,12 @@ public class SafeGeoSPARQLDatasetAssembler extends AssemblerBase {
     
     private static final String GEOSPARQL_NS = "http://jena.apache.org/geosparql#";
     
+    // Property names for GeoSPARQL configuration
+    private static final String PROP_DATASET = "dataset";
+    private static final String PROP_INFERENCE = "inference";
+    private static final String PROP_QUERY_REWRITE = "queryRewrite";
+    private static final String PROP_APPLY_DEFAULT_GEOMETRY = "applyDefaultGeometry";
+    
     /**
      * Open a GeoSPARQL dataset without building a spatial index.
      *
@@ -81,10 +87,10 @@ public class SafeGeoSPARQLDatasetAssembler extends AssemblerBase {
         LOGGER.info("Spatial operations will be pushed down to FalkorDB's native geospatial functions");
         
         // Get configuration properties
-        Property datasetProperty = root.getModel().createProperty(GEOSPARQL_NS, "dataset");
-        Property inferenceProperty = root.getModel().createProperty(GEOSPARQL_NS, "inference");
-        Property queryRewriteProperty = root.getModel().createProperty(GEOSPARQL_NS, "queryRewrite");
-        Property applyDefaultGeometryProperty = root.getModel().createProperty(GEOSPARQL_NS, "applyDefaultGeometry");
+        Property datasetProperty = root.getModel().createProperty(GEOSPARQL_NS, PROP_DATASET);
+        Property inferenceProperty = root.getModel().createProperty(GEOSPARQL_NS, PROP_INFERENCE);
+        Property queryRewriteProperty = root.getModel().createProperty(GEOSPARQL_NS, PROP_QUERY_REWRITE);
+        Property applyDefaultGeometryProperty = root.getModel().createProperty(GEOSPARQL_NS, PROP_APPLY_DEFAULT_GEOMETRY);
         
         // Validate required property
         if (!root.hasProperty(datasetProperty)) {
@@ -118,9 +124,10 @@ public class SafeGeoSPARQLDatasetAssembler extends AssemblerBase {
         // This enables GeoSPARQL function recognition and query rewriting
         // while spatial operations are handled by FalkorDB via pushdown
         try {
-            // Initialize GeoSPARQL with query rewriting enabled but NO spatial index
-            // The setupMemoryIndex() only sets up vocabulary and query rewriting,
-            // it doesn't force index building like the GeoAssembler does
+            // Initialize GeoSPARQL vocabulary and query rewriting support
+            // Note: setupMemoryIndex() is a misnomer - it initializes the GeoSPARQL
+            // vocabulary and query rewriting capabilities but does NOT force spatial
+            // index building when called standalone (unlike when called by GeoAssembler)
             GeoSPARQLConfig.setupMemoryIndex();
             LOGGER.info("GeoSPARQL query rewriting initialized successfully");
             LOGGER.info("Spatial queries will be translated to FalkorDB's point() and distance() functions");

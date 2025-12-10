@@ -312,9 +312,9 @@ public class FusekiRestartWithDataTest {
             RDFDataMgr.read(model, reader, null, Lang.TURTLE);
         }
         
-        // Convert to string and POST
+        // Convert to N-Triples format (no prefixes) for INSERT DATA
         StringWriter writer = new StringWriter();
-        RDFDataMgr.write(writer, model, Lang.TURTLE);
+        RDFDataMgr.write(writer, model, Lang.NTRIPLES);
         
         UpdateExecutionHTTP.service(updateEndpoint)
             .update("INSERT DATA { " + writer.toString() + " }")

@@ -35,6 +35,79 @@ This document demonstrates key features of the Jena-FalkorDB adapter with practi
 
 ---
 
+## Accessing Fuseki
+
+### Fuseki Web UI
+
+Apache Jena Fuseki provides a web-based user interface for managing datasets and running SPARQL queries.
+
+**Access the Fuseki UI:**
+- URL: **http://localhost:3330/**
+- The UI provides:
+  - Dataset management and statistics
+  - Interactive SPARQL query editor with syntax highlighting
+  - SPARQL update interface
+  - File upload capabilities
+  - Server information and configuration
+
+**Quick Start with the UI:**
+1. Open your browser to http://localhost:3330/
+2. Click on the **"query"** tab
+3. Select your dataset (e.g., `/falkor`)
+4. Enter a SPARQL query in the editor
+5. Click **"Execute"** to run the query
+
+### REST API Endpoints
+
+The Fuseki server exposes standard SPARQL Protocol endpoints:
+
+| Endpoint | Method | Purpose | Content-Type |
+|----------|--------|---------|--------------|
+| `http://localhost:3330/falkor/query` | GET/POST | SPARQL SELECT/ASK queries | `application/sparql-query` |
+| `http://localhost:3330/falkor/update` | POST | SPARQL UPDATE operations | `application/sparql-update` |
+| `http://localhost:3330/falkor/data` | GET/POST/PUT/DELETE | Graph Store Protocol (upload/download data) | `text/turtle`, `application/rdf+xml`, etc. |
+| `http://localhost:3330/$/ping` | GET | Health check endpoint | - |
+| `http://localhost:3330/$/stats` | GET | Server statistics | `application/json` |
+
+**Example REST API Usage:**
+
+```bash
+# Query via GET (URL-encoded)
+curl -G http://localhost:3330/falkor/query \
+  --data-urlencode 'query=SELECT * WHERE { ?s ?p ?o } LIMIT 10'
+
+# Query via POST (request body)
+curl -X POST http://localhost:3330/falkor/query \
+  -H "Content-Type: application/sparql-query" \
+  --data 'SELECT * WHERE { ?s ?p ?o } LIMIT 10'
+
+# Upload data (Turtle format)
+curl -X POST http://localhost:3330/falkor/data \
+  -H "Content-Type: text/turtle" \
+  --data-binary @mydata.ttl
+
+# SPARQL UPDATE
+curl -X POST http://localhost:3330/falkor/update \
+  -H "Content-Type: application/sparql-update" \
+  --data 'INSERT DATA { <http://example.org/subject> <http://example.org/predicate> "object" . }'
+
+# Get server stats
+curl http://localhost:3330/$/stats
+```
+
+**Available Result Formats:**
+- `application/sparql-results+json` (JSON results - default)
+- `application/sparql-results+xml` (XML results)
+- `text/csv` (CSV format)
+- `text/tab-separated-values` (TSV format)
+
+Specify format with the `Accept` header:
+```bash
+curl -H "Accept: text/csv" http://localhost:3330/falkor/query?query=...
+```
+
+---
+
 ## 1. Load the Data (Batch Optimized for Large Files)
 
 Batch loading uses transactions to optimize writes for large datasets. The adapter automatically buffers operations during a transaction and flushes them in bulk.
@@ -482,6 +555,51 @@ This POC demonstrates:
 - Read [OPTIMIZATIONS.md](OPTIMIZATIONS.md) for technical details
 - Check [MAGIC_PROPERTY.md](MAGIC_PROPERTY.md) for advanced Cypher patterns
 - Review [samples/](samples/) directory for complete working examples
+
+---
+
+## Tests and Code References
+
+All features demonstrated in this POC are thoroughly tested. Here are the key test files:
+
+### Core Tests
+
+- **[FusekiAssemblerConfigTest.java](jena-fuseki-falkordb/src/test/java/com/falkordb/FusekiAssemblerConfigTest.java)** - Tests Fuseki configuration with FalkorDB assembler
+- **[GrandfatherInferenceSystemTest.java](jena-fuseki-falkordb/src/test/java/com/falkordb/GrandfatherInferenceSystemTest.java)** - Tests forward chaining inference with grandfather rules
+- **[GeoSPARQLPOCSystemTest.java](jena-fuseki-falkordb/src/test/java/com/falkordb/GeoSPARQLPOCSystemTest.java)** - Tests GeoSPARQL with forward inference integration
+- **[FusekiRestartWithDataTest.java](jena-fuseki-falkordb/src/test/java/com/falkordb/FusekiRestartWithDataTest.java)** - Tests server restart with existing data (zero errors)
+
+### Optimization Tests
+
+- **[FalkorDBQueryPushdownTest.java](jena-falkordb-adapter/src/test/java/com/falkordb/jena/query/FalkorDBQueryPushdownTest.java)** - Tests SPARQL to Cypher query pushdown
+- **[FalkorDBAggregationPushdownTest.java](jena-falkordb-adapter/src/test/java/com/falkordb/jena/query/FalkorDBAggregationPushdownTest.java)** - Tests aggregation pushdown optimization
+- **[FalkorDBGeospatialPushdownTest.java](jena-falkordb-adapter/src/test/java/com/falkordb/jena/query/FalkorDBGeospatialPushdownTest.java)** - Tests geospatial query pushdown
+- **[FalkorDBTransactionHandlerTest.java](jena-falkordb-adapter/src/test/java/com/falkordb/jena/FalkorDBTransactionHandlerTest.java)** - Tests batch write optimizations
+
+### Magic Property Tests
+
+- **[CypherQueryFuncTest.java](jena-falkordb-adapter/src/test/java/com/falkordb/jena/pfunction/CypherQueryFuncTest.java)** - Tests magic property Cypher execution
+- **[MagicPropertyDocExamplesTest.java](jena-falkordb-adapter/src/test/java/com/falkordb/jena/pfunction/MagicPropertyDocExamplesTest.java)** - Tests all magic property examples from documentation
+
+### Tracing Tests
+
+- **[FusekiTracingFilterTest.java](jena-fuseki-falkordb/src/test/java/com/falkordb/tracing/FusekiTracingFilterTest.java)** - Tests OpenTelemetry integration with Fuseki
+- **[TracedGraphTest.java](jena-falkordb-adapter/src/test/java/com/falkordb/jena/tracing/TracedGraphTest.java)** - Tests OpenTelemetry tracing at graph level
+
+### GeoSPARQL Tests
+
+- **[GeoSPARQLIntegrationTest.java](jena-geosparql/src/test/java/com/falkordb/geosparql/GeoSPARQLIntegrationTest.java)** - Tests GeoSPARQL module integration
+- **[SafeGeoSPARQLDatasetAssemblerTest.java](jena-fuseki-falkordb/src/test/java/com/falkordb/SafeGeoSPARQLDatasetAssemblerTest.java)** - Tests safe GeoSPARQL assembler error handling
+
+Run all tests:
+```bash
+mvn clean test
+```
+
+Run specific test:
+```bash
+mvn test -Dtest=GrandfatherInferenceSystemTest
+```
 
 ---
 

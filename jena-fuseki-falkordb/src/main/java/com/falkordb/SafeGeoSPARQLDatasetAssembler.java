@@ -51,6 +51,16 @@ import org.slf4j.LoggerFactory;
  */
 public class SafeGeoSPARQLDatasetAssembler extends AssemblerBase {
     
+    /**
+     * Constructs a new SafeGeoSPARQLDatasetAssembler.
+     * 
+     * <p>The assembler uses the default GeoAssembler internally and adds
+     * safe error handling for mixed data types.</p>
+     */
+    public SafeGeoSPARQLDatasetAssembler() {
+        super();
+    }
+    
     private static final Logger LOGGER = LoggerFactory.getLogger(
         SafeGeoSPARQLDatasetAssembler.class);
     
@@ -120,39 +130,42 @@ public class SafeGeoSPARQLDatasetAssembler extends AssemblerBase {
      * @param assembler the assembler to use
      * @param root the root resource
      * @return the base dataset
+     * @throws AssemblerException if the base dataset cannot be retrieved
      */
     private Dataset fallbackToBaseDataset(Assembler assembler, Resource root) {
+        // Get the geosparql:dataset property
+        String GEOSPARQL_NS = "http://jena.apache.org/geosparql#";
+        var datasetProperty = root.getModel().createProperty(GEOSPARQL_NS, "dataset");
+        
+        if (!root.hasProperty(datasetProperty)) {
+            LOGGER.error("Failed to retrieve base dataset: {}", "No geosparql:dataset property found");
+            throw new org.apache.jena.assembler.exceptions.AssemblerException(root,
+                "No geosparql:dataset property found");
+        }
+        
         try {
-            // Get the geosparql:dataset property
-            String GEOSPARQL_NS = "http://jena.apache.org/geosparql#";
-            var datasetProperty = root.getModel().createProperty(GEOSPARQL_NS, "dataset");
+            Resource datasetResource = root.getProperty(datasetProperty).getResource();
+            Dataset baseDataset = (Dataset) assembler.open(datasetResource);
             
-            if (root.hasProperty(datasetProperty)) {
-                Resource datasetResource = root.getProperty(datasetProperty).getResource();
-                Dataset baseDataset = (Dataset) assembler.open(datasetResource);
-                
-                LOGGER.info("Successfully retrieved base dataset");
-                LOGGER.info("GeoSPARQL query rewriting features will be available");
-                LOGGER.info("Spatial index will not be available - spatial queries may be slower");
-                
-                // Initialize GeoSPARQL for query rewriting without index
-                try {
-                    GeoSPARQLConfig.setupMemoryIndex();
-                    LOGGER.info("GeoSPARQL query rewriting initialized");
-                } catch (Exception e) {
-                    LOGGER.debug("Could not initialize GeoSPARQL query rewriting: {}", 
-                                e.getMessage());
-                }
-                
-                return baseDataset;
+            LOGGER.info("Successfully retrieved base dataset");
+            LOGGER.info("GeoSPARQL query rewriting features will be available");
+            LOGGER.info("Spatial index will not be available - spatial queries may be slower");
+            
+            // Initialize GeoSPARQL for query rewriting without index
+            try {
+                GeoSPARQLConfig.setupMemoryIndex();
+                LOGGER.info("GeoSPARQL query rewriting initialized");
+            } catch (Exception e) {
+                LOGGER.debug("Could not initialize GeoSPARQL query rewriting: {}", 
+                            e.getMessage());
             }
             
-            throw new IllegalStateException("No geosparql:dataset property found");
+            return baseDataset;
             
         } catch (Exception e) {
-            LOGGER.error("Failed to retrieve base dataset: {}", e.getMessage(), e);
+            LOGGER.error("Failed to retrieve base dataset: {}", e.getMessage());
             throw new org.apache.jena.assembler.exceptions.AssemblerException(root,
-                "Failed to create Safe GeoSPARQL dataset", e);
+                "Failed to create Safe GeoSPARQL dataset: " + e.getMessage(), e);
         }
     }
 }

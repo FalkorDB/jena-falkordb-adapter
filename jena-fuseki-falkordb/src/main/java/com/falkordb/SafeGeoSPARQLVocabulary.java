@@ -12,6 +12,15 @@ import org.apache.jena.rdf.model.ResourceFactory;
  */
 public class SafeGeoSPARQLVocabulary {
     
+    /**
+     * Private constructor to prevent instantiation of this utility class.
+     * 
+     * <p>This class only provides static constants and methods.</p>
+     */
+    private SafeGeoSPARQLVocabulary() {
+        // Utility class - no instantiation
+    }
+    
     /** Namespace for FalkorDB assembler vocabulary. */
     public static final String NS = "http://falkordb.com/jena/assembler#";
     

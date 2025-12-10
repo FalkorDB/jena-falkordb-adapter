@@ -88,10 +88,11 @@ falkor:FalkorDBModel rdfs:subClassOf ja:Model .
     # Enable query rewriting for optimization
     geosparql:queryRewrite         true ;
     
-    # Enable spatial indexing - SafeGeosparqlDataset will handle errors gracefully
-    # FalkorDB handles spatial operations natively via query pushdown
-    # The SafeGeosparqlDataset catches errors during index building on restart
-    geosparql:indexEnabled         true ;
+    # Disable spatial indexing - NOT NEEDED since FalkorDB handles spatial operations natively
+    # All spatial queries are pushed down to FalkorDB's native point() and distance() functions
+    # via the GeoSPARQLToCypherTranslator in the query pushdown layer
+    # Setting to false avoids the overhead of building an in-memory spatial index
+    geosparql:indexEnabled         false ;
     
     # Whether to apply default geometry to features
     geosparql:applyDefaultGeometry false ;

@@ -26,29 +26,27 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * System test for GeoSPARQL queries from POC.md section 5.
+ * System test for GeoSPARQL queries using config-falkordb.ttl.
  *
- * <p>This test validates all the working queries from POC.md section 5 (GeoSPARQL with Lazy Inference):</p>
+ * <p>This test validates GeoSPARQL spatial queries with the three-layer onion architecture:</p>
  * <ul>
- *   <li>5.4: Find friend-of-friend with their locations</li>
- *   <li>5.5: Check friend-of-friend connection (ASK query)</li>
- *   <li>5.6: Find friends-of-friends with occupations and locations</li>
- *   <li>5.7: Geographic features with people</li>
- *   <li>5.8: Count people by geographic feature</li>
+ *   <li>GeoSPARQL Dataset (outer layer) - handles spatial queries</li>
+ *   <li>Inference Model (middle layer) - applies forward chaining rules for eager inference</li>
+ *   <li>FalkorDB Model (core layer) - physical storage</li>
  * </ul>
  *
- * <p>This test uses config-falkordb-lazy-inference-with-geosparql.ttl which provides:</p>
+ * <p>Tests verify:</p>
  * <ul>
- *   <li>FalkorDB as the backend storage</li>
- *   <li>Lazy inference with friend-of-friend rules (2-hop relationships)</li>
- *   <li>GeoSPARQL spatial query capabilities</li>
+ *   <li>Geographic features with people and relationships</li>
+ *   <li>Spatial queries combined with inference</li>
+ *   <li>Count queries by geographic feature</li>
  * </ul>
  *
  * <p>Prerequisites: FalkorDB must be running on localhost:6379</p>
  */
 public class GeoSPARQLPOCSystemTest {
 
-    private static final int TEST_PORT = 3336;
+    private static final int TEST_PORT = 3337;
     private static final String DATASET_PATH = "/falkor";
     private static final int DEFAULT_FALKORDB_PORT = 6379;
 
@@ -70,18 +68,21 @@ public class GeoSPARQLPOCSystemTest {
 
     @BeforeEach
     public void setUp() throws IOException {
-        // Load and customize config for this test
+        // Initialize GeoSPARQL - required for the GeoSPARQL layer
+        org.apache.jena.geosparql.configuration.GeoSPARQLConfig.setupMemoryIndex();
+        
+        // Load config-falkordb.ttl and customize for this test
         String configContent = loadAndCustomizeConfig(falkorHost, falkorPort);
-        Path configPath = tempDir.resolve("config-test-geosparql-poc.ttl");
+        Path configPath = tempDir.resolve("config-falkordb.ttl");
         Files.writeString(configPath, configContent);
 
-        // Copy the friend_of_friend rule file to a location accessible by the config
+        // Copy the grandfather forward rule file to a location accessible by the config
         Path rulesDir = tempDir.resolve("rules");
         Files.createDirectories(rulesDir);
         try (InputStream ruleStream = getClass().getClassLoader()
-                .getResourceAsStream("rules/friend_of_friend_bwd.rule")) {
+                .getResourceAsStream("rules/grandfather_of_fwd.rule")) {
             if (ruleStream != null) {
-                Files.copy(ruleStream, rulesDir.resolve("friend_of_friend_bwd.rule"));
+                Files.copy(ruleStream, rulesDir.resolve("grandfather_of_fwd.rule"));
             }
         }
 
@@ -115,22 +116,21 @@ public class GeoSPARQLPOCSystemTest {
     }
 
     /**
-     * Load and customize the config file for this test.
+     * Load config-falkordb.ttl from resources and customize it for this test.
      */
     private String loadAndCustomizeConfig(String host, int port) throws IOException {
-        try (InputStream is = getClass().getClassLoader().getResourceAsStream(
-                "config-falkordb-lazy-inference-with-geosparql.ttl")) {
-            if (is == null) {
-                throw new IllegalStateException("Config file not found");
+        try (InputStream configStream = getClass().getClassLoader()
+                .getResourceAsStream("config-falkordb.ttl")) {
+            if (configStream == null) {
+                throw new IOException("config-falkordb.ttl not found in test resources");
             }
-            String config = new String(is.readAllBytes());
-            
-            // Customize for this test
-            config = config.replace("\"localhost\"", "\"" + host + "\"");
-            config = config.replace("6379", String.valueOf(port));
-            config = config.replace("knowledge_graph_geo", "geosparql_poc_test_" + System.currentTimeMillis());
-            
-            return config;
+            String content = new String(configStream.readAllBytes());
+            // Customize the host, port, and graph name for testing
+            content = content.replace("falkor:host \"localhost\"", "falkor:host \"" + host + "\"");
+            content = content.replace("falkor:port 6379", "falkor:port " + port);
+            content = content.replace("falkor:graphName \"knowledge_graph\"", 
+                                    "falkor:graphName \"geosparql_poc_test_" + System.currentTimeMillis() + "\"");
+            return content;
         }
     }
 

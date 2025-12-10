@@ -1,37 +1,35 @@
-# FalkorDB Fuseki Configuration with Lazy Inference and GeoSPARQL Support
+# FalkorDB + Eager Inference + GeoSPARQL Configuration
 #
-# This configuration file combines lazy inference (backward chaining rules)
-# with GeoSPARQL spatial query capabilities using FalkorDB as the backend.
+# ARCHITECTURE (The "Three-Layer Onion"):
+# ---------------------------
+# Level 1 (Top): GeoSPARQL Dataset (<#geospatial_dataset>)
+#       - Intercepts spatial queries (e.g., geof:sfWithin)
+#       - Wraps the Inference Model
 #
-# Features:
-# - Lazy inference uses backward chaining rules to compute inferred triples
-#   on-demand when queried
-# - GeoSPARQL enables spatial queries for points, polygons, and other geometries
-# - FalkorDB provides the persistent graph database backend
+# Level 2 (Middle): Inference Model (<#inf_model>)
+#       - Runs in 'forward' (eager) mode
+#       - Immediately materializes "grandfather" triples when "father" triples are added
+#       - Wraps the FalkorDB Model
 #
-# The configuration uses:
-# 1. FalkorDB as the base storage layer
-# 2. Generic Rule Reasoner with backward chaining for lazy inference
-# 3. GeoSPARQL dataset wrapper for spatial functionality
+# Level 3 (Bottom): FalkorDB Model (<#falkor_model>)
+#       - Physical storage layer
+#       - Connects to Redis/FalkorDB
 #
 # To use this configuration:
 # 1. Start FalkorDB: docker run -p 6379:6379 -it --rm falkordb/falkordb:latest
-# 2. Build the project: mvn clean install
-# 3. Run Fuseki with this config: 
-#    java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar --config config-falkordb-lazy-inference-with-geosparql.ttl
+# 2. Run Fuseki with this config: 
+#    java -jar jena-fuseki-falkordb.jar --config config-falkordb.ttl
 #
-# Example usage:
-# - Store social network with spatial locations
-# - Infer transitive relationships (friend of friend)
-# - Query for people within certain areas or distances
-# - Find spatial relationships (contains, within, intersects)
+# Prerequisites:
+# - FalkorDB must be running on localhost:6379 (or as configured below)
+# - The jena-fuseki-falkordb JAR must include the assembler module
 
-@prefix :        <#> .
-@prefix falkor:  <http://falkordb.com/jena/assembler#> .
-@prefix fuseki:  <http://jena.apache.org/fuseki#> .
-@prefix ja:      <http://jena.hpl.hp.com/2005/11/Assembler#> .
-@prefix rdf:     <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
-@prefix rdfs:    <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix :          <#> .
+@prefix fuseki:    <http://jena.apache.org/fuseki#> .
+@prefix rdf:       <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:      <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix ja:        <http://jena.hpl.hp.com/2005/11/Assembler#> .
+@prefix falkor:    <http://falkordb.com/jena/assembler#> .
 @prefix geosparql: <http://jena.apache.org/geosparql#> .
 
 # Declare FalkorDBModel as a subclass of ja:Model for assembler compatibility
@@ -43,7 +41,7 @@ falkor:FalkorDBModel rdfs:subClassOf ja:Model .
      :service
    ) .
 
-# The service with combined lazy inference and GeoSPARQL capabilities
+# The FalkorDB-backed service with three-layer onion architecture
 :service rdf:type fuseki:Service ;
     # Service name - endpoint will be available at /falkor
     fuseki:name "falkor" ;
@@ -76,12 +74,12 @@ falkor:FalkorDBModel rdfs:subClassOf ja:Model .
         fuseki:name "data"
     ] ;
     
-    # Link to the GeoSPARQL dataset wrapping the inference model
-    fuseki:dataset :dataset_geosparql .
+    # Link to the GeoSPARQL dataset (outer layer)
+    fuseki:dataset :geospatial_dataset .
 
-# GeoSPARQL Dataset Configuration
+# Level 1 (Outer Layer): GeoSPARQL Dataset Configuration
 # This wraps the inference dataset with GeoSPARQL capabilities
-:dataset_geosparql rdf:type geosparql:GeosparqlDataset ;
+:geospatial_dataset rdf:type geosparql:GeosparqlDataset ;
     # Enable GeoSPARQL inference (derives additional spatial relations)
     geosparql:inference            true ;
     
@@ -101,28 +99,33 @@ falkor:FalkorDBModel rdfs:subClassOf ja:Model .
     # Index expiry times in milliseconds
     geosparql:indexExpires         "5000,5000,5000" ;
 
-    # Base dataset with inference model
+    # Base dataset with inference model (middle layer)
     geosparql:dataset :dataset_rdf .
 
 # RDF Dataset wrapping the inference model
+# This is needed because GeoSPARQL expects a Dataset, not a Model
 :dataset_rdf rdf:type ja:RDFDataset ;
-    ja:defaultGraph :model_inf .
+    ja:defaultGraph :inf_model .
 
-# Inference model with Generic Rule Reasoner using backward chaining (lazy inference)
-# Backward chaining rules are evaluated on-demand when queries are executed
-:model_inf rdf:type ja:InfModel ;
-    ja:baseModel :falkor_db_model ;
+# Level 2 (Middle Layer): Inference Model with Generic Rule Reasoner
+# This model wraps the FalkorDB base model and applies forward chaining rules
+# Forward chaining (eager inference) materializes inferred triples immediately
+# when new data is added
+:inf_model rdf:type ja:InfModel ;
+    ja:baseModel :falkor_model ;
     ja:reasoner [
         # Use Generic Rule Reasoner
         # See: https://jena.apache.org/documentation/inference/
         ja:reasonerURL <http://jena.hpl.hp.com/2003/GenericRuleReasoner> ;
-        # Load backward chaining rules from file for lazy inference
-        ja:rulesFrom <file:rules/friend_of_friend_bwd.rule> ;
+        # Load forward chaining rules from file for eager inference
+        # Forward rules materialize grandfather relationships immediately
+        ja:rulesFrom <file:rules/grandfather_of_fwd.rule> ;
     ] .
 
-# FalkorDB-backed model configuration (base model)
-:falkor_db_model rdf:type falkor:FalkorDBModel ;
+# Level 3 (Core/Bottom Layer): FalkorDB-backed model configuration
+# This is the physical storage layer
+:falkor_model rdf:type falkor:FalkorDBModel ;
     # FalkorDB connection settings (all optional with defaults shown)
     falkor:host "localhost" ;  # Default: "localhost"
     falkor:port 6379 ;         # Default: 6379
-    falkor:graphName "knowledge_graph_geo" .  # Default: "rdf_graph"
+    falkor:graphName "knowledge_graph" .  # Default: "rdf_graph"

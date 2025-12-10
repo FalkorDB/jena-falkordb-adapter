@@ -13,18 +13,19 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Tests for Fuseki server started with assembler configuration file.
+ * Tests for Fuseki server started with config-falkordb.ttl configuration file.
  * 
  * This verifies that:
  * 1. The FalkorDBAssembler is properly registered and used
- * 2. Configuration files can define FalkorDB-backed datasets
- * 3. The server works correctly with config-based initialization
+ * 2. The config-falkordb.ttl file correctly defines the three-layer onion architecture
+ * 3. The server works correctly with GeoSPARQL + Inference + FalkorDB layers
  * 
  * Prerequisites: FalkorDB must be running. Configure via environment variables:
  * - FALKORDB_HOST (default: localhost)
@@ -53,10 +54,23 @@ public class FusekiAssemblerConfigTest {
     
     @BeforeEach
     public void setUp() throws IOException {
-        // Generate config file with dynamic port
-        String configContent = generateConfigFile(falkorHost, falkorPort);
-        Path configPath = tempDir.resolve("config-test-falkordb.ttl");
+        // Initialize GeoSPARQL - required for the GeoSPARQL layer
+        org.apache.jena.geosparql.configuration.GeoSPARQLConfig.setupMemoryIndex();
+        
+        // Load config-falkordb.ttl from test resources and customize it with dynamic connection
+        String configContent = loadAndCustomizeConfig(falkorHost, falkorPort);
+        Path configPath = tempDir.resolve("config-falkordb.ttl");
         Files.writeString(configPath, configContent);
+        
+        // Copy the grandfather forward rule file to a location accessible by the config
+        Path rulesDir = tempDir.resolve("rules");
+        Files.createDirectories(rulesDir);
+        try (InputStream ruleStream = getClass().getClassLoader()
+                .getResourceAsStream("rules/grandfather_of_fwd.rule")) {
+            if (ruleStream != null) {
+                Files.copy(ruleStream, rulesDir.resolve("grandfather_of_fwd.rule"));
+            }
+        }
         
         // Start Fuseki server with config file
         server = FusekiServer.create()
@@ -65,9 +79,9 @@ public class FusekiAssemblerConfigTest {
             .build();
         server.start();
         
-        // Endpoints based on config file service name "testdb"
-        sparqlEndpoint = "http://localhost:" + TEST_PORT + "/testdb/query";
-        updateEndpoint = "http://localhost:" + TEST_PORT + "/testdb/update";
+        // Endpoints based on config file service name "falkor"
+        sparqlEndpoint = "http://localhost:" + TEST_PORT + "/falkor/query";
+        updateEndpoint = "http://localhost:" + TEST_PORT + "/falkor/update";
         
         // Clear any existing data
         String clearQuery = "DELETE WHERE { ?s ?p ?o }";
@@ -75,33 +89,22 @@ public class FusekiAssemblerConfigTest {
     }
     
     /**
-     * Generate a Fuseki configuration file with the given FalkorDB connection details.
+     * Load config-falkordb.ttl from resources and customize with dynamic FalkorDB connection.
      */
-    private String generateConfigFile(String host, int port) {
-        return "# FalkorDB Fuseki Test Configuration (generated)\n" +
-               "@prefix :        <#> .\n" +
-               "@prefix falkor:  <http://falkordb.com/jena/assembler#> .\n" +
-               "@prefix fuseki:  <http://jena.apache.org/fuseki#> .\n" +
-               "@prefix ja:      <http://jena.hpl.hp.com/2005/11/Assembler#> .\n" +
-               "@prefix rdf:     <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .\n" +
-               "\n" +
-               "[] rdf:type fuseki:Server ;\n" +
-               "   fuseki:services ( :service ) .\n" +
-               "\n" +
-               ":service rdf:type fuseki:Service ;\n" +
-               "    fuseki:name \"testdb\" ;\n" +
-               "    fuseki:endpoint [ fuseki:operation fuseki:query ; fuseki:name \"query\" ] ;\n" +
-               "    fuseki:endpoint [ fuseki:operation fuseki:update ; fuseki:name \"update\" ] ;\n" +
-               "    fuseki:endpoint [ fuseki:operation fuseki:gsp-rw ; fuseki:name \"data\" ] ;\n" +
-               "    fuseki:dataset :dataset_rdf .\n" +
-               "\n" +
-               ":dataset_rdf rdf:type ja:RDFDataset ;\n" +
-               "    ja:defaultGraph :falkor_db_model .\n" +
-               "\n" +
-               ":falkor_db_model rdf:type falkor:FalkorDBModel ;\n" +
-               "    falkor:host \"" + host + "\" ;\n" +
-               "    falkor:port " + port + " ;\n" +
-               "    falkor:graphName \"test_assembler_graph\" .\n";
+    private String loadAndCustomizeConfig(String host, int port) throws IOException {
+        try (InputStream configStream = getClass().getClassLoader()
+                .getResourceAsStream("config-falkordb.ttl")) {
+            if (configStream == null) {
+                throw new IOException("config-falkordb.ttl not found in test resources");
+            }
+            String content = new String(configStream.readAllBytes());
+            // Customize the host, port, and graph name for testing
+            content = content.replace("falkor:host \"localhost\"", "falkor:host \"" + host + "\"");
+            content = content.replace("falkor:port 6379", "falkor:port " + port);
+            content = content.replace("falkor:graphName \"knowledge_graph\"", 
+                                    "falkor:graphName \"test_assembler_graph\"");
+            return content;
+        }
     }
     
     @AfterEach
@@ -199,6 +202,15 @@ public class FusekiAssemblerConfigTest {
         
         try (QueryExecution qexec = QueryExecutionHTTP.service(sparqlEndpoint).query(verifyTypes).build()) {
             assertTrue(qexec.execAsk(), "All three should be of type Male");
+        }
+        
+        // Test forward chaining inference: grandfather_of should be materialized
+        String verifyGrandfather = 
+            "PREFIX ff: <http://www.semanticweb.org/ontologies/2023/1/fathers_father#> " +
+            "ASK { ff:Abraham ff:grandfather_of ff:Jacob }";
+        
+        try (QueryExecution qexec = QueryExecutionHTTP.service(sparqlEndpoint).query(verifyGrandfather).build()) {
+            assertTrue(qexec.execAsk(), "Abraham should be grandfather of Jacob (forward chaining inference)");
         }
     }
     

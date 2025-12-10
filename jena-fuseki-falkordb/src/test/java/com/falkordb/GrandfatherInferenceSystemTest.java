@@ -20,34 +20,18 @@ import java.nio.file.Path;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * System test for grandfather inference using config-falkordb-lazy-inference.ttl.
+ * System test for grandfather inference using config-falkordb.ttl.
  *
- * <p>This test demonstrates the complete workflow from POC.md:</p>
+ * <p>This test demonstrates the complete workflow using the three-layer onion architecture:</p>
  * <ul>
- *   <li>Starting a Fuseki server with FalkorDB backend and lazy inference using the existing config file pattern</li>
- *   <li>Loading fathers_father_sample.ttl data file</li>
- *   <li>Querying for grandfather_of relationships using backward chaining rules</li>
+ *   <li>GeoSPARQL Dataset (outer layer) - handles spatial queries</li>
+ *   <li>Inference Model (middle layer) - applies forward chaining rules for eager inference</li>
+ *   <li>FalkorDB Model (core layer) - physical storage</li>
  * </ul>
  *
- * <p>This test addresses the issue where the user ran:</p>
- * <pre>
- * curl -G http://localhost:3330/falkor/query \
- *   -H "Accept: application/sparql-results+json" \
- *   --data-urlencode 'query=
- * PREFIX ff: http://www.semanticweb.org/ontologies/2023/1/fathers_father#
- * SELECT ?grandfather ?grandson
- * WHERE {
- *   ?grandfather ff:grandfather_of ?grandson .
- * }'
- * </pre>
- * and got empty results.
- *
- * <p>This test uses the existing config-falkordb-lazy-inference.ttl file which configures:</p>
- * <ul>
- *   <li>FalkorDB as the backend (not in-memory)</li>
- *   <li>Generic Rule Reasoner with backward chaining (lazy inference)</li>
- *   <li>Custom configuration using rules/grandfather_of_bwd.rule for this specific test</li>
- * </ul>
+ * <p>The test verifies that grandfather_of relationships are eagerly materialized
+ * when father_of triples are inserted, using the forward chaining rules from
+ * rules/grandfather_of_fwd.rule.</p>
  *
  * <p>Prerequisites: FalkorDB must be running on localhost:6379</p>
  */
@@ -75,18 +59,21 @@ public class GrandfatherInferenceSystemTest {
 
     @BeforeEach
     public void setUp() throws IOException {
-        // Load the config-falkordb-lazy-inference.ttl from resources and customize it for this test
+        // Initialize GeoSPARQL - required for the GeoSPARQL layer
+        org.apache.jena.geosparql.configuration.GeoSPARQLConfig.setupMemoryIndex();
+        
+        // Load config-falkordb.ttl from resources and customize it for this test
         String configContent = loadAndCustomizeConfig(falkorHost, falkorPort);
-        Path configPath = tempDir.resolve("config-test-grandfather.ttl");
+        Path configPath = tempDir.resolve("config-falkordb.ttl");
         Files.writeString(configPath, configContent);
 
-        // Copy the grandfather rule file to a location accessible by the config
+        // Copy the grandfather forward rule file to a location accessible by the config
         Path rulesDir = tempDir.resolve("rules");
         Files.createDirectories(rulesDir);
         try (InputStream ruleStream = getClass().getClassLoader()
-                .getResourceAsStream("rules/grandfather_of_bwd.rule")) {
+                .getResourceAsStream("rules/grandfather_of_fwd.rule")) {
             if (ruleStream != null) {
-                Files.copy(ruleStream, rulesDir.resolve("grandfather_of_bwd.rule"));
+                Files.copy(ruleStream, rulesDir.resolve("grandfather_of_fwd.rule"));
             }
         }
 
@@ -110,44 +97,22 @@ public class GrandfatherInferenceSystemTest {
     }
 
     /**
-     * Load config-falkordb-lazy-inference.ttl and customize it for this test with dynamic settings.
+     * Load config-falkordb.ttl from resources and customize it for this test with dynamic settings.
      */
-    private String loadAndCustomizeConfig(String host, int port) {
-        // Generate config similar to config-falkordb-lazy-inference.ttl but with test-specific settings
-        return "# FalkorDB Fuseki Configuration with Inference Rules (Test)\n" +
-               "@prefix :        <#> .\n" +
-               "@prefix falkor:  <http://falkordb.com/jena/assembler#> .\n" +
-               "@prefix fuseki:  <http://jena.apache.org/fuseki#> .\n" +
-               "@prefix ja:      <http://jena.hpl.hp.com/2005/11/Assembler#> .\n" +
-               "@prefix rdf:     <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .\n" +
-               "@prefix rdfs:    <http://www.w3.org/2000/01/rdf-schema#> .\n" +
-               "\n" +
-               "falkor:FalkorDBModel rdfs:subClassOf ja:Model .\n" +
-               "\n" +
-               "[] rdf:type fuseki:Server ;\n" +
-               "   fuseki:services ( :service ) .\n" +
-               "\n" +
-               ":service rdf:type fuseki:Service ;\n" +
-               "    fuseki:name \"falkor\" ;\n" +
-               "    fuseki:endpoint [ fuseki:operation fuseki:query ; fuseki:name \"query\" ] ;\n" +
-               "    fuseki:endpoint [ fuseki:operation fuseki:update ; fuseki:name \"update\" ] ;\n" +
-               "    fuseki:endpoint [ fuseki:operation fuseki:gsp-rw ; fuseki:name \"data\" ] ;\n" +
-               "    fuseki:dataset :dataset_rdf .\n" +
-               "\n" +
-               ":dataset_rdf rdf:type ja:RDFDataset ;\n" +
-               "    ja:defaultGraph :model_inf .\n" +
-               "\n" +
-               ":model_inf rdf:type ja:InfModel ;\n" +
-               "    ja:baseModel :falkor_db_model ;\n" +
-               "    ja:reasoner [\n" +
-               "        ja:reasonerURL <http://jena.hpl.hp.com/2003/GenericRuleReasoner> ;\n" +
-               "        ja:rulesFrom <file:" + tempDir.resolve("rules/grandfather_of_bwd.rule").toString() + "> ;\n" +
-               "    ] .\n" +
-               "\n" +
-               ":falkor_db_model rdf:type falkor:FalkorDBModel ;\n" +
-               "    falkor:host \"" + host + "\" ;\n" +
-               "    falkor:port " + port + " ;\n" +
-               "    falkor:graphName \"grandfather_test_graph\" .\n";
+    private String loadAndCustomizeConfig(String host, int port) throws IOException {
+        try (InputStream configStream = getClass().getClassLoader()
+                .getResourceAsStream("config-falkordb.ttl")) {
+            if (configStream == null) {
+                throw new IOException("config-falkordb.ttl not found in test resources");
+            }
+            String content = new String(configStream.readAllBytes());
+            // Customize the host, port, and graph name for testing
+            content = content.replace("falkor:host \"localhost\"", "falkor:host \"" + host + "\"");
+            content = content.replace("falkor:port 6379", "falkor:port " + port);
+            content = content.replace("falkor:graphName \"knowledge_graph\"", 
+                                    "falkor:graphName \"grandfather_test_graph\"");
+            return content;
+        }
     }
 
     @AfterEach
@@ -210,16 +175,9 @@ public class GrandfatherInferenceSystemTest {
             assertEquals(2, count, "Should have 2 father relationships (Abraham->Isaac, Isaac->Jacob)");
         }
 
-        // Step 2: Query for grandfather_of relationships (should be inferred by the rule)
-        // This mimics the exact query the user ran:
-        // curl -G http://localhost:3330/falkor/query \
-        //   -H "Accept: application/sparql-results+json" \
-        //   --data-urlencode 'query=
-        // PREFIX ff: <http://www.semanticweb.org/ontologies/2023/1/fathers_father#>
-        // SELECT ?grandfather ?grandson
-        // WHERE {
-        //   ?grandfather ff:grandfather_of ?grandson .
-        // }'
+        // Step 2: Query for grandfather_of relationships (should be materialized by forward chaining)
+        // With forward chaining (eager inference), the grandfather_of triple is materialized
+        // immediately when the father_of triples are inserted, so it should exist in the data
         
         String grandfatherQuery =
                 "PREFIX ff: <http://www.semanticweb.org/ontologies/2023/1/fathers_father#> " +
@@ -231,26 +189,26 @@ public class GrandfatherInferenceSystemTest {
         try (QueryExecution qexec = QueryExecutionHTTP.service(sparqlEndpoint).query(grandfatherQuery).build()) {
             ResultSet results = qexec.execSelect();
             assertTrue(results.hasNext(), 
-                "Should infer grandfather relationship (Abraham grandfather_of Jacob) using FalkorDB backend");
+                "Should have materialized grandfather relationship (Abraham grandfather_of Jacob) via forward chaining");
 
             var solution = results.next();
             String grandfather = solution.getResource("grandfather").getURI();
             String grandson = solution.getResource("grandson").getURI();
 
-            System.out.println("Inferred grandfather relationship: " + grandfather + " -> " + grandson);
+            System.out.println("Materialized grandfather relationship: " + grandfather + " -> " + grandson);
 
             assertTrue(grandfather.endsWith("Abraham"), 
-                "Abraham should be inferred as grandfather");
+                "Abraham should be materialized as grandfather");
             assertTrue(grandson.endsWith("Jacob"), 
-                "Jacob should be inferred as grandson");
+                "Jacob should be materialized as grandson");
             
             assertFalse(results.hasNext(), 
-                "Should have exactly one grandfather relationship inferred");
+                "Should have exactly one grandfather relationship materialized");
         }
     }
 
     @Test
-    @DisplayName("System Test: Verify ASK query for specific grandfather relationship with FalkorDB backend")
+    @DisplayName("System Test: Verify ASK query for specific grandfather relationship with FalkorDB backend and forward chaining")
     public void testAskQueryForGrandfatherRelationship() {
         // Insert data
         String insertQuery =
@@ -262,20 +220,20 @@ public class GrandfatherInferenceSystemTest {
 
         UpdateExecutionHTTP.service(updateEndpoint).update(insertQuery).execute();
 
-        // ASK if Abraham is grandfather of Jacob (should be inferred)
+        // ASK if Abraham is grandfather of Jacob (should be materialized via forward chaining)
         String askQuery =
                 "PREFIX ff: <http://www.semanticweb.org/ontologies/2023/1/fathers_father#> " +
                         "ASK { ff:Abraham ff:grandfather_of ff:Jacob }";
 
         try (QueryExecution qexec = QueryExecutionHTTP.service(sparqlEndpoint).query(askQuery).build()) {
             boolean result = qexec.execAsk();
-            assertTrue(result, "Abraham should be inferred as grandfather of Jacob using FalkorDB+inference");
+            assertTrue(result, "Abraham should be materialized as grandfather of Jacob using FalkorDB+forward chaining inference");
         }
     }
 
     @Test
-    @DisplayName("System Test: Query all relationships including inferred ones with FalkorDB backend")
-    public void testQueryAllRelationshipsIncludingInferred() {
+    @DisplayName("System Test: Query all relationships including materialized ones with FalkorDB backend and forward chaining")
+    public void testQueryAllRelationshipsIncludingMaterialized() {
         // Insert data
         String insertQuery =
                 "PREFIX ff: <http://www.semanticweb.org/ontologies/2023/1/fathers_father#> " +

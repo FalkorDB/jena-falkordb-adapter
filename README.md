@@ -272,11 +272,11 @@ mvn clean install
 
 **Step 3:** Run the Fuseki server
 ```bash
-# Run Fuseki server with the three-layer config
+# Run Fuseki server with the three-layer config (recommended)
 java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
   --config jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl
 
-# OR run the Fuseki SPARQL server
+# OR run with environment variables (simpler, uses default settings)
 java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar
 ```
 
@@ -945,28 +945,6 @@ mvn exec:java -Dexec.mainClass="com.falkordb.samples.AggregationsExample"
 mvn exec:java -Dexec.mainClass="com.falkordb.samples.MagicPropertyExample"
 ```
 
-### Running Examples via Fuseki Server
-
-You can also run examples via the Fuseki server web UI:
-
-**Step 1:** Start Fuseki with FalkorDB backend:
-```bash
-java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
-  --config jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl
-```
-
-**Step 2:** Open the Fuseki Web UI in your browser:
-- Navigate to **http://localhost:3330/**
-- Select the `/falkor` dataset
-- Use the query editor to run SPARQL queries interactively
-
-**Step 3:** Load sample data via the web UI or HTTP:
-```bash
-curl -X POST http://localhost:3330/falkor/update \
-  -H "Content-Type: text/turtle" \
-  --data-binary @samples/batch-writes/data-example.ttl
-```
-
 ### Loading Sample Data
 
 Each example directory contains sample data files (`data-example.ttl`). To load them:
@@ -1221,8 +1199,12 @@ mvn clean package
 # Run the adapter demo
 java -jar jena-falkordb-adapter/target/jena-falkordb-adapter-0.2.0-SNAPSHOT.jar
 
-# Run the Fuseki server with FalkorDB
+# Run the Fuseki server with FalkorDB (uses environment variables or defaults)
 java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar
+
+# OR run with config file (recommended for production)
+java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
+  --config jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl
 ```
 
 ### Running the Fuseki Server

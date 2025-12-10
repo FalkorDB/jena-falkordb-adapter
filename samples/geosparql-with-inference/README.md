@@ -1,14 +1,14 @@
-# GeoSPARQL with Lazy Inference Example
+# GeoSPARQL with Forward Inference Example
 
-This example demonstrates how to combine **lazy inference** (backward chaining rules) with **GeoSPARQL** spatial queries using FalkorDB as the backend storage. This powerful combination enables queries that span both inferred relationships and geographic data.
+This example demonstrates how to combine **forward inference** (eager, forward chaining rules) with **GeoSPARQL** spatial queries using FalkorDB as the backend storage. This powerful combination enables queries that span both materialized inferred relationships and geographic data.
 
 ## Overview
 
-The configuration `config-falkordb-lazy-inference-with-geosparql.ttl` stacks three layers:
+The configuration [config-falkordb.ttl](../../jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl) implements a three-layer onion architecture:
 
-1. **FalkorDB** - Persistent graph database backend
-2. **Generic Rule Reasoner** - Lazy inference using backward chaining rules
-3. **GeoSPARQL Dataset** - Spatial query capabilities with indexing
+1. **GeoSPARQL Dataset (Outer Layer)** - Spatial query capabilities with indexing and optimization
+2. **Inference Model (Middle Layer)** - Forward chaining (eager inference) materializes relationships immediately
+3. **FalkorDB Model (Core Layer)** - Persistent graph database backend
 
 ## Use Cases
 
@@ -34,9 +34,7 @@ Alice -> Bob -> Carol
          Bob -> Dave -> Eve
 ```
 
-With lazy inference, this enables transitive queries:
-- Alice transitively knows: Bob, Carol, Dave, Eve
-- Bob transitively knows: Carol, Dave, Eve
+With forward inference using grandfather rules, when father_of relationships are inserted, grandfather_of relationships are automatically materialized.
 
 ### Geographic Data
 

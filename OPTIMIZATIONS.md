@@ -1624,585 +1624,555 @@ See **[GEOSPATIAL_PUSHDOWN.md](GEOSPATIAL_PUSHDOWN.md)**
 
 ## Future Improvements
 
-The query pushdown can be extended to support additional SPARQL patterns. Below are implementation suggestions for each:
+The query pushdown mechanism continues to evolve. Below are potential improvements and additional SPARQL patterns that could be supported:
 
-### OPTIONAL Patterns
+### 1. MINUS (Set Difference)
 
-> **Status**: ✅ **IMPLEMENTED**  
-> **Tests**: See [SparqlToCypherCompilerTest.java](jena-falkordb-adapter/src/test/java/com/falkordb/jena/query/SparqlToCypherCompilerTest.java) (`testOptional*` methods) and [FalkorDBQueryPushdownTest.java](jena-falkordb-adapter/src/test/java/com/falkordb/jena/query/FalkorDBQueryPushdownTest.java) (`testOptional*` methods)  
-> **Examples**: See [samples/optional-patterns/](samples/optional-patterns/)  
-> **Documentation**: See [OPTIONAL Patterns section](#optional-patterns) above for complete documentation
+**Status**: ❌ **NOT YET IMPLEMENTED**
 
-SPARQL `OPTIONAL` patterns are now automatically translated to Cypher `OPTIONAL MATCH` clauses. This allows returning all matches from the required pattern with NULL values for optional data, all in a single database query.
-
-**Key Features:**
-- ✅ Single query execution (no N+1 queries)
-- ✅ NULL handling for missing optional data
-- ✅ Multiple OPTIONAL clauses supported
-- ✅ FILTER expressions in required patterns
-- ✅ Literal properties and relationships
-- ✅ Complete test coverage
-
-**Implementation:**
-- `FalkorDBOpExecutor.java`: `execute(OpLeftJoin, QueryIterator)` method intercepts OPTIONAL operations
-- `SparqlToCypherCompiler.java`: `translateWithOptional()` method generates `OPTIONAL MATCH` clauses
-
-### FILTER Expressions
-
-> **Status**: ✅ **IMPLEMENTED**  
-> **Tests**: See [SparqlToCypherCompilerTest.java](jena-falkordb-adapter/src/test/java/com/falkordb/jena/query/SparqlToCypherCompilerTest.java) (`testFilterWith*` methods) and [FalkorDBQueryPushdownTest.java](jena-falkordb-adapter/src/test/java/com/falkordb/jena/query/FalkorDBQueryPushdownTest.java) (`testFilterWith*` methods)  
-> **Examples**: See [samples/filter-expressions/](samples/filter-expressions/)
-
-SPARQL `FILTER` expressions are now automatically translated to Cypher `WHERE` clauses, eliminating client-side filtering and reducing data transfer.
-
-**Supported Operators:**
-
-| SPARQL | Cypher | Example |
-|--------|--------|---------|
-| `FILTER(?x < 10)` | `WHERE x < 10` | Less than |
-| `FILTER(?x <= 10)` | `WHERE x <= 10` | Less than or equal |
-| `FILTER(?x > 10)` | `WHERE x > 10` | Greater than |
-| `FILTER(?x >= 10)` | `WHERE x >= 10` | Greater than or equal |
-| `FILTER(?x = "value")` | `WHERE x = 'value'` | Equals |
-| `FILTER(?x != "value")` | `WHERE x <> 'value'` | Not equals |
-| `FILTER(?x > 10 && ?x < 20)` | `WHERE (x > 10 AND x < 20)` | Logical AND |
-| `FILTER(?x < 10 || ?x > 20)` | `WHERE (x < 10 OR x > 20)` | Logical OR |
-| `FILTER(! (?x < 10))` | `WHERE NOT (x < 10)` | Logical NOT |
+SPARQL `MINUS` patterns allow set difference operations (A - B), which could be translated to Cypher's filtering mechanisms.
 
 **Example:**
-
 ```sparql
-# SPARQL with FILTER
-PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+# SPARQL: Find people who don't know Alice
+SELECT ?person WHERE {
+    ?person rdf:type foaf:Person .
+    MINUS { ?person foaf:knows <http://example.org/alice> }
+}
+```
+
+**Potential Cypher:**
+```cypher
+MATCH (person:Resource:`http://xmlns.com/foaf/0.1/Person`)
+WHERE NOT EXISTS {
+    MATCH (person)-[:`http://xmlns.com/foaf/0.1/knows`]->(:Resource {uri: $alice})
+}
+RETURN person.uri AS person
+```
+
+**Implementation Approach:**
+- Intercept `OpMinus` in `FalkorDBOpExecutor`
+- Translate to Cypher `WHERE NOT EXISTS` pattern
+- Handle nested graph patterns within MINUS
+
+### 2. BIND Expressions
+
+**Status**: ❌ **NOT YET IMPLEMENTED**
+
+SPARQL `BIND` allows creating derived variables from expressions, which could be translated to Cypher computed properties or WITH clauses.
+
+**Example:**
+```sparql
+# SPARQL: Calculate age from birth year
 SELECT ?person ?age WHERE {
-    ?person foaf:age ?age .
-    FILTER(?age >= 18 && ?age < 65)
+    ?person ex:birthYear ?birthYear .
+    BIND(2024 - ?birthYear AS ?age)
 }
 ```
 
+**Potential Cypher:**
 ```cypher
-# Generated Cypher with WHERE clause
 MATCH (person:Resource)
-WHERE person.`http://xmlns.com/foaf/0.1/age` IS NOT NULL
-  AND (person.`http://xmlns.com/foaf/0.1/age` >= 18 
-   AND person.`http://xmlns.com/foaf/0.1/age` < 65)
-RETURN person.uri AS person, 
-       person.`http://xmlns.com/foaf/0.1/age` AS age
+WHERE person.`http://example.org/birthYear` IS NOT NULL
+WITH person, 2024 - person.`http://example.org/birthYear` AS age
+RETURN person.uri AS person, age
 ```
 
-**FILTER with UNION Queries:**
+### 3. Advanced FILTER Functions
 
-When a BGP uses variable object optimization (resulting in UNION), FILTER is automatically applied to each UNION branch:
+**Status**: ⚠️ **PARTIALLY IMPLEMENTED**
 
+Additional SPARQL filter functions could be supported:
+
+| Function | Status | Cypher Equivalent |
+|----------|--------|-------------------|
+| `regex(?x, "pattern")` | ❌ | `x =~ 'pattern'` |
+| `str(?x)` | ❌ | `toString(x)` |
+| `bound(?x)` | ❌ | `x IS NOT NULL` |
+| `isURI(?x)` | ❌ | Type checking logic |
+| `isLiteral(?x)` | ❌ | Type checking logic |
+| `datatype(?x)` | ❌ | Type inspection |
+| `lang(?x)` | ❌ | Language tag support |
+
+**Example:**
+```sparql
+SELECT ?person ?email WHERE {
+    ?person foaf:email ?email .
+    FILTER(regex(?email, "@example\\.com$"))
+}
+```
+
+**Potential Cypher:**
 ```cypher
-# UNION query with FILTER on each branch
-MATCH (person:Resource)-[:`foaf:age`]->(age:Resource)
-WHERE age.uri >= 18 
-  AND age.uri < 65
-RETURN person.uri AS person, age.uri AS age
-UNION ALL
 MATCH (person:Resource)
-WHERE person.`foaf:age` IS NOT NULL
-  AND person.`foaf:age` >= 18 
-  AND person.`foaf:age` < 65
-RETURN person.uri AS person, person.`foaf:age` AS age
+WHERE person.`http://xmlns.com/foaf/0.1/email` =~ '.*@example\\.com$'
+RETURN person.uri AS person, person.`http://xmlns.com/foaf/0.1/email` AS email
 ```
 
-**Performance Benefits:**
-- ✅ Eliminates client-side filtering
-- ✅ Reduces data transfer (only matching rows returned)
-- ✅ Enables use of database indexes
-- ✅ Single query execution (no post-processing)
+### 4. Property Paths
 
-**Limitations:**
-- Some SPARQL filter functions (`regex()`, `str()`, `bound()`, `isURI()`) not yet supported
-- Complex nested filters may fall back to standard evaluation
+**Status**: ❌ **NOT YET IMPLEMENTED**
 
-**Implementation:**
-- `FalkorDBOpExecutor.java`: Intercepts `OpFilter` operations
-- `SparqlToCypherCompiler.java`: `translateWithFilter()` method converts expressions to Cypher WHERE
+SPARQL property paths (transitive closure, alternative paths) could leverage Cypher's path capabilities.
 
-### UNION Patterns
-
-> **Status**: ✅ **IMPLEMENTED**  
-> **Tests**: See [SparqlToCypherCompilerTest.java](jena-falkordb-adapter/src/test/java/com/falkordb/jena/query/SparqlToCypherCompilerTest.java) (`testUnion*` methods) and [FalkorDBQueryPushdownTest.java](jena-falkordb-adapter/src/test/java/com/falkordb/jena/query/FalkorDBQueryPushdownTest.java) (`testUnion*` methods)  
-> **Examples**: See [samples/union-patterns/](samples/union-patterns/)  
-> **Documentation**: See [UNION Patterns section](#union-patterns) below for complete documentation
-
-SPARQL `UNION` patterns are now automatically translated to Cypher `UNION` queries. This allows combining results from alternative query patterns in a single database query, avoiding multiple round trips.
-
-**The Problem:**
-
-Without UNION pattern pushdown, SPARQL UNION requires executing each branch separately and combining results on the client side:
-
+**Example:**
 ```sparql
-# SPARQL: Find all people who are either students or teachers
-SELECT ?person WHERE {
-    { ?person rdf:type foaf:Student }
-    UNION
-    { ?person rdf:type foaf:Teacher }
+# SPARQL: Find all ancestors (transitive knows relationship)
+SELECT ?ancestor WHERE {
+    <http://example.org/alice> foaf:knows+ ?ancestor .
 }
 ```
 
-Gets executed as:
-1. Query 1: `find all persons of type Student` → Returns N students
-2. Query 2: `find all persons of type Teacher` → Returns M teachers
-3. Client combines results
-
-This results in 2 database round trips plus client-side merging.
-
-**The Solution:**
-
-The query pushdown mechanism translates SPARQL UNION patterns to a single Cypher `UNION` query:
-
+**Potential Cypher:**
 ```cypher
-# Compiled Cypher:
-MATCH (person:Resource:`http://xmlns.com/foaf/0.1/Student`)
-RETURN person.uri AS person
-UNION
-MATCH (person:Resource:`http://xmlns.com/foaf/0.1/Teacher`)
-RETURN person.uri AS person
+MATCH (alice:Resource {uri: $alice})-[:`http://xmlns.com/foaf/0.1/knows`*]->(ancestor:Resource)
+RETURN ancestor.uri AS ancestor
 ```
 
-This executes as a single database operation, with FalkorDB handling the union internally.
+**Property Path Types:**
+- `predicate+` - One or more
+- `predicate*` - Zero or more
+- `predicate?` - Zero or one
+- `predicate{n,m}` - Between n and m
+- `^predicate` - Inverse path
+- `predicate1 / predicate2` - Sequence
+- `predicate1 | predicate2` - Alternative
 
-**Supported UNION Patterns:**
+### 5. VALUES Clause
 
-| Pattern Type | Supported | Example |
-|-------------|-----------|---------|
-| Type patterns | ✅ | `{ ?s rdf:type <TypeA> } UNION { ?s rdf:type <TypeB> }` |
-| Relationship patterns | ✅ | `{ ?s foaf:knows ?o } UNION { ?s foaf:worksWith ?o }` |
-| Property patterns | ✅ | `{ ?s foaf:email ?v } UNION { ?s foaf:phone ?v }` |
-| Concrete subjects | ✅ | `{ <alice> foaf:knows ?f } UNION { <bob> foaf:knows ?f }` |
-| Multi-triple patterns | ✅ | `{ ?s rdf:type <Student> . ?s foaf:age 20 } UNION { ?s rdf:type <Teacher> . ?s foaf:age 30 }` |
-| Nested UNION | ✅ | `{ ... } UNION { { ... } UNION { ... } }` |
-| UNION with variable predicates | ❌ (fallback) | Requires each branch to avoid variable predicates |
-| UNION with unsupported patterns | ❌ (fallback) | Falls back if any branch can't compile |
+**Status**: ❌ **NOT YET IMPLEMENTED**
 
-**Example 1: Basic Type UNION**
+SPARQL `VALUES` provides inline data that could be translated to Cypher parameters or UNWIND.
 
+**Example:**
 ```sparql
-# SPARQL with UNION
-PREFIX foaf: <http://xmlns.com/foaf/0.1/>
-SELECT ?person WHERE {
-    { ?person rdf:type foaf:Student }
-    UNION
-    { ?person rdf:type foaf:Teacher }
+SELECT ?person ?name WHERE {
+    VALUES ?person { <http://example.org/alice> <http://example.org/bob> }
+    ?person foaf:name ?name .
 }
 ```
 
+**Potential Cypher:**
 ```cypher
-# Generated Cypher with UNION
-MATCH (person:Resource:`http://xmlns.com/foaf/0.1/Student`)
-RETURN person.uri AS person
-UNION
-MATCH (person:Resource:`http://xmlns.com/foaf/0.1/Teacher`)
-RETURN person.uri AS person
+UNWIND [$alice, $bob] AS personUri
+MATCH (person:Resource {uri: personUri})
+WHERE person.`http://xmlns.com/foaf/0.1/name` IS NOT NULL
+RETURN person.uri AS person, person.`http://xmlns.com/foaf/0.1/name` AS name
 ```
 
-**Example 2: UNION with Relationships**
+### 6. Subqueries
 
+**Status**: ❌ **NOT YET IMPLEMENTED**
+
+SPARQL 1.1 subqueries could be translated to Cypher subqueries using `CALL` blocks.
+
+**Example:**
 ```sparql
-# SPARQL: Find all connections (friends or colleagues)
-PREFIX foaf: <http://xmlns.com/foaf/0.1/>
-PREFIX ex: <http://example.org/>
-
-SELECT ?person ?connection WHERE {
-    { ?person foaf:knows ?connection }
-    UNION
-    { ?person ex:worksWith ?connection }
-}
-```
-
-```cypher
-# Generated Cypher
-MATCH (person:Resource)-[:`http://xmlns.com/foaf/0.1/knows`]->(connection:Resource)
-RETURN person.uri AS person, connection.uri AS connection
-UNION
-MATCH (person:Resource)-[:`http://example.org/worksWith`]->(connection:Resource)
-RETURN person.uri AS person, connection.uri AS connection
-```
-
-**Example 3: UNION with Concrete Subjects**
-
-```sparql
-# SPARQL: Get friends of either Alice or Bob
-PREFIX foaf: <http://xmlns.com/foaf/0.1/>
-
-SELECT ?friend WHERE {
-    { <http://example.org/alice> foaf:knows ?friend }
-    UNION
-    { <http://example.org/bob> foaf:knows ?friend }
-}
-```
-
-```cypher
-# Generated Cypher (parameterized)
-MATCH (s:Resource {uri: $p0})-[:`http://xmlns.com/foaf/0.1/knows`]->(friend:Resource)
-RETURN friend.uri AS friend
-UNION
-MATCH (s:Resource {uri: $p1})-[:`http://xmlns.com/foaf/0.1/knows`]->(friend:Resource)
-RETURN friend.uri AS friend
-
-# Parameters: {p0: "http://example.org/alice", p1: "http://example.org/bob"}
-```
-
-**Example 4: UNION with Multi-Triple Patterns**
-
-```sparql
-# SPARQL: Find all students aged 20 or teachers aged 30
-PREFIX foaf: <http://xmlns.com/foaf/0.1/>
-PREFIX ex: <http://example.org/>
-
-SELECT ?person WHERE {
-    { ?person rdf:type ex:Student . ?person foaf:age 20 }
-    UNION
-    { ?person rdf:type ex:Teacher . ?person foaf:age 30 }
-}
-```
-
-```cypher
-# Generated Cypher
-MATCH (person:Resource:`http://example.org/Student`)
-WHERE person.`http://xmlns.com/foaf/0.1/age` IS NOT NULL
-  AND person.`http://xmlns.com/foaf/0.1/age` = $p0
-RETURN person.uri AS person
-UNION
-MATCH (person:Resource:`http://example.org/Teacher`)
-WHERE person.`http://xmlns.com/foaf/0.1/age` IS NOT NULL
-  AND person.`http://xmlns.com/foaf/0.1/age` = $p1
-RETURN person.uri AS person
-
-# Parameters: {p0: 20, p1: 30}
-```
-
-**Example 5: UNION with Property Values**
-
-```sparql
-# SPARQL: Find any contact info (email or phone)
-PREFIX foaf: <http://xmlns.com/foaf/0.1/>
-
-SELECT ?person ?contact WHERE {
-    { ?person foaf:email ?contact }
-    UNION
-    { ?person foaf:phone ?contact }
-}
-```
-
-```cypher
-# Generated Cypher
-MATCH (person:Resource)
-WHERE person.`http://xmlns.com/foaf/0.1/email` IS NOT NULL
-RETURN person.uri AS person, person.`http://xmlns.com/foaf/0.1/email` AS contact
-UNION
-MATCH (person:Resource)
-WHERE person.`http://xmlns.com/foaf/0.1/phone` IS NOT NULL
-RETURN person.uri AS person, person.`http://xmlns.com/foaf/0.1/phone` AS contact
-```
-
-**Key Benefits:**
-
-- ✅ **Single query execution**: One database round-trip instead of N queries
-- ✅ **Native FalkorDB optimization**: Database handles union efficiently
-- ✅ **Handles overlapping results**: Returns all matches (duplicates possible without DISTINCT)
-- ✅ **Transparent**: Works automatically for supported UNION patterns
-- ✅ **Parameter handling**: Automatically renames conflicting parameters between branches
-
-**Performance Comparison:**
-
-| Scenario | Without UNION Pushdown | With UNION Pushdown | Improvement |
-|----------|----------------------|---------------------|-------------|
-| 2 alternative type queries | 2 queries | 1 query | 2x fewer calls |
-| N alternative patterns | N queries | 1 query | Nx fewer calls |
-| UNION with relationships | N queries + merge | 1 query | Nx fewer calls |
-| Nested UNION (3 branches) | 3 queries + merge | 1 query | 3x fewer calls |
-
-**Java Usage Example:**
-
-```java
-// Setup: Create people with different types
-Model model = FalkorDBModelFactory.createModel("myGraph");
-
-var alice = model.createResource("http://example.org/alice");
-var bob = model.createResource("http://example.org/bob");
-var charlie = model.createResource("http://example.org/charlie");
-
-var studentType = model.createResource("http://example.org/Student");
-var teacherType = model.createResource("http://example.org/Teacher");
-
-alice.addProperty(RDF.type, studentType);
-bob.addProperty(RDF.type, teacherType);
-charlie.addProperty(RDF.type, studentType);
-
-// Query with UNION - automatically uses pushdown
-String sparql = """
-    PREFIX ex: <http://example.org/>
-    SELECT ?person WHERE {
-        { ?person a ex:Student }
-        UNION
-        { ?person a ex:Teacher }
-    }
-    ORDER BY ?person
-    """;
-
-Query query = QueryFactory.create(sparql);
-try (QueryExecution qexec = QueryExecutionFactory.create(query, model)) {
-    ResultSet results = qexec.execSelect();
-    while (results.hasNext()) {
-        QuerySolution solution = results.nextSolution();
-        String person = solution.getResource("person").getURI();
-        System.out.println("Person: " + person);
-    }
-}
-
-// Output:
-// Person: http://example.org/alice
-// Person: http://example.org/bob
-// Person: http://example.org/charlie
-```
-
-**Limitations:**
-
-The UNION pattern optimization has the following limitations:
-
-1. **Variable predicates not supported**: Each UNION branch must have concrete predicates. Patterns like `{ ?s ?p ?o } UNION { ?s ?p2 ?o2 }` will fall back to standard evaluation.
-
-2. **Existing BGP limitations apply**: Each UNION branch is compiled independently, so existing limitations for BGPs apply to each branch:
-   - Multi-triple patterns with ambiguous variable objects require the object to be used as a subject
-   - Complex patterns that can't be compiled individually will cause the entire UNION to fall back
-
-3. **DISTINCT not automatic**: SPARQL UNION doesn't eliminate duplicates by default. If the same result appears in multiple branches, it will be returned multiple times. Use `SELECT DISTINCT` if needed:
-   ```sparql
-   SELECT DISTINCT ?person WHERE {
-       { ?person rdf:type ex:Student }
-       UNION
-       { ?person rdf:type ex:Teacher }
-   }
-   ```
-
-4. **No MINUS support yet**: SPARQL MINUS (set difference) is not yet optimized and will fall back to standard evaluation.
-
-5. **Parameter conflicts handled but may affect readability**: When both branches use the same parameter names (e.g., for URIs), the compiler renames parameters in the right branch (e.g., `$p0` becomes `$p0_r`). This is transparent but may make debugging more complex.
-
-6. **Fallback on compilation failure**: If any branch of the UNION cannot be compiled to Cypher, the entire UNION operation falls back to standard Jena evaluation. Check logs for "UNION pushdown failed, falling back" messages.
-
-**When Pushdown Fails:**
-
-The optimizer will fall back to standard Jena evaluation in these cases:
-
-- One or both branches are not BGPs (e.g., contain FILTER, OPTIONAL)
-- One or both branches contain unsupported patterns
-- Any branch contains variable predicates
-- Compilation errors occur
-
-**Example of Fallback:**
-
-```sparql
-# This will fall back because of variable predicate
-SELECT ?s ?p ?o WHERE {
-    { ?s ?p ?o }  # Variable predicate - not supported
-    UNION
-    { ?s foaf:name ?o }
-}
-```
-
-**Implementation:**
-- `FalkorDBOpExecutor.java`: `execute(OpUnion, QueryIterator)` method intercepts UNION operations
-- `SparqlToCypherCompiler.java`: `translateUnion()` method generates Cypher UNION queries
-- Automatic parameter renaming to avoid conflicts between branches
-- Full OpenTelemetry tracing support with span `FalkorDBOpExecutor.executeUnion`
-
-### Aggregations
-
-> **Status**: ✅ **IMPLEMENTED**  
-> **Tests**: See [AggregationToCypherTranslatorTest.java](jena-falkordb-adapter/src/test/java/com/falkordb/jena/query/AggregationToCypherTranslatorTest.java) and [FalkorDBAggregationPushdownTest.java](jena-falkordb-adapter/src/test/java/com/falkordb/jena/query/FalkorDBAggregationPushdownTest.java)  
-> **Examples**: See [samples/aggregations/](samples/aggregations/)  
-> **Documentation**: See [Aggregations section](#aggregations-1) below for complete documentation
-
-SPARQL aggregation queries (GROUP BY with COUNT, SUM, AVG, MIN, MAX, etc.) are now automatically translated to native Cypher aggregation queries, enabling database-side computation and significantly reducing data transfer.
-
-**The Problem:**
-
-Without aggregation pushdown, SPARQL aggregations require:
-1. Fetching all matching triples from the database
-2. Performing grouping and aggregation on the client side
-3. Processing potentially large result sets in memory
-
-This results in high network traffic and slow query execution.
-
-**The Solution:**
-
-The query pushdown mechanism translates SPARQL aggregations to Cypher:
-
-```sparql
-# SPARQL
-SELECT ?type (COUNT(?person) AS ?count) WHERE {
-    ?person rdf:type ?type
-}
-GROUP BY ?type
-```
-
-```cypher
-# Generated Cypher
-MATCH (person:Resource)
-UNWIND labels(person) AS type
-WHERE type <> 'Resource'
-RETURN type, count(person) AS count
-```
-
-**Supported Aggregations:**
-
-| SPARQL Aggregation | Cypher Aggregation | Example |
-|--------------------|-------------------|---------|
-| `COUNT(?x)` | `count(x)` | Count non-null values |
-| `COUNT(DISTINCT ?x)` | `count(DISTINCT x)` | Count unique values |
-| `COUNT(*)` | `count(*)` | Count all rows |
-| `SUM(?x)` | `sum(x)` | Sum of numeric values |
-| `SUM(DISTINCT ?x)` | `sum(DISTINCT x)` | Sum of unique values |
-| `AVG(?x)` | `avg(x)` | Average of values |
-| `AVG(DISTINCT ?x)` | `avg(DISTINCT x)` | Average of unique values |
-| `MIN(?x)` | `min(x)` | Minimum value |
-| `MAX(?x)` | `max(x)` | Maximum value |
-| `GROUP BY ?g` | Implicit grouping in RETURN | Group by variable |
-
-**Example 1: COUNT with GROUP BY**
-
-```sparql
-# SPARQL: Count entities by type
-PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-
-SELECT ?type (COUNT(?entity) AS ?count)
-WHERE {
-    ?entity rdf:type ?type .
-}
-GROUP BY ?type
-ORDER BY DESC(?count)
-```
-
-```cypher
-# Generated Cypher
-MATCH (entity:Resource)
-UNWIND labels(entity) AS type
-WHERE type <> 'Resource'
-RETURN type, count(entity) AS count
-ORDER BY count DESC
-```
-
-**Example 2: Multiple Aggregations**
-
-```sparql
-# SPARQL: Get comprehensive statistics
-PREFIX ex: <http://example.org/>
-
-SELECT 
-    (COUNT(?item) AS ?count)
-    (SUM(?price) AS ?total)
-    (AVG(?price) AS ?avgPrice)
-    (MIN(?price) AS ?minPrice)
-    (MAX(?price) AS ?maxPrice)
-WHERE {
-    ?item ex:price ?price .
-}
-```
-
-```cypher
-# Generated Cypher
-MATCH (item:Resource)
-WHERE item.`http://example.org/price` IS NOT NULL
-RETURN 
-    count(item) AS count,
-    sum(item.`http://example.org/price`) AS total,
-    avg(item.`http://example.org/price`) AS avgPrice,
-    min(item.`http://example.org/price`) AS minPrice,
-    max(item.`http://example.org/price`) AS maxPrice
-```
-
-**Example 3: AVG by Group**
-
-```sparql
-# SPARQL: Average age by person type
-PREFIX ex: <http://example.org/>
-
-SELECT ?type (AVG(?age) AS ?avgAge)
-WHERE {
-    ?person rdf:type ?type .
-    ?person ex:age ?age .
-}
-GROUP BY ?type
-```
-
-```cypher
-# Generated Cypher
-MATCH (person:Resource)
-WHERE person.`http://example.org/age` IS NOT NULL
-UNWIND labels(person) AS type
-WHERE type <> 'Resource'
-RETURN type, avg(person.`http://example.org/age`) AS avgAge
-```
-
-**Key Benefits:**
-
-- ✅ **Single query execution**: One database round-trip instead of fetching all data
-- ✅ **Database-side computation**: Leverages FalkorDB's native aggregation functions
-- ✅ **Reduced data transfer**: Returns only aggregated results, not all matching triples
-- ✅ **Better performance**: For 10,000 entities grouped into 50 types, reduces data transfer by 200x
-- ✅ **Transparent**: Works automatically for supported aggregation patterns
-
-**Performance Comparison:**
-
-| Scenario | Without Pushdown | With Pushdown | Improvement |
-|----------|-----------------|---------------|-------------|
-| Count 10K entities in 50 groups | 10K triples fetched | 50 rows returned | 200x less data |
-| Multiple aggregations (5) | 10K × 5 operations | 1 query | 50,000x fewer ops |
-| Network time (100K items) | ~10 seconds | ~10ms | 1000x faster |
-
-**Limitations:**
-
-- Only supports aggregations over Basic Graph Patterns (BGPs)
-- Complex subpatterns (FILTER, OPTIONAL, UNION within GROUP BY) not yet supported
-- HAVING clause not yet optimized
-- Aggregation expressions must be over simple variables
-
-**Implementation:**
-
-- `FalkorDBOpExecutor.java`: `execute(OpGroup, QueryIterator)` method intercepts GROUP operations
-- `AggregationToCypherTranslator.java`: Translates SPARQL aggregations to Cypher
-- Automatic fallback to standard Jena evaluation when translation fails
-
-**Complete Working Examples:**
-
-See [samples/aggregations/](samples/aggregations/) for:
-- Full Java code with multiple use cases
-- SPARQL query patterns with generated Cypher
-- Sample data demonstrating various aggregation scenarios
-- Detailed README with performance analysis
-
-### General Implementation Notes
-
-1. **Fallback Strategy**: Always implement a fallback to standard Jena evaluation when translation fails
-2. **OpenTelemetry**: Add spans for new translation paths with attributes like `falkordb.pattern.type`
-3. **Testing**: Create unit tests in `SparqlToCypherCompilerTest.java` for each new pattern type
-4. **Integration Tests**: Add tests in `FalkorDBQueryPushdownTest.java` that verify end-to-end execution
-
-```java
-// Example test structure
-@Test
-@DisplayName("Test OPTIONAL pattern with pushdown")
-public void testOptionalPatternPushdown() {
-    // Add test data with and without optional values
-    var person1 = model.createResource("http://example.org/person1");
-    var person2 = model.createResource("http://example.org/person2");
-    person1.addProperty(emailProp, "test@example.org");
-    // person2 has no email
-    
-    String sparql = """
-        SELECT ?person ?email WHERE {
-            ?person a <Person> .
-            OPTIONAL { ?person <email> ?email }
+SELECT ?person ?friendCount WHERE {
+    ?person rdf:type foaf:Person .
+    {
+        SELECT ?person (COUNT(?friend) AS ?friendCount) WHERE {
+            ?person foaf:knows ?friend .
         }
-        """;
+        GROUP BY ?person
+    }
+}
+```
+
+**Potential Cypher:**
+```cypher
+MATCH (person:Resource:`http://xmlns.com/foaf/0.1/Person`)
+CALL {
+    MATCH (person)-[:`http://xmlns.com/foaf/0.1/knows`]->(friend:Resource)
+    RETURN person, count(friend) AS friendCount
+}
+RETURN person.uri AS person, friendCount
+```
+
+### 7. Named Graphs (GRAPH Clause)
+
+**Status**: ❌ **NOT YET IMPLEMENTED**
+
+SPARQL named graphs could map to FalkorDB's multiple graph support.
+
+**Example:**
+```sparql
+SELECT ?person ?name WHERE {
+    GRAPH <http://example.org/graph1> {
+        ?person foaf:name ?name .
+    }
+}
+```
+
+**Implementation would require:**
+- Multiple FalkorDB graph connections
+- Query routing based on graph name
+- Cross-graph query support
+
+### 8. Full POLYGON/LINESTRING/MULTIPOINT Support
+
+**Status**: ⚠️ **IN PROGRESS** (Current focus of this issue)
+
+Complete geometry type support beyond current POINT handling:
+
+- ✅ **POINT** - Already fully supported
+- ⚠️ **POLYGON** - Currently uses first coordinate approximation; needs proper bounding box
+- ❌ **LINESTRING** - Needs WKT parsing and bounding box calculation
+- ❌ **MULTIPOINT** - Needs WKT parsing and bounding box calculation
+
+**Planned Improvements:**
+- Full bounding box calculation for POLYGON (min/max lat/lon)
+- LINESTRING parsing with bounding box
+- MULTIPOINT parsing with bounding box  
+- Enhanced spatial operations (point-in-polygon, line intersection)
+
+### 9. Spatial Distance Functions with Units
+
+**Status**: ❌ **NOT YET IMPLEMENTED**
+
+Enhanced distance calculations with unit conversion:
+
+```sparql
+# Calculate distance in kilometers
+SELECT ?city ?distanceKm WHERE {
+    ?city ex:latitude ?lat .
+    ?city ex:longitude ?lon .
+    BIND(geof:distance(?point1, ?point2) / 1000 AS ?distanceKm)
+}
+```
+
+### 10. Federated Query (SERVICE)
+
+**Status**: ❌ **NOT YET IMPLEMENTED**
+
+SPARQL `SERVICE` keyword for federated queries across multiple endpoints:
+
+```sparql
+SELECT ?person ?name WHERE {
+    ?person rdf:type foaf:Person .
+    SERVICE <http://dbpedia.org/sparql> {
+        ?person foaf:name ?name .
+    }
+}
+```
+
+### 11. Full Text Search Integration
+
+**Status**: ❌ **NOT YET IMPLEMENTED**
+
+Leverage FalkorDB's full-text search capabilities:
+
+```sparql
+SELECT ?doc WHERE {
+    ?doc ex:content ?content .
+    FILTER(contains(?content, "search term"))
+}
+```
+
+**Potential Cypher:**
+```cypher
+CALL db.idx.fulltext.queryNodes('contentIndex', 'search term') YIELD node
+RETURN node.uri AS doc
+```
+
+### 12. Temporal Query Support
+
+**Status**: ❌ **NOT YET IMPLEMENTED**
+
+Time-based queries and temporal reasoning:
+
+```sparql
+SELECT ?event WHERE {
+    ?event ex:startTime ?start .
+    ?event ex:endTime ?end .
+    FILTER(?start >= "2024-01-01T00:00:00"^^xsd:dateTime && 
+           ?end <= "2024-12-31T23:59:59"^^xsd:dateTime)
+}
+```
+
+### Implementation Priority
+
+Based on user demand and technical feasibility:
+
+**High Priority:**
+1. ✅ OPTIONAL patterns - **DONE**
+2. ✅ FILTER expressions - **DONE**
+3. ✅ UNION patterns - **DONE**
+4. ✅ Aggregations - **DONE**
+5. ⚠️ Full geometry types (POLYGON, LINESTRING, MULTIPOINT) - **IN PROGRESS**
+
+**Medium Priority:**
+6. MINUS (set difference)
+7. Advanced FILTER functions (regex, str, bound)
+8. Property paths (transitive closure)
+9. BIND expressions
+
+**Lower Priority:**
+10. VALUES clause
+11. Subqueries
+12. Named graphs
+13. Spatial distance with units
+14. Federated queries
+15. Full-text search
+16. Temporal queries
+
+### Contributing
+
+Contributions to implement these improvements are welcome! When implementing:
+
+1. **Follow existing patterns**: See implemented optimizations for structure
+2. **Add comprehensive tests**: Unit tests in compiler, integration tests in executor
+3. **Include OpenTelemetry tracing**: Add spans with relevant attributes
+4. **Document thoroughly**: Add examples, performance metrics, and limitations
+5. **Implement fallback**: Always fallback to standard Jena evaluation when translation fails
+
+See the [General Implementation Notes](#general-implementation-notes) section below for detailed guidelines.
+
+## General Implementation Notes
+
+When implementing new query pushdown optimizations, follow these guidelines:
+
+### 1. Fallback Strategy
+
+Always implement a graceful fallback to standard Jena evaluation when translation fails:
+
+```java
+@Override
+protected QueryIterator execute(OpMyPattern op, QueryIterator input) {
+    try {
+        // Attempt to compile to Cypher
+        String cypher = compiler.translate(op);
+        if (cypher != null) {
+            // Execute with pushdown
+            return executePushdown(cypher, input);
+        }
+    } catch (Exception e) {
+        LOGGER.debug("Pushdown failed, falling back to standard evaluation", e);
+    }
+    // Fallback to standard Jena evaluation
+    return super.execute(op, input);
+}
+```
+
+### 2. OpenTelemetry Tracing
+
+Add comprehensive tracing for observability:
+
+```java
+Span span = TRACER.spanBuilder("FalkorDBOpExecutor.executeMyPattern")
+    .setSpanKind(SpanKind.INTERNAL)
+    .setAttribute("falkordb.pattern.type", "MY_PATTERN")
+    .setAttribute("falkordb.pattern.complexity", complexity)
+    .startSpan();
+
+try (Scope scope = span.makeCurrent()) {
+    // Execute operation
+    span.setAttribute("falkordb.cypher.query", cypher);
+    span.setAttribute("falkordb.result.count", resultCount);
+    span.setStatus(StatusCode.OK);
+    return results;
+} catch (Exception e) {
+    span.recordException(e);
+    span.setStatus(StatusCode.ERROR, e.getMessage());
+    throw e;
+} finally {
+    span.end();
+}
+```
+
+### 3. Testing Strategy
+
+Create comprehensive test coverage at multiple levels:
+
+**Unit Tests** (in `SparqlToCypherCompilerTest.java`):
+```java
+@Test
+@DisplayName("Compile MY_PATTERN to Cypher")
+public void testMyPatternCompilation() {
+    BasicPattern pattern = createTestPattern();
+    Map<String, Object> params = new HashMap<>();
     
-    // Execute and verify both persons returned,
-    // with email for person1 and null for person2
+    String cypher = compiler.translate(pattern, params);
+    
+    assertNotNull(cypher, "Should compile to Cypher");
+    assertTrue(cypher.contains("MATCH"), "Should generate MATCH clause");
+    assertFalse(params.isEmpty(), "Should populate parameters");
+}
+```
+
+**Integration Tests** (in `FalkorDBQueryPushdownTest.java`):
+```java
+@Test
+@DisplayName("Execute MY_PATTERN query end-to-end")
+public void testMyPatternExecution() {
+    // Setup test data
+    createTestData(model);
+    
+    // Execute SPARQL query
+    String sparql = "SELECT ?s ?o WHERE { /* MY_PATTERN */ }";
+    Query query = QueryFactory.create(sparql);
+    
+    try (QueryExecution qexec = QueryExecutionFactory.create(query, model)) {
+        ResultSet results = qexec.execSelect();
+        
+        // Verify results
+        assertTrue(results.hasNext(), "Should return results");
+        QuerySolution sol = results.next();
+        assertNotNull(sol.get("s"), "Should have subject");
+        assertNotNull(sol.get("o"), "Should have object");
+    }
+}
+```
+
+### 4. Parameter Handling
+
+Use parameterized queries to prevent injection and improve performance:
+
+```java
+// Generate parameter names with prefix to avoid conflicts
+String paramName = varPrefix + "_" + varName;
+params.put(paramName, value);
+cypher.append("$").append(paramName);
+```
+
+### 5. Error Handling
+
+Provide clear error messages and logging:
+
+```java
+try {
+    return translatePattern(pattern);
+} catch (IllegalArgumentException e) {
+    LOGGER.warn("Invalid pattern for pushdown: {}", e.getMessage());
+    return null;  // Triggers fallback
+} catch (Exception e) {
+    LOGGER.error("Unexpected error during translation", e);
+    return null;  // Triggers fallback
+}
+```
+
+### 6. Documentation
+
+Document each optimization with:
+
+- **Overview**: What pattern is optimized and why
+- **Examples**: SPARQL query → Cypher translation
+- **Performance metrics**: Before/after comparisons
+- **Limitations**: What patterns are not supported
+- **Test references**: Links to unit and integration tests
+- **Sample code**: Working Java examples
+
+### 7. Code Organization
+
+Follow the existing structure:
+
+```
+jena-falkordb-adapter/src/main/java/com/falkordb/jena/
+├── query/
+│   ├── SparqlToCypherCompiler.java     # Add translation methods
+│   ├── FalkorDBOpExecutor.java         # Add execution methods
+│   └── *Translator.java                # Specialized translators
+└── tracing/
+    └── TracingUtil.java                 # Tracing utilities
+
+jena-falkordb-adapter/src/test/java/com/falkordb/jena/
+├── query/
+│   ├── SparqlToCypherCompilerTest.java    # Unit tests
+│   └── FalkorDBQueryPushdownTest.java     # Integration tests
+```
+
+### 8. Performance Considerations
+
+- Minimize database round-trips
+- Use batch operations where possible
+- Leverage indexes (Resource.uri is automatically indexed)
+- Avoid redundant computations
+- Profile with OpenTelemetry tracing
+
+### 9. Compatibility
+
+Ensure compatibility with:
+
+- All supported SPARQL 1.1 features (when possible)
+- Jena's inference models (consider disabling pushdown for InfGraph if needed)
+- FalkorDB versions specified in pom.xml
+- OpenTelemetry tracing
+- Existing optimizations (batch writes, magic property, etc.)
+
+### 10. Validation
+
+Before submitting:
+
+- ✅ Run all tests: `mvn clean test`
+- ✅ Check code coverage: Aim for >80% on new code
+- ✅ Test with FalkorDB: Start with docker-compose-tracing.yaml
+- ✅ Verify tracing: Check spans in Jaeger UI
+- ✅ Review logs: Ensure no unexpected warnings/errors
+- ✅ Update documentation: README, OPTIMIZATIONS.md, sample READMEs
+- ✅ Add examples: Create/update samples/ directory
+
+### Example: Complete Implementation
+
+Here's a minimal example of implementing a new pattern optimization:
+
+```java
+// In SparqlToCypherCompiler.java
+public String translateMyPattern(MyPattern pattern, Map<String, Object> params) {
+    Span span = TRACER.spanBuilder("SparqlToCypherCompiler.translateMyPattern")
+        .startSpan();
+    
+    try (Scope scope = span.makeCurrent()) {
+        StringBuilder cypher = new StringBuilder("MATCH ");
+        
+        // Translate pattern to Cypher
+        cypher.append("(n:Resource {uri: $uri})");
+        params.put("uri", pattern.getUri());
+        
+        cypher.append(" RETURN n.uri AS result");
+        
+        String result = cypher.toString();
+        span.setAttribute("falkordb.cypher.query", result);
+        span.setStatus(StatusCode.OK);
+        return result;
+        
+    } catch (Exception e) {
+        span.recordException(e);
+        span.setStatus(StatusCode.ERROR, e.getMessage());
+        return null;
+    } finally {
+        span.end();
+    }
+}
+
+// In FalkorDBOpExecutor.java
+@Override
+protected QueryIterator execute(OpMyPattern op, QueryIterator input) {
+    Span span = TRACER.spanBuilder("FalkorDBOpExecutor.executeMyPattern")
+        .startSpan();
+    
+    try (Scope scope = span.makeCurrent()) {
+        Map<String, Object> params = new HashMap<>();
+        String cypher = compiler.translateMyPattern(op, params);
+        
+        if (cypher == null) {
+            LOGGER.debug("MyPattern pushdown failed, falling back");
+            return super.execute(op, input);
+        }
+        
+        // Execute Cypher query
+        List<Binding> results = executeCypher(cypher, params);
+        
+        span.setAttribute("falkordb.result.count", results.size());
+        span.setStatus(StatusCode.OK);
+        
+        return QueryIterPlainWrapper.create(results.iterator(), context);
+        
+    } catch (Exception e) {
+        span.recordException(e);
+        span.setStatus(StatusCode.ERROR, e.getMessage());
+        return super.execute(op, input);
+    } finally {
+        span.end();
+    }
 }
 ```

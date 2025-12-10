@@ -50,18 +50,18 @@ mvn -version
 # Should show: Apache Maven 3.9.11
 ```
 
-### Clone the Repository
+---
+
+## Starting the Services
+
+### Step 1: Clone the Repository
 
 ```bash
 git clone https://github.com/FalkorDB/jena-falkordb-adapter.git
 cd jena-falkordb-adapter
 ```
 
----
-
-## Starting the Services
-
-### Step 1: Start Docker Compose with FalkorDB and Jaeger
+### Step 2: Start Docker Compose with FalkorDB and Jaeger
 
 The `docker-compose-tracing.yaml` file configures both FalkorDB (graph database) and Jaeger (tracing backend).
 
@@ -85,7 +85,7 @@ jaeger              jaegertracing/all-in-one:latest       Up                  0.
 - **Jaeger UI**: http://localhost:16686
 - **OTLP gRPC**: `localhost:4317` (for sending traces)
 
-### Step 2: Verify FalkorDB is Running
+### Step 3: Verify FalkorDB is Running
 
 ```bash
 # Test connection to FalkorDB
@@ -93,7 +93,7 @@ redis-cli -p 6379 PING
 # Should return: PONG
 ```
 
-### Step 3: Build the Project
+### Step 4: Build the Project
 
 ```bash
 # Build with Java 21

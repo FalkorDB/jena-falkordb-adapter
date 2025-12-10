@@ -15,27 +15,32 @@ Jena-Fuseki-FalkorDB provides a SPARQL endpoint backed by FalkorDB graph databas
   - Variable objects/predicates → UNION queries for mixed data
   - Transaction batching for bulk operations
 
-## Quick Start (3 Steps)
+## Quick Start (4 Steps)
 
-### Step 1: Start FalkorDB
+### Step 1: Clone the Project
 
 ```bash
-docker run -p 6379:6379 -it --rm falkordb/falkordb:latest
+git clone https://github.com/FalkorDB/jena-falkordb-adapter.git
+cd jena-falkordb-adapter
 ```
 
-### Step 2: Build and Run
+### Step 2: Start FalkorDB with Tracing
 
-**Option A: Run from the project root**
+```bash
+docker-compose -f docker-compose-tracing.yaml up -d
+```
+
+### Step 3: Build the Project
+
 ```bash
 mvn clean install -DskipTests
-java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
-  --config jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl
 ```
 
-**Option B: Run with Maven exec plugin**
+### Step 4: Run the Fuseki Server with Config File
+
 ```bash
-cd jena-fuseki-falkordb
-mvn exec:java -Dexec.mainClass="com.falkordb.FalkorFuseki"
+java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
+  --config jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl
 ```
 
 The server will start on port 3330 by default with the endpoint at `/falkor`.
@@ -138,34 +143,15 @@ WHERE {
 
 ## Configuration Options
 
-### Option 1: Environment Variables (Default Mode)
+### Recommended: Configuration File (Assembler Mode)
 
-Set environment variables before starting the server:
-
-```bash
-export FALKORDB_HOST=localhost
-export FALKORDB_PORT=6379
-export FALKORDB_GRAPH=my_knowledge_graph
-export FUSEKI_PORT=3330
-
-java -jar jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar
-```
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `FALKORDB_HOST` | `localhost` | FalkorDB server hostname |
-| `FALKORDB_PORT` | `6379` | FalkorDB server port |
-| `FALKORDB_GRAPH` | `my_knowledge_graph` | FalkorDB graph name |
-| `FUSEKI_PORT` | `3330` | Fuseki server port |
-| `FUSEKI_CONFIG` | - | Path to config file (alternative to --config) |
-
-### Option 2: Configuration File (Assembler Mode)
-
-Create a TTL configuration file to customize the server:
+Always run the Fuseki server with the config-falkordb.ttl configuration file:
 
 ```bash
 java -jar jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar --config config-falkordb.ttl
 ```
+
+This provides the three-layer architecture with GeoSPARQL support, forward inference, and FalkorDB storage.
 
 **Example configuration file (`config-falkordb.ttl`):**
 

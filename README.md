@@ -248,36 +248,33 @@ Note: snapshots live in the OSSRH snapshots repository; once a release is publis
 
 ## How to Run Locally
 
-### Option 1: Quick Start (3 Steps)
-
 The fastest way to get started with the Jena-FalkorDB Adapter:
 
-**Step 1:** Start FalkorDB with Tracing
+**Step 1:** Clone the project
+```bash
+git clone https://github.com/FalkorDB/jena-falkordb-adapter.git
+cd jena-falkordb-adapter
+```
+
+**Step 2:** Start FalkorDB with Tracing
 ```bash
 docker-compose -f docker-compose-tracing.yaml up -d
 ```
 
-**Step 2:** Clone and build the project
-```bash
-git clone https://github.com/FalkorDB/jena-falkordb-adapter.git
-cd jena-falkordb-adapter
+> **Note:** The docker-compose must be running for tests to pass.
 
+**Step 3:** Build the project
+```bash
 # Install Java and Maven using SDKMAN (see Prerequisites)
 sdk env install
 
 mvn clean install
 ```
 
-> **Note:** The docker-compose must be running for tests to pass.
-
-**Step 3:** Run the Fuseki server
+**Step 4:** Run the Fuseki server with config file
 ```bash
-# Run Fuseki server with the three-layer config (recommended)
 java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
   --config jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl
-
-# OR run with environment variables (simpler, uses default settings)
-java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar
 ```
 
 The Fuseki server will start at http://localhost:3330/ with the SPARQL endpoint at `/falkor`.
@@ -286,40 +283,6 @@ The Fuseki server will start at http://localhost:3330/ with the SPARQL endpoint 
 - Open your browser and navigate to **http://localhost:3330/**
 - The web interface provides a query editor, dataset management, and server statistics
 - You can run SPARQL queries directly from the browser UI
-
-### Option 2: Using the Setup Script
-
-For Linux/Mac users, use the included setup script:
-
-```bash
-chmod +x setup.sh
-./setup.sh
-```
-
-The script will:
-- Check prerequisites (Java, Maven, Docker)
-- Start FalkorDB if Docker is available
-- Build the project
-- Provide instructions for running
-
-### Option 3: Development Setup
-
-For development work with tests:
-
-```bash
-# 1. Start FalkorDB
-docker run -p 6379:6379 -d --name falkordb falkordb/falkordb:latest
-
-# 2. Clone and build
-git clone https://github.com/FalkorDB/jena-falkordb-adapter.git
-cd jena-falkordb-adapter
-
-# 3. Build and run tests
-mvn clean install
-
-# 4. Run specific tests
-mvn test -pl jena-falkordb-adapter
-```
 
 See [GETTING_STARTED.md](GETTING_STARTED.md) for detailed setup instructions, troubleshooting, and more examples.
 
@@ -399,8 +362,10 @@ FROM openjdk:21-slim
 # Install FalkorDB client tools (optional)
 RUN apt-get update && apt-get install -y redis-tools && rm -rf /var/lib/apt/lists/*
 
-# Copy the JAR
+# Copy the JAR and config file
 COPY jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar /app/fuseki.jar
+COPY jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl /app/config-falkordb.ttl
+COPY rules /app/rules
 
 # Environment variables
 ENV FALKORDB_HOST=falkordb
@@ -410,7 +375,7 @@ ENV FUSEKI_PORT=3330
 
 EXPOSE 3330
 
-CMD ["java", "-jar", "/app/fuseki.jar"]
+CMD ["java", "-jar", "/app/fuseki.jar", "--config", "/app/config-falkordb.ttl"]
 ```
 
 **Docker Compose** example with FalkorDB:
@@ -1199,26 +1164,18 @@ mvn clean package
 # Run the adapter demo
 java -jar jena-falkordb-adapter/target/jena-falkordb-adapter-0.2.0-SNAPSHOT.jar
 
-# Run the Fuseki server with FalkorDB (uses environment variables or defaults)
-java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar
-
-# OR run with config file (recommended for production)
+# Run the Fuseki server with config file (recommended)
 java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
   --config jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl
 ```
 
 ### Running the Fuseki Server
 
-The Fuseki server module provides a standalone SPARQL endpoint:
+The Fuseki server module provides a standalone SPARQL endpoint. Always run with the config file:
 
 ```bash
-# Using environment variables for configuration
-export FALKORDB_HOST=localhost
-export FALKORDB_PORT=6379
-export FALKORDB_GRAPH=my_knowledge_graph
-export FUSEKI_PORT=3330
-
-java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar
+java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
+  --config jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl
 ```
 
 Then access:

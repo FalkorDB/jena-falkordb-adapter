@@ -10,23 +10,28 @@ This guide will help you set up and start using the Jena-FalkorDB project in und
 
 The adapter features efficient literal storage as node properties, automatic URI indexing, and rdf:type support with native labels for optimal performance! See the [README](README.md) for architecture details.
 
-## Quick Start (3 Steps)
+## Quick Start (4 Steps)
 
-### Step 1: Start FalkorDB
-
-```bash
-docker run -p 6379:6379 -it --rm falkordb/falkordb:latest
-```
-
-### Step 2: Build the Project
+### Step 1: Clone the Project
 
 ```bash
 git clone https://github.com/FalkorDB/jena-falkordb-adapter.git
 cd jena-falkordb-adapter
+```
+
+### Step 2: Start FalkorDB with Tracing
+
+```bash
+docker-compose -f docker-compose-tracing.yaml up -d
+```
+
+### Step 3: Build the Project
+
+```bash
 mvn clean install -DskipTests
 ```
 
-### Step 3: Run the Demo or Fuseki Server
+### Step 4: Run the Demo or Fuseki Server
 
 **Option A: Run the adapter demo**
 ```bash

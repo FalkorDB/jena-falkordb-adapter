@@ -44,14 +44,14 @@ The server will start on port 3330 by default with the endpoint at `/falkor`.
 
 Once the server is running, you can access the web interface:
 
-- **URL**: http://localhost:3330
+- **URL**: http://localhost:3330/
 - **Features**:
   - Interactive SPARQL query editor
   - Dataset management and statistics
   - Query history and results visualization
   - Server status and configuration information
 
-Simply open your browser and navigate to **http://localhost:3330** to get started.
+Simply open your browser and navigate to **http://localhost:3330/** to get started.
 
 ### Step 3: Insert and Query Data
 

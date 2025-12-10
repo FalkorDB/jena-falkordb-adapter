@@ -91,7 +91,7 @@ Bundles Apache Jena's GeoSPARQL implementation with all dependencies, enabling s
 #### jena-fuseki-falkordb (SPARQL Server)
 
 A standalone SPARQL endpoint server built on Apache Jena Fuseki with FalkorDB as the backend. Provides:
-- Web-based UI for query execution at `http://localhost:3330`
+- Web-based UI for query execution at `http://localhost:3330/`
 - REST API endpoints for SPARQL query, update, and Graph Store Protocol
 - Support for rule-based inference and reasoning
 - Environment variable and TTL file-based configuration
@@ -280,10 +280,10 @@ java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
 java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar
 ```
 
-The Fuseki server will start at http://localhost:3330 with the SPARQL endpoint at `/falkor`.
+The Fuseki server will start at http://localhost:3330/ with the SPARQL endpoint at `/falkor`.
 
 **Accessing the Fuseki Web UI:**
-- Open your browser and navigate to **http://localhost:3330**
+- Open your browser and navigate to **http://localhost:3330/**
 - The web interface provides a query editor, dataset management, and server statistics
 - You can run SPARQL queries directly from the browser UI
 
@@ -352,7 +352,7 @@ The server will be available at `http://localhost:3330/falkor` with full support
 - Persistent storage in FalkorDB
 
 **Accessing the Fuseki Web UI:**
-Open your browser and navigate to **http://localhost:3330** to access the web interface for interactive querying and dataset management.
+Open your browser and navigate to **http://localhost:3330/** to access the web interface for interactive querying and dataset management.
 
 See the full [config-falkordb.ttl](jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl) file for the complete configuration and architecture details.
 
@@ -956,7 +956,7 @@ java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
 ```
 
 **Step 2:** Open the Fuseki Web UI in your browser:
-- Navigate to **http://localhost:3330**
+- Navigate to **http://localhost:3330/**
 - Select the `/falkor` dataset
 - Use the query editor to run SPARQL queries interactively
 
@@ -997,7 +997,7 @@ java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
 ```
 
 **Step 2:** Access the Fuseki Web UI:
-- Open your browser and navigate to **http://localhost:3330**
+- Open your browser and navigate to **http://localhost:3330/**
 - The web interface provides a query editor, dataset management, and server statistics
 - Select the `/falkor` dataset to run queries
 
@@ -1056,7 +1056,7 @@ For interactive exploration, use the Fuseki web UI:
    java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
      --config jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl
    ```
-2. Open browser and navigate to: **http://localhost:3330**
+2. Open browser and navigate to: **http://localhost:3330/**
 3. Select the `/falkor` dataset from the dataset list
 4. Navigate to the query editor tab
 5. Load queries from `samples/*/queries.sparql`
@@ -1240,7 +1240,7 @@ java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar
 ```
 
 Then access:
-- **Web UI**: http://localhost:3330 (open in your browser for interactive querying)
+- **Web UI**: http://localhost:3330/ (open in your browser for interactive querying)
 - **SPARQL Endpoint**: http://localhost:3330/falkor
 
 Developer notes:

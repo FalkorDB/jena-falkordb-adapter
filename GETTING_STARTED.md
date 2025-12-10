@@ -40,7 +40,7 @@ java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
 ```
 
 **Accessing the Fuseki Web UI:**
-Open your browser and navigate to **http://localhost:3330** to access the web interface.
+Open your browser and navigate to **http://localhost:3330/** to access the web interface.
 The UI provides:
 - Interactive SPARQL query editor
 - Dataset management and statistics

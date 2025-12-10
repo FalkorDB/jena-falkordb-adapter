@@ -129,22 +129,36 @@ A standalone SPARQL endpoint server built on Apache Jena Fuseki with FalkorDB as
 
 ## Prerequisites
 
-- Java 17 or newer (tested with 21 and 25)
-- Maven 3.6 or newer
-- FalkorDB running (via Docker or direct installation)
+### Install Java and Maven
 
-> **Tip:** You can use [sdkman](https://sdkman.io/) to easily install and manage Java and Maven versions.
-## Setup
-
-### 1. Install FalkorDB
-
-Using Docker (recommended):
+Install Java 21.0.5-graal and Maven 3.9.11 using SDKMAN (matching versions in `.sdkmanrc`):
 
 ```bash
-docker run -p 6379:6379 -it --rm falkordb/falkordb:latest
+# Install SDKMAN if not already installed
+curl -s "https://get.sdkman.io" | bash
+source "$HOME/.sdkman/bin/sdkman-init.sh"
+
+# Install Java and Maven from project's .sdkmanrc
+sdk env install
+
+# Verify installations
+java -version  # Should show: java version "21.0.5" ... (GraalVM)
+mvn -version   # Should show: Apache Maven 3.9.11
 ```
 
-Or install directly from: https://www.falkordb.com/
+### Install FalkorDB with Tracing
+
+Start FalkorDB and Jaeger using docker-compose (required for development and testing):
+
+```bash
+docker-compose -f docker-compose-tracing.yaml up -d
+```
+
+This starts:
+- **FalkorDB** on `localhost:6379`
+- **Jaeger UI** on `http://localhost:16686` (for viewing traces)
+
+> **Note:** The docker-compose setup is required for building and running tests.
 
 ### 2. Clone and Build the Project
 
@@ -238,22 +252,29 @@ Note: snapshots live in the OSSRH snapshots repository; once a release is publis
 
 The fastest way to get started with the Jena-FalkorDB Adapter:
 
-**Step 1:** Start FalkorDB
+**Step 1:** Start FalkorDB with Tracing
 ```bash
-docker run -p 6379:6379 -it --rm falkordb/falkordb:latest
+docker-compose -f docker-compose-tracing.yaml up -d
 ```
 
 **Step 2:** Clone and build the project
 ```bash
 git clone https://github.com/FalkorDB/jena-falkordb-adapter.git
 cd jena-falkordb-adapter
-mvn clean install -DskipTests
+
+# Install Java and Maven using SDKMAN (see Prerequisites)
+sdk env install
+
+mvn clean install
 ```
 
-**Step 3:** Run the demo or Fuseki server
+> **Note:** The docker-compose must be running for tests to pass.
+
+**Step 3:** Run the Fuseki server
 ```bash
-# Run the adapter demo
-java -jar jena-falkordb-adapter/target/jena-falkordb-adapter-0.2.0-SNAPSHOT.jar
+# Run Fuseki server with the three-layer config
+java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
+  --config jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl
 
 # OR run the Fuseki SPARQL server
 java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar
@@ -301,63 +322,31 @@ See [GETTING_STARTED.md](GETTING_STARTED.md) for detailed setup instructions, tr
 
 The `jena-fuseki-falkordb` module can be deployed as a standalone SPARQL endpoint server. There are several deployment options:
 
-### Deployment Option 1: Using the Bundled JAR
+### Deployment Option 1: Using Configuration File (Recommended)
 
-The simplest deployment method using the pre-built executable JAR:
+The recommended approach uses the included [config-falkordb.ttl](jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl) file which implements a three-layer onion architecture:
 
+- **Layer 1 (Outer)**: GeoSPARQL Dataset - handles spatial queries with indexing and optimization
+- **Layer 2 (Middle)**: Inference Model - applies forward chaining rules for eager inference (e.g., grandfather relationships)
+- **Layer 3 (Core)**: FalkorDB Model - physical storage layer connecting to Redis/FalkorDB
+
+**Step 1:** Start FalkorDB with tracing:
 ```bash
-# Build the JAR
-mvn clean package -pl jena-fuseki-falkordb -am
-
-# Run with environment variables
-export FALKORDB_HOST=localhost
-export FALKORDB_PORT=6379
-export FALKORDB_GRAPH=my_knowledge_graph
-export FUSEKI_PORT=3330
-
-java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar
+docker-compose -f docker-compose-tracing.yaml up -d
 ```
 
-Access the server:
-- **Web UI:** http://localhost:3330/
-- **SPARQL Query Endpoint:** http://localhost:3330/falkor/query
-- **SPARQL Update Endpoint:** http://localhost:3330/falkor/update
-
-### Deployment Option 2: Using Configuration File
-
-For more control, use a TTL configuration file:
-
-**Step 1:** Create `config-falkordb.ttl`:
-```turtle
-@prefix :        <#> .
-@prefix falkor:  <http://falkordb.com/jena/assembler#> .
-@prefix fuseki:  <http://jena.apache.org/fuseki#> .
-@prefix ja:      <http://jena.hpl.hp.com/2005/11/Assembler#> .
-@prefix rdf:     <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
-
-[] rdf:type fuseki:Server ;
-   fuseki:services ( :service ) .
-
-:service rdf:type fuseki:Service ;
-    fuseki:name "dataset" ;
-    fuseki:endpoint [ fuseki:operation fuseki:query ; ] ;
-    fuseki:endpoint [ fuseki:operation fuseki:update ; ] ;
-    fuseki:dataset :dataset_rdf .
-
-:dataset_rdf rdf:type ja:RDFDataset ;
-    ja:defaultGraph :falkor_db_model .
-
-:falkor_db_model rdf:type falkor:FalkorDBModel ;
-    falkor:host "localhost" ;
-    falkor:port 6379 ;
-    falkor:graphName "my_graph" .
-```
-
-**Step 2:** Start the server with config:
+**Step 2:** Start the server with the included configuration:
 ```bash
 java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
-  --config config-falkordb.ttl
+  --config jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl
 ```
+
+The server will be available at `http://localhost:3330/falkor` with full support for:
+- SPARQL queries with GeoSPARQL spatial functions
+- Forward chaining inference (e.g., grandfather relationships are automatically materialized)
+- Persistent storage in FalkorDB
+
+See the full [config-falkordb.ttl](jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl) file for the complete configuration and architecture details.
 
 ### Deployment Option 3: Integrating with Existing Fuseki
 
@@ -372,12 +361,19 @@ cp jena-falkordb-adapter/target/jena-falkordb-adapter-0.2.0-SNAPSHOT.jar \
 cp jena-falkordb-assembler/target/jena-falkordb-assembler-0.2.0-SNAPSHOT.jar \
    /path/to/fuseki/lib/
 
+cp jena-geosparql/target/jena-geosparql-0.2.0-SNAPSHOT.jar \
+   /path/to/fuseki/lib/
+
 # Copy JFalkorDB dependency
 cp ~/.m2/repository/com/falkordb/jfalkordb/0.6.0/jfalkordb-0.6.0.jar \
    /path/to/fuseki/lib/
 ```
 
-**Step 2:** Create assembler configuration (same as Option 2)
+**Step 2:** Copy the configuration file and rules:
+```bash
+cp jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl /path/to/fuseki/
+cp -r rules /path/to/fuseki/
+```
 
 **Step 3:** Start Fuseki with the configuration:
 ```bash

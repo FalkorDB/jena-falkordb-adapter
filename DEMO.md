@@ -30,20 +30,24 @@
 - **Docker**: For running FalkorDB and Jaeger
 - **curl**: For testing HTTP endpoints
 
-### Install Java 21
+### Install Java and Maven using SDKMAN
+
+Install Java 21.0.5-graal and Maven 3.9.11 using SDKMAN (matches `.sdkmanrc`):
 
 ```bash
-# Using apt (Ubuntu/Debian)
-sudo apt-get update
-sudo apt-get install -y msopenjdk-21
+# Install SDKMAN
+curl -s "https://get.sdkman.io" | bash
+source "$HOME/.sdkman/bin/sdkman-init.sh"
 
-# Set JAVA_HOME
-export JAVA_HOME=/usr/lib/jvm/msopenjdk-21-amd64
-export PATH=$JAVA_HOME/bin:$PATH
+# Install Java and Maven from project's .sdkmanrc
+sdk env install
 
-# Verify installation
+# Verify installations
 java -version
-# Should show: openjdk version "21.0.x"
+# Should show: java version "21.0.5" ... (GraalVM)
+
+mvn -version
+# Should show: Apache Maven 3.9.11
 ```
 
 ### Clone the Repository
@@ -123,8 +127,9 @@ export OTEL_TRACING_ENABLED=true
 ### Start the Fuseki Server
 
 ```bash
-# Start Fuseki with FalkorDB backend
-java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar
+# Start Fuseki with the three-layer config (GeoSPARQL + Forward Inference + FalkorDB)
+java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
+  --config jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl
 ```
 
 **Expected output:**
@@ -1057,7 +1062,8 @@ echo $OTEL_EXPORTER_OTLP_ENDPOINT
 export OTEL_TRACING_ENABLED=true
 export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
 export OTEL_SERVICE_NAME=jena-falkordb-demo
-java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar
+java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
+  --config jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl
 ```
 
 ### Issue: Java Version Mismatch
@@ -1091,7 +1097,8 @@ kill -9 <PID>
 
 # Or use a different port
 export FUSEKI_PORT=3331
-java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar
+java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
+  --config jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl
 ```
 
 ### Issue: Curl Commands Not Working

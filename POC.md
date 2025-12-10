@@ -4,21 +4,34 @@ This document demonstrates key features of the Jena-FalkorDB adapter with practi
 
 ## Prerequisites
 
-1. **Start FalkorDB**:
+1. **Install Java and Maven using SDKMAN**:
    ```bash
-   docker run -p 6379:6379 -it --rm falkordb/falkordb:latest
+   # Install SDKMAN
+   curl -s "https://get.sdkman.io" | bash
+   source "$HOME/.sdkman/bin/sdkman-init.sh"
+   
+   # Install Java 21.0.5-graal and Maven 3.9.11 (from .sdkmanrc)
+   sdk env install
    ```
 
-2. **Build and Start Fuseki Server**:
+2. **Start FalkorDB with tracing**:
    ```bash
-   mvn clean install -DskipTests
-   java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar
+   docker-compose -f docker-compose-tracing.yaml up -d
    ```
 
-3. **Verify Fuseki is running**:
+3. **Build and Start Fuseki Server**:
+   ```bash
+   mvn clean install
+   java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
+     --config jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl
+   ```
+
+4. **Verify Fuseki is running**:
    ```bash
    curl -s http://localhost:3330/$/ping
    ```
+
+> **Note:** docker-compose must be running for tests to pass.
 
 ---
 
@@ -145,24 +158,13 @@ The `grandfather_of_bwd.rule` file contains a backward-chaining rule that infers
 ]
 ```
 
-### 4.1 Setup Inference Model with Rules
+### 4.1 Configuration
 
-The repository includes a pre-configured file `config-falkordb-lazy-inference.ttl` that uses FalkorDB as the backend with grandfather inference rules. This configuration:
+The server is already running with [config-falkordb.ttl](jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl) (started in Prerequisites above), which implements forward chaining (eager inference) to materialize relationships.
 
-- Uses FalkorDB (not in-memory) for persistent graph storage
-- Applies backward-chaining inference rules for lazy, on-demand inference
-- Provides all standard Fuseki endpoints at `/falkor`
+See the test [GrandfatherInferenceSystemTest.java](jena-fuseki-falkordb/src/test/java/com/falkordb/GrandfatherInferenceSystemTest.java) for a complete working example.
 
-**For this grandfather example, you can create a custom configuration based on the lazy inference pattern**:
-
-```bash
-java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
-  --config jena-fuseki-falkordb/src/main/resources/config-falkordb-lazy-inference.ttl
-```
-
-The configuration uses FalkorDB as the base model with inference layered on top, so your data is stored in FalkorDB and inference is computed on-demand using backward chaining (lazy inference).
-
-### 4.2 Load the Data to the Inference Endpoint
+### 4.2 Load the Data
 
 ```bash
 curl -X POST http://localhost:3330/falkor/data \
@@ -257,30 +259,23 @@ This uses Cypher's variable-length path matching `*2..2` to find exactly 2-hop `
 
 ---
 
-## 5. GeoSPARQL with Lazy Inference
+## 5. GeoSPARQL with Forward Inference
 
-This section demonstrates combining **lazy inference** (backward chaining rules) with **GeoSPARQL** spatial queries. This powerful combination enables queries that span both inferred social relationships and geographic data.
+This section demonstrates the three-layer onion architecture combining **GeoSPARQL** spatial queries with **forward chaining inference** and **FalkorDB** storage. This powerful combination enables queries that span both materialized inferred relationships and geographic data.
 
 ### 5.1 Overview
 
-The `config-falkordb-lazy-inference-with-geosparql.ttl` configuration stacks three layers:
+The server is already running with [config-falkordb.ttl](jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl) (started in Prerequisites), which implements a three-layer onion architecture:
 
-1. **FalkorDB** - Persistent graph database backend
-2. **Generic Rule Reasoner** - Lazy inference using backward chaining rules
-3. **GeoSPARQL Dataset** - Spatial query capabilities with indexing
+1. **GeoSPARQL Dataset (Outer Layer)** - Spatial query capabilities with indexing and optimization
+2. **Inference Model (Middle Layer)** - Forward chaining (eager inference) materializes relationships immediately
+3. **FalkorDB Model (Core Layer)** - Persistent graph database backend
 
-This enables queries like "Find all people I know transitively (via inference) who are within a specific geographic area (via GeoSPARQL)."
+See the tests for complete working examples:
+- [GeoSPARQLPOCSystemTest.java](jena-fuseki-falkordb/src/test/java/com/falkordb/GeoSPARQLPOCSystemTest.java) - GeoSPARQL queries
+- [GrandfatherInferenceSystemTest.java](jena-fuseki-falkordb/src/test/java/com/falkordb/GrandfatherInferenceSystemTest.java) - Forward chaining inference tests
 
-### 5.2 Start Fuseki with GeoSPARQL + Inference Configuration
-
-```bash
-java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
-  --config jena-fuseki-falkordb/src/main/resources/config-falkordb-lazy-inference-with-geosparql.ttl
-```
-
-The server will start on port 3330 with the service available at `/falkor`.
-
-### 5.3 Load Example Data (Social Network with Geographic Locations)
+### 5.2 Load Example Data (Social Network with Geographic Locations)
 
 Load the example data that contains both social relationships and geographic coordinates (London locations):
 
@@ -296,9 +291,9 @@ curl -X POST http://localhost:3330/falkor/data \
 - 3 geographic features representing London districts
 - Social network creates transitive paths (e.g., Alice → Bob → Carol)
 
-### 5.4 Query: Find Friend-of-Friend with Their Locations
+### 5.3 Query: Find Friends with Their Locations
 
-Query for all people Alice knows through a 2-hop relationship (friend-of-friend) along with their geographic locations:
+Query for all people Alice knows directly along with their geographic locations:
 
 ```bash
 curl -G http://localhost:3330/falkor/query \
@@ -309,7 +304,7 @@ PREFIX geo: <http://www.opengis.net/ont/geosparql#>
 PREFIX ex: <http://example.org/>
 SELECT ?friendName ?location
 WHERE {
-  ex:alice social:knows_transitively ?friend .
+  ex:alice social:knows ?friend .
   ?friend ex:name ?friendName ;
           geo:hasGeometry ?geom .
   ?geom geo:asWKT ?location .
@@ -318,19 +313,17 @@ ORDER BY ?friendName'
 ```
 
 **Expected Result:**
-- Returns Carol and Dave (friends-of-friends via Bob)
-- Includes their WKT point coordinates in London
+- Returns Bob (Alice's direct friend)
+- Includes WKT point coordinates in London
 
 **What happened:**
-1. The inference rule computed 2-hop `knows_transitively` relationships on-demand
-2. GeoSPARQL extracted the geographic location for each friend-of-friend
-3. Both features worked together seamlessly
+1. The GeoSPARQL layer handles spatial data queries
+2. The query retrieves both social relationships and geographic locations
+3. Both features work together seamlessly
 
-**Note:** The current rule supports 2-hop relationships (friend-of-friend). For arbitrary-length transitive paths, additional rules or Cypher queries with variable-length paths would be needed.
+### 5.4 Query: Check Direct Friend Connection (ASK Query)
 
-### 5.5 Query: Check Friend-of-Friend Connection (ASK Query)
-
-Check if Carol is in Alice's 2-hop network using an ASK query with inference:
+Check if Bob is Alice's direct friend using an ASK query:
 
 ```bash
 curl -G http://localhost:3330/falkor/query \
@@ -339,7 +332,7 @@ curl -G http://localhost:3330/falkor/query \
 PREFIX social: <http://example.org/social#>
 PREFIX ex: <http://example.org/>
 ASK {
-  ex:alice social:knows_transitively ex:carol .
+  ex:alice social:knows ex:bob .
 }'
 ```
 
@@ -350,11 +343,11 @@ ASK {
 }
 ```
 
-Carol is reachable via the path: Alice → Bob → Carol (2 hops)
+Bob is Alice's direct friend.
 
-### 5.6 Query: Find Friends-of-Friends with Occupations and Locations
+### 5.5 Query: Find Direct Friends with Occupations and Locations
 
-Query for people in Bob's 2-hop network with their occupations and geographic locations:
+Query for people in Bob's direct network with their occupations and geographic locations:
 
 ```bash
 curl -G http://localhost:3330/falkor/query \
@@ -365,7 +358,7 @@ PREFIX geo: <http://www.opengis.net/ont/geosparql#>
 PREFIX ex: <http://example.org/>
 SELECT ?friendName ?occupation ?location
 WHERE {
-  ex:bob social:knows_transitively ?friend .
+  ex:bob social:knows ?friend .
   ?friend ex:name ?friendName ;
           ex:occupation ?occupation ;
           geo:hasGeometry ?geom .
@@ -375,10 +368,10 @@ ORDER BY ?friendName'
 ```
 
 **Expected Result:**
-- Returns Eve (friend-of-friend via Dave) with occupation and coordinates
-- Demonstrates combining 2-hop inference, standard properties, and spatial data
+- Returns Bob's direct friends (Carol, Dave) with their occupations and coordinates
+- Demonstrates combining social relationships, standard properties, and spatial data
 
-### 5.7 Query: Geographic Features with People
+### 5.6 Query: Geographic Features with People
 
 Query all geographic features (regions) and people in the dataset:
 
@@ -449,11 +442,17 @@ curl -G http://localhost:3330/falkor/query \
 
 ### 5.10 Key Benefits
 
-✅ **Lazy Inference**: Rules compute transitive relationships on-demand, not upfront  
+✅ **Forward Inference**: Rules eagerly materialize inferred relationships immediately when data is added  
 ✅ **Spatial Queries**: Full GeoSPARQL support for points, polygons, and spatial functions  
-✅ **Combined Queries**: Seamlessly mix inference and spatial predicates  
-✅ **Performance**: FalkorDB backend with spatial indexing  
+✅ **Combined Queries**: Seamlessly mix materialized inference and spatial predicates  
+✅ **Performance**: FalkorDB backend with spatial indexing and **full query pushdown** on materialized triples  
 ✅ **Standards Compliant**: Uses standard SPARQL, GeoSPARQL, and Jena inference
+
+> **🚀 Performance Note**: Because forward chaining materializes inferred triples into FalkorDB, ALL query optimizations work:
+> - Query pushdown translates SPARQL to efficient Cypher
+> - Aggregations (COUNT, SUM, etc.) execute in the database
+> - Spatial queries use FalkorDB's native graph capabilities
+> - No performance penalty for querying inferred vs. base triples!
 
 ---
 
@@ -465,14 +464,14 @@ This POC demonstrates:
 2. ✅ **Query Without Magic Property**: Automatic SPARQL-to-Cypher translation with query pushdown
 3. ✅ **Query With Magic Property**: Direct Cypher execution for maximum control
 4. ✅ **Loading fathers_father_sample.ttl**: Simple family relationship data
-5. ✅ **Inference with Rules**: Backward-chaining rules to infer grandfather relationships
-6. ✅ **GeoSPARQL with Lazy Inference**: Combining spatial queries with transitive reasoning
+5. ✅ **Inference with Rules**: Forward-chaining rules to eagerly materialize grandfather relationships
+6. ✅ **GeoSPARQL with Forward Inference**: Combining spatial queries with materialized inferred relationships
 
 ### Key Features Showcased
 
 - **Performance**: Batch writes, query pushdown, magic property
 - **Flexibility**: Standard SPARQL or direct Cypher
-- **Intelligence**: Rule-based inference with backward chaining
+- **Intelligence**: Rule-based inference with forward chaining (eager materialization)
 - **Compatibility**: Works with standard Jena reasoning and rules
 
 ### Next Steps

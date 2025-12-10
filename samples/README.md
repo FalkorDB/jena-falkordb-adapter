@@ -141,18 +141,25 @@ Each subdirectory contains:
 
 ### Running the Examples
 
-1. **Start FalkorDB:**
+1. **Start FalkorDB with tracing:**
    ```bash
-   docker run -p 6379:6379 -d falkordb/falkordb:latest
+   docker-compose -f docker-compose-tracing.yaml up -d
    ```
 
-2. **Build the project:**
+2. **Install Java and Maven using SDKMAN:**
+   ```bash
+   curl -s "https://get.sdkman.io" | bash
+   source "$HOME/.sdkman/bin/sdkman-init.sh"
+   sdk env install
+   ```
+
+3. **Build the project:**
    ```bash
    cd jena-falkordb-adapter
    mvn clean install
    ```
 
-3. **Run an example:**
+4. **Run an example:**
    ```bash
    # Batch Writes
    mvn exec:java -Dexec.mainClass="com.falkordb.samples.BatchWriteExample"

@@ -132,7 +132,7 @@ SELECT ?person WHERE {
 
 ```bash
 # Start FalkorDB
-docker run -p 6379:6379 -d falkordb/falkordb:latest
+docker-compose -f docker-compose-tracing.yaml up -d
 
 # Build the project
 mvn clean install
@@ -327,11 +327,12 @@ First, start FalkorDB and Fuseki:
 
 ```bash
 # Start FalkorDB
-docker run -p 6379:6379 -it --rm falkordb/falkordb:latest
+docker-compose -f docker-compose-tracing.yaml up -d
 
 # In another terminal, start Fuseki (from project root)
 mvn clean install -DskipTests
-java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar
+java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
+  --config jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl
 ```
 
 The Fuseki server will start on `http://localhost:3330` with the default endpoint at `/falkor`.

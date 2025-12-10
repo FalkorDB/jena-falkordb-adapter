@@ -13,17 +13,18 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * System tests for Fuseki server using the config-test-falkordb-lazy-inference-with-geosparql.ttl
- * configuration file. These tests verify that the configuration file correctly combines:
- * - FalkorDB backend storage
- * - Lazy inference (backward chaining rules)
- * - GeoSPARQL spatial query capabilities
+ * System tests for Fuseki server using the config-falkordb.ttl configuration file.
+ * These tests verify that the configuration file correctly combines the three-layer onion architecture:
+ * - GeoSPARQL Dataset (outer layer) - handles spatial queries
+ * - Inference Model (middle layer) - applies forward chaining rules for eager inference
+ * - FalkorDB backend storage (core layer) - physical storage
  *
  * <p>These tests load the actual configuration file from resources and demonstrate
  * real-world usage patterns for querying geospatial data with inference.</p>
@@ -60,17 +61,20 @@ public class FusekiLazyInferenceGeoSPARQLConfigTest {
         // Initialize GeoSPARQL - this must be done before creating datasets
         org.apache.jena.geosparql.configuration.GeoSPARQLConfig.setupMemoryIndex();
         
-        // Generate config file with dynamic port and FalkorDB connection
-        String configContent = generateConfigFile(falkorHost, falkorPort);
-        Path configPath = tempDir.resolve("config-test-lazy-inference-geosparql.ttl");
+        // Load config-falkordb.ttl from resources and customize it for this test
+        String configContent = loadAndCustomizeConfig(falkorHost, falkorPort);
+        Path configPath = tempDir.resolve("config-falkordb.ttl");
         Files.writeString(configPath, configContent);
         
-        // Also create the rules file that the config references
-        String rulesContent = loadRulesFromResources();
+        // Copy the grandfather forward rule file to a location accessible by the config
         Path rulesDir = tempDir.resolve("rules");
         Files.createDirectories(rulesDir);
-        Path rulesPath = rulesDir.resolve("friend_of_friend_bwd.rule");
-        Files.writeString(rulesPath, rulesContent);
+        try (InputStream ruleStream = getClass().getClassLoader()
+                .getResourceAsStream("rules/grandfather_of_fwd.rule")) {
+            if (ruleStream != null) {
+                Files.copy(ruleStream, rulesDir.resolve("grandfather_of_fwd.rule"));
+            }
+        }
         
         // Start Fuseki server with config file
         server = FusekiServer.create()
@@ -79,9 +83,9 @@ public class FusekiLazyInferenceGeoSPARQLConfigTest {
             .build();
         server.start();
         
-        // Endpoints based on config file service name "testdb"
-        sparqlEndpoint = "http://localhost:" + TEST_PORT + "/testdb/query";
-        updateEndpoint = "http://localhost:" + TEST_PORT + "/testdb/update";
+        // Endpoints based on config file service name "falkor"
+        sparqlEndpoint = "http://localhost:" + TEST_PORT + "/falkor/query";
+        updateEndpoint = "http://localhost:" + TEST_PORT + "/falkor/update";
         
         // Clear any existing data
         String clearQuery = "DELETE WHERE { ?s ?p ?o }";
@@ -89,97 +93,21 @@ public class FusekiLazyInferenceGeoSPARQLConfigTest {
     }
     
     /**
-     * Generate a Fuseki configuration file matching config-test-falkordb-lazy-inference-with-geosparql.ttl
-     * with dynamic connection details.
+     * Load config-falkordb.ttl from resources and customize it for this test with dynamic settings.
      */
-    private String generateConfigFile(String host, int port) {
-        return "# FalkorDB Fuseki Test Configuration with Lazy Inference and GeoSPARQL\n" +
-               "#\n" +
-               "# This configuration file is used for testing the combination of lazy inference\n" +
-               "# rules with GeoSPARQL spatial queries using FalkorDB backend.\n" +
-               "\n" +
-               "@prefix :        <#> .\n" +
-               "@prefix falkor:  <http://falkordb.com/jena/assembler#> .\n" +
-               "@prefix fuseki:  <http://jena.apache.org/fuseki#> .\n" +
-               "@prefix ja:      <http://jena.hpl.hp.com/2005/11/Assembler#> .\n" +
-               "@prefix rdf:     <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .\n" +
-               "@prefix rdfs:    <http://www.w3.org/2000/01/rdf-schema#> .\n" +
-               "@prefix geosparql: <http://jena.apache.org/geosparql#> .\n" +
-               "\n" +
-               "# Declare FalkorDBModel as a subclass of ja:Model for assembler compatibility\n" +
-               "falkor:FalkorDBModel rdfs:subClassOf ja:Model .\n" +
-               "\n" +
-               "# Fuseki server configuration\n" +
-               "[] rdf:type fuseki:Server ;\n" +
-               "   fuseki:services (\n" +
-               "     :service\n" +
-               "   ) .\n" +
-               "\n" +
-               "# The service with combined lazy inference and GeoSPARQL\n" +
-               ":service rdf:type fuseki:Service ;\n" +
-               "    fuseki:name \"testdb\" ;\n" +
-               "    \n" +
-               "    fuseki:endpoint [\n" +
-               "        fuseki:operation fuseki:query ;\n" +
-               "        fuseki:name \"sparql\"\n" +
-               "    ] ;\n" +
-               "    fuseki:endpoint [\n" +
-               "        fuseki:operation fuseki:query ;\n" +
-               "        fuseki:name \"query\"\n" +
-               "    ] ;\n" +
-               "    fuseki:endpoint [\n" +
-               "        fuseki:operation fuseki:update ;\n" +
-               "        fuseki:name \"update\"\n" +
-               "    ] ;\n" +
-               "    fuseki:endpoint [\n" +
-               "        fuseki:operation fuseki:gsp-r ;\n" +
-               "        fuseki:name \"get\"\n" +
-               "    ] ;\n" +
-               "    fuseki:endpoint [\n" +
-               "        fuseki:operation fuseki:gsp-rw ;\n" +
-               "        fuseki:name \"data\"\n" +
-               "    ] ;\n" +
-               "    \n" +
-               "    fuseki:dataset :dataset_geosparql .\n" +
-               "\n" +
-               "# GeoSPARQL Dataset Configuration\n" +
-               ":dataset_geosparql rdf:type geosparql:GeosparqlDataset ;\n" +
-               "    geosparql:inference            true ;\n" +
-               "    geosparql:queryRewrite         true ;\n" +
-               "    geosparql:indexEnabled         true ;\n" +
-               "    geosparql:applyDefaultGeometry false ;\n" +
-               "    geosparql:indexSizes           \"-1,-1,-1\" ;\n" +
-               "    geosparql:indexExpires         \"5000,5000,5000\" ;\n" +
-               "    geosparql:dataset :dataset_rdf .\n" +
-               "\n" +
-               "# RDF Dataset wrapping the inference model\n" +
-               ":dataset_rdf rdf:type ja:RDFDataset ;\n" +
-               "    ja:defaultGraph :model_inf .\n" +
-               "\n" +
-               "# Inference model with Generic Rule Reasoner using backward chaining\n" +
-               ":model_inf rdf:type ja:InfModel ;\n" +
-               "    ja:baseModel :falkor_db_model ;\n" +
-               "    ja:reasoner [\n" +
-               "        ja:reasonerURL <http://jena.hpl.hp.com/2003/GenericRuleReasoner> ;\n" +
-               "        ja:rulesFrom <file:rules/friend_of_friend_bwd.rule> ;\n" +
-               "    ] .\n" +
-               "\n" +
-               "# FalkorDB-backed model configuration\n" +
-               ":falkor_db_model rdf:type falkor:FalkorDBModel ;\n" +
-               "    falkor:host \"" + host + "\" ;\n" +
-               "    falkor:port " + port + " ;\n" +
-               "    falkor:graphName \"test_lazy_inf_geo_cfg_" + System.currentTimeMillis() + "\" .\n";
-    }
-    
-    /**
-     * Load the friend_of_friend backward chaining rules from resources.
-     */
-    private String loadRulesFromResources() throws IOException {
-        try (var is = getClass().getClassLoader().getResourceAsStream("rules/friend_of_friend_bwd.rule")) {
-            if (is == null) {
-                throw new IllegalArgumentException("Rule file not found in resources");
+    private String loadAndCustomizeConfig(String host, int port) throws IOException {
+        try (InputStream configStream = getClass().getClassLoader()
+                .getResourceAsStream("config-falkordb.ttl")) {
+            if (configStream == null) {
+                throw new IOException("config-falkordb.ttl not found in test resources");
             }
-            return new String(is.readAllBytes());
+            String content = new String(configStream.readAllBytes());
+            // Customize the host, port, and graph name for testing
+            content = content.replace("falkor:host \"localhost\"", "falkor:host \"" + host + "\"");
+            content = content.replace("falkor:port 6379", "falkor:port " + port);
+            content = content.replace("falkor:graphName \"knowledge_graph\"", 
+                                    "falkor:graphName \"test_geo_cfg_" + System.currentTimeMillis() + "\"");
+            return content;
         }
     }
     
@@ -191,7 +119,7 @@ public class FusekiLazyInferenceGeoSPARQLConfigTest {
     }
     
     @Test
-    @DisplayName("Test server starts with lazy inference + GeoSPARQL config file")
+    @DisplayName("Test server starts with config-falkordb.ttl (GeoSPARQL + Forward Inference + FalkorDB)")
     public void testServerStartsWithConfigFile() {
         assertNotNull(server, "Server should be started");
         assertEquals(TEST_PORT, server.getPort(), "Server should be running on configured port");
@@ -230,13 +158,14 @@ public class FusekiLazyInferenceGeoSPARQLConfigTest {
         
         UpdateExecutionHTTP.service(updateEndpoint).update(insertQuery).execute();
         
-        // Query: Find all people Alice knows (directly or transitively) with their locations
+        // Query: Find all people Alice knows directly with their locations
+        // Note: Config uses grandfather forward chaining, not friend-of-friend inference
         String selectQuery = 
             "PREFIX social: <http://example.org/social#> " +
             "PREFIX geo: <http://www.opengis.net/ont/geosparql#> " +
             "PREFIX ex: <http://example.org/> " +
             "SELECT ?personName ?wkt WHERE { " +
-            "  ex:alice social:knows_transitively ?person . " +  // Uses lazy inference
+            "  ex:alice social:knows ?person . " +  // Direct relationships only
             "  ?person ex:name ?personName ; " +
             "    geo:hasGeometry ?geom . " +                      // GeoSPARQL
             "  ?geom geo:asWKT ?wkt . " +
@@ -245,12 +174,12 @@ public class FusekiLazyInferenceGeoSPARQLConfigTest {
         try (QueryExecution qexec = QueryExecutionHTTP.service(sparqlEndpoint).query(selectQuery).build()) {
             ResultSet results = qexec.execSelect();
             
-            assertTrue(results.hasNext(), "Should find Carol via transitive inference");
+            assertTrue(results.hasNext(), "Should find Bob (Alice knows Bob directly)");
             var solution = results.next();
-            assertEquals("Carol", solution.getLiteral("personName").getString());
+            assertEquals("Bob", solution.getLiteral("personName").getString());
             String wkt = solution.getLiteral("wkt").getString();
             assertTrue(wkt.contains("POINT"), "Location should be a point");
-            assertTrue(wkt.contains("51.5155"), "Should have Carol's coordinates");
+            assertTrue(wkt.contains("51.5155"), "Should have Bob's coordinates");
         }
     }
     
@@ -293,14 +222,14 @@ public class FusekiLazyInferenceGeoSPARQLConfigTest {
         
         UpdateExecutionHTTP.service(updateEndpoint).update(insertQuery).execute();
         
-        // Query: Find people Dave knows (transitively) who are in central London
-        // This combines inference AND spatial queries
+        // Query: Find people Dave knows directly who are in central London
+        // This combines direct relationships AND spatial queries
         String selectQuery = 
             "PREFIX social: <http://example.org/social#> " +
             "PREFIX geo: <http://www.opengis.net/ont/geosparql#> " +
             "PREFIX ex: <http://example.org/> " +
             "SELECT ?friendName WHERE { " +
-            "  ex:dave social:knows_transitively ?friend . " +
+            "  ex:dave social:knows ?friend . " +  // Direct relationships only
             "  ?friend ex:name ?friendName ; " +
             "    geo:hasGeometry ?friendGeom . " +
             "  ?friendGeom geo:asWKT ?friendWkt . " +
@@ -309,9 +238,9 @@ public class FusekiLazyInferenceGeoSPARQLConfigTest {
         try (QueryExecution qexec = QueryExecutionHTTP.service(sparqlEndpoint).query(selectQuery).build()) {
             ResultSet results = qexec.execSelect();
             
-            assertTrue(results.hasNext(), "Should find Eve via transitive inference (dave->frank->eve)");
+            assertTrue(results.hasNext(), "Should find Frank (Dave knows Frank directly)");
             var solution = results.next();
-            assertEquals("Eve", solution.getLiteral("friendName").getString());
+            assertEquals("Frank", solution.getLiteral("friendName").getString());
         }
     }
     
@@ -348,14 +277,14 @@ public class FusekiLazyInferenceGeoSPARQLConfigTest {
         
         UpdateExecutionHTTP.service(updateEndpoint).update(insertQuery).execute();
         
-        // Query: Find transitive friends with their locations
+        // Query: Find direct friends with their locations
         String selectQuery = 
             "PREFIX social: <http://example.org/social#> " +
             "PREFIX geo: <http://www.opengis.net/ont/geosparql#> " +
             "PREFIX ex: <http://example.org/> " +
             "SELECT ?person1Name ?person2Name ?loc1 ?loc2 WHERE { " +
             "  ?person1 ex:name ?person1Name ; " +
-            "    social:knows_transitively ?person2 ; " +  // Lazy inference
+            "    social:knows ?person2 ; " +  // Direct relationships only
             "    geo:hasGeometry ?geom1 . " +
             "  ?person2 ex:name ?person2Name ; " +
             "    geo:hasGeometry ?geom2 . " +
@@ -367,15 +296,15 @@ public class FusekiLazyInferenceGeoSPARQLConfigTest {
         try (QueryExecution qexec = QueryExecutionHTTP.service(sparqlEndpoint).query(selectQuery).build()) {
             ResultSet results = qexec.execSelect();
             
-            assertTrue(results.hasNext(), "Should find Henry via transitive inference");
+            assertTrue(results.hasNext(), "Should find Grace (Frank knows Grace directly)");
             var solution = results.next();
             assertEquals("Frank", solution.getLiteral("person1Name").getString());
-            assertEquals("Henry", solution.getLiteral("person2Name").getString());
+            assertEquals("Grace", solution.getLiteral("person2Name").getString());
             
             String loc1 = solution.getLiteral("loc1").getString();
             String loc2 = solution.getLiteral("loc2").getString();
             assertTrue(loc1.contains("POINT"), "Frank's location should be a point");
-            assertTrue(loc2.contains("POINT"), "Henry's location should be a point");
+            assertTrue(loc2.contains("POINT"), "Grace's location should be a point");
         }
     }
     

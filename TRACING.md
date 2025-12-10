@@ -27,13 +27,26 @@ This starts:
 - **FalkorDB**: Graph database on `localhost:6379`
 - **Jaeger**: Tracing backend with UI on `http://localhost:16686`
 
-### 2. Build the Project
+### 2. Install Java and Maven using SDKMAN
 
 ```bash
-mvn clean package -DskipTests
+# Install SDKMAN
+curl -s "https://get.sdkman.io" | bash
+source "$HOME/.sdkman/bin/sdkman-init.sh"
+
+# Install from project's .sdkmanrc
+sdk env install
 ```
 
-### 3. Run the Fuseki Server with Tracing
+### 3. Build the Project
+
+```bash
+mvn clean package
+```
+
+> **Note:** docker-compose must be running for tests to pass.
+
+### 4. Run the Fuseki Server with Tracing
 
 Set the required environment variables and run the server:
 
@@ -43,16 +56,12 @@ export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
 export OTEL_SERVICE_NAME=jena-falkordb
 export OTEL_TRACING_ENABLED=true
 
-# Configure FalkorDB connection
-export FALKORDB_HOST=localhost
-export FALKORDB_PORT=6379
-export FALKORDB_GRAPH=knowledge_graph
-
-# Start the Fuseki server
-java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar
+# Start the Fuseki server with the three-layer config
+java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
+  --config jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl
 ```
 
-### 4. View Traces in Jaeger
+### 5. View Traces in Jaeger
 
 Open `http://localhost:16686` in your browser to access the Jaeger UI.
 Select "jena-falkordb" from the Service dropdown to view traces.
@@ -86,9 +95,9 @@ export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
 export OTEL_SERVICE_NAME=jena-falkordb
 export OTEL_TRACING_ENABLED=true
 
-# Run with lazy inference config
+# Run with the three-layer onion config (GeoSPARQL + Forward Inference + FalkorDB)
 java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
-  --config jena-fuseki-falkordb/src/main/resources/config-falkordb-lazy-inference.ttl
+  --config jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl
 ```
 
 ### 4. Query for Inferred Grandfather Relationships

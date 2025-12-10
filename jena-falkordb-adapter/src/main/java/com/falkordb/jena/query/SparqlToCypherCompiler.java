@@ -1743,6 +1743,16 @@ public final class SparqlToCypherCompiler {
         String predicateVar = triple.getPredicate().getName();
         String objectVar = getNodeVariable(triple.getObject());
         
+        // Add optional triple's variables to the sets
+        allVariables.add(predicateVar);
+        if (triple.getObject().isVariable()) {
+            allVariables.add(triple.getObject().getName());
+            nodeVariables.add(objectVar);
+        }
+        if (triple.getSubject().isVariable()) {
+            allVariables.add(triple.getSubject().getName());
+        }
+        
         StringBuilder cypher = new StringBuilder();
         
         // Part 1: Query relationships with OPTIONAL MATCH

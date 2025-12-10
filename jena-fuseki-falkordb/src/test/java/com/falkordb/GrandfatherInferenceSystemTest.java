@@ -285,4 +285,65 @@ public class GrandfatherInferenceSystemTest {
             assertEquals(1, grandfatherCount, "Should have 1 inferred grandfather relationship");
         }
     }
+
+    @Test
+    @DisplayName("System Test: Verify aggregation pushdown works on materialized inferred triples")
+    public void testAggregationPushdownOnInferredTriples() {
+        // Insert data that will trigger forward chaining
+        String insertQuery =
+                "PREFIX ff: <http://www.semanticweb.org/ontologies/2023/1/fathers_father#> " +
+                        "INSERT DATA { " +
+                        "  ff:Abraham ff:father_of ff:Isaac . " +
+                        "  ff:Isaac ff:father_of ff:Jacob . " +
+                        "  ff:Jacob ff:father_of ff:Joseph . " +
+                        "}";
+
+        UpdateExecutionHTTP.service(updateEndpoint).update(insertQuery).execute();
+
+        // Test 1: Count grandfather relationships (should use aggregation pushdown)
+        String countQuery =
+                "PREFIX ff: <http://www.semanticweb.org/ontologies/2023/1/fathers_father#> " +
+                        "SELECT (COUNT(?gc) AS ?count) " +
+                        "WHERE { " +
+                        "  ?gf ff:grandfather_of ?gc . " +
+                        "}";
+
+        try (QueryExecution qexec = QueryExecutionHTTP.service(sparqlEndpoint).query(countQuery).build()) {
+            ResultSet results = qexec.execSelect();
+            assertTrue(results.hasNext(), "Should have count result");
+            var solution = results.next();
+            int count = solution.getLiteral("count").getInt();
+            assertEquals(2, count, "Should have 2 grandfather relationships (Abraham->Jacob, Isaac->Joseph)");
+        }
+
+        // Test 2: Count by grandfather (GROUP BY with aggregation on inferred triples)
+        String groupByQuery =
+                "PREFIX ff: <http://www.semanticweb.org/ontologies/2023/1/fathers_father#> " +
+                        "SELECT ?gf (COUNT(?gc) AS ?grandchildCount) " +
+                        "WHERE { " +
+                        "  ?gf ff:grandfather_of ?gc . " +
+                        "} " +
+                        "GROUP BY ?gf " +
+                        "ORDER BY DESC(?grandchildCount)";
+
+        try (QueryExecution qexec = QueryExecutionHTTP.service(sparqlEndpoint).query(groupByQuery).build()) {
+            ResultSet results = qexec.execSelect();
+            
+            // Verify we get results (aggregation pushdown worked)
+            assertTrue(results.hasNext(), "Should have grouped results");
+            
+            int totalGrandfathers = 0;
+            while (results.hasNext()) {
+                var solution = results.next();
+                String grandfather = solution.getResource("gf").getLocalName();
+                int grandchildCount = solution.getLiteral("grandchildCount").getInt();
+                
+                System.out.println("Grandfather: " + grandfather + " has " + grandchildCount + " grandchild(ren)");
+                assertEquals(1, grandchildCount, "Each grandfather should have 1 grandchild");
+                totalGrandfathers++;
+            }
+            
+            assertEquals(2, totalGrandfathers, "Should have 2 grandfathers (Abraham, Isaac)");
+        }
+    }
 }

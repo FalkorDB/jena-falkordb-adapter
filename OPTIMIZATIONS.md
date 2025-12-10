@@ -863,57 +863,128 @@ See [TRACING.md](TRACING.md) for complete documentation on trace attributes and 
 
 When using Jena's inference/reasoning capabilities with `InfModel` (which wraps the base model in an `InfGraph`), optimization behavior is different to preserve inference semantics:
 
-### Query Pushdown with InfGraph
+### Query Pushdown with Inference
 
-Query pushdown is **intentionally disabled** for inference models. When you create an `InfModel`:
+The behavior of query pushdown with inference depends on the **chaining mode**:
+
+#### Forward Chaining (Eager Inference) ✅ Pushdown Works!
+
+With forward chaining, inferred triples are **materialized immediately** into the base FalkorDB graph when data is inserted. This means:
+
+1. **Inferred triples physically exist** in FalkorDB alongside base triples
+2. **Queries can use pushdown** on both base and inferred triples
+3. **Full optimization benefits** - aggregations, filters, and spatial queries all push down
 
 ```java
-// Create base FalkorDB model
-Model baseModel = FalkorDBModelFactory.createModel("myGraph");
+// Forward chaining with config-falkordb.ttl
+// Inferred triples are materialized into FalkorDB immediately
+// Query pushdown works on all triples (base + inferred)
 
-// Create inference model with rules
-Reasoner reasoner = new GenericRuleReasoner(rules);
+// When you insert:
+// :abraham :father_of :isaac
+// :isaac :father_of :jacob
+
+// Forward rules immediately materialize:
+// :abraham :grandfather_of :jacob  ← This triple exists in FalkorDB!
+
+// Queries use pushdown on materialized triples
+String query = "SELECT ?gf ?gc WHERE { ?gf :grandfather_of ?gc }";
+// ✅ Pushes down to Cypher: MATCH (gf)-[:grandfather_of]->(gc) RETURN gf, gc
+```
+
+**When to use:** Production deployments where query performance is critical and the inference closure is manageable.
+
+#### Backward Chaining (Lazy Inference) ❌ Pushdown Disabled
+
+With backward chaining, inferred triples are computed **on-demand** during query evaluation. Query pushdown is intentionally disabled because:
+
+1. **Inferred triples don't exist** in FalkorDB - they're derived at query time
+2. **Pushdown would miss inferences** - would only see base triples
+3. **Standard Jena evaluation required** to apply backward chaining rules
+
+```java
+// Backward chaining (NOT supported in current config)
+// Inferred triples computed on-demand during queries
+// Query pushdown disabled for InfModel
+
+Model baseModel = FalkorDBModelFactory.createModel("myGraph");
+Reasoner reasoner = new GenericRuleReasoner(backwardRules);
 InfModel infModel = ModelFactory.createInfModel(reasoner, baseModel);
 
 // Queries against infModel use standard Jena evaluation (no pushdown)
 ```
 
-**Why disabled?** Query pushdown would bypass the inference layer, causing incorrect results. Inference requires:
-1. Access to all base triples
-2. Application of forward/backward chaining rules
-3. Generation of inferred triples
+**Note:** The current `config-falkordb.ttl` uses **forward chaining only**, so all queries benefit from pushdown on materialized triples.
 
-Query pushdown operates directly on the graph database, which only contains base triples, not inferred ones.
+### Optimization Support by Inference Mode
 
-### Available Optimizations for InfGraph
-
-Even with query pushdown disabled, these optimizations **still work**:
-
-| Optimization | InfGraph Support | Notes |
+| Optimization | Forward Chaining<br/>(config-falkordb.ttl) | Backward Chaining<br/>(Not configured) |
 |-------------|------------------|-------|
-| **Transaction Batching** | ✅ Enabled | Bulk writes to base model use `UNWIND` |
-| **Magic Property (`falkor:cypher`)** | ✅ Enabled | Unwraps InfGraph to access raw FalkorDB graph |
-| **Query Pushdown** | ❌ Disabled | Would bypass inference layer |
-| **Automatic Indexing** | ✅ Enabled | Base graph maintains URI index |
+| **Query Pushdown** | ✅ **Fully Enabled** | ❌ Disabled |
+| **Aggregation Pushdown** | ✅ **Fully Enabled** | ❌ Disabled |
+| **Spatial Query Pushdown** | ✅ **Fully Enabled** | ❌ Disabled |
+| **Transaction Batching** | ✅ Enabled | ✅ Enabled |
+| **Magic Property (`falkor:cypher`)** | ✅ Enabled | ✅ Enabled |
+| **Automatic Indexing** | ✅ Enabled | ✅ Enabled |
 
-### Example: Optimized Writes with Inference
+### Example: Query Pushdown with Forward Inference
+
+With the three-layer `config-falkordb.ttl`, queries on inferred triples use pushdown:
 
 ```java
-// Transaction batching still works with InfModel
-InfModel infModel = ModelFactory.createInfModel(reasoner, baseModel);
+// Using Fuseki with config-falkordb.ttl (forward chaining)
+String sparqlEndpoint = "http://localhost:3330/falkor/query";
 
-infModel.begin(ReadWrite.WRITE);
-try {
-    // These writes are batched and flushed efficiently
-    for (int i = 0; i < 1000; i++) {
-        Resource person = infModel.createResource("http://example.org/person" + i);
-        person.addProperty(RDF.type, personType);
-        person.addProperty(name, "Person " + i);
+// Query for grandfather relationships (inferred triples!)
+String query = """
+    PREFIX ff: <http://www.semanticweb.org/ontologies/2023/1/fathers_father#>
+    SELECT ?grandfather ?grandchild
+    WHERE {
+        ?grandfather ff:grandfather_of ?grandchild .
     }
-    infModel.commit();  // Single bulk operation to base graph
-} finally {
-    infModel.end();
+    """;
+
+// ✅ This query uses pushdown!
+// Compiles to: MATCH (gf)-[:grandfather_of]->(gc) RETURN gf.uri AS grandfather, gc.uri AS grandchild
+try (QueryExecution qexec = QueryExecutionHTTP.service(sparqlEndpoint)
+        .query(query).build()) {
+    ResultSet results = qexec.execSelect();
+    // Results include all materialized grandfather relationships
 }
+```
+
+### Example: Aggregation Pushdown on Inferred Triples
+
+```java
+// Count grandfather relationships (uses aggregation pushdown!)
+String countQuery = """
+    PREFIX ff: <http://www.semanticweb.org/ontologies/2023/1/fathers_father#>
+    SELECT (COUNT(?grandchild) AS ?count)
+    WHERE {
+        ?grandfather ff:grandfather_of ?grandchild .
+    }
+    """;
+
+// ✅ Pushes aggregation to Cypher:
+// MATCH (gf)-[:grandfather_of]->(gc) RETURN count(gc) AS count
+```
+
+### Example: Spatial Query with Inferred Data
+
+```java
+// GeoSPARQL query on data with forward inference
+String spatialQuery = """
+    PREFIX geo: <http://www.opengis.net/ont/geosparql#>
+    PREFIX ex: <http://example.org/>
+    SELECT ?person ?location
+    WHERE {
+        ex:alice ex:relative ?person .  # Inferred relationship
+        ?person geo:hasGeometry/geo:asWKT ?location .  # Spatial data
+    }
+    """;
+
+// ✅ Spatial predicates push down to FalkorDB
+// Both inferred relatives and spatial data use optimized queries
 ```
 
 ### Example: Direct Cypher with Inference

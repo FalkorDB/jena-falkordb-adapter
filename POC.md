@@ -445,8 +445,14 @@ curl -G http://localhost:3330/falkor/query \
 ✅ **Forward Inference**: Rules eagerly materialize inferred relationships immediately when data is added  
 ✅ **Spatial Queries**: Full GeoSPARQL support for points, polygons, and spatial functions  
 ✅ **Combined Queries**: Seamlessly mix materialized inference and spatial predicates  
-✅ **Performance**: FalkorDB backend with spatial indexing and query pushdown on materialized triples  
+✅ **Performance**: FalkorDB backend with spatial indexing and **full query pushdown** on materialized triples  
 ✅ **Standards Compliant**: Uses standard SPARQL, GeoSPARQL, and Jena inference
+
+> **🚀 Performance Note**: Because forward chaining materializes inferred triples into FalkorDB, ALL query optimizations work:
+> - Query pushdown translates SPARQL to efficient Cypher
+> - Aggregations (COUNT, SUM, etc.) execute in the database
+> - Spatial queries use FalkorDB's native graph capabilities
+> - No performance penalty for querying inferred vs. base triples!
 
 ---
 

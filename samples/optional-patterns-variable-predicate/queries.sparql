@@ -1,0 +1,139 @@
+# Sample SPARQL Queries for Variable Predicate in OPTIONAL Patterns
+#
+# These queries demonstrate the variable predicate optimization in OPTIONAL patterns.
+# Each query uses a three-part UNION approach to retrieve relationships, properties, and types.
+
+# ============================================================================
+# Query 1: Basic Variable Predicate in OPTIONAL
+# ============================================================================
+# Returns all properties (relationships, literals, and types) for each person
+
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT ?person ?name ?p ?o WHERE {
+    ?person a foaf:Person .
+    ?person foaf:name ?name .
+    OPTIONAL {
+        ?person ?p ?o .
+    }
+}
+ORDER BY ?person ?p
+
+# Generated Cypher (simplified):
+# MATCH (person:Resource:`foaf:Person`)
+# WHERE person.`foaf:name` IS NOT NULL
+# OPTIONAL MATCH (person)-[_r]->(o:Resource)
+# RETURN person.uri AS person, person.`foaf:name` AS name, type(_r) AS p, o.uri AS o
+# UNION ALL
+# MATCH (person:Resource:`foaf:Person`)
+# WHERE person.`foaf:name` IS NOT NULL
+# OPTIONAL MATCH (person)
+# UNWIND keys(person) AS _propKey
+# WITH person, _propKey WHERE _propKey <> 'uri'
+# RETURN person.uri AS person, person.`foaf:name` AS name, _propKey AS p, person[_propKey] AS o
+# UNION ALL
+# MATCH (person:Resource:`foaf:Person`)
+# WHERE person.`foaf:name` IS NOT NULL
+# OPTIONAL MATCH (person)
+# UNWIND labels(person) AS _label
+# WITH person, _label WHERE _label <> 'Resource'
+# RETURN person.uri AS person, person.`foaf:name` AS name, 'rdf:type' AS p, _label AS o
+
+
+# ============================================================================
+# Query 2: Variable Predicate with Concrete Subject
+# ============================================================================
+# Returns all properties for a specific person (Alice)
+
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT ?p ?o WHERE {
+    <http://example.org/person/alice> a foaf:Person .
+    OPTIONAL {
+        <http://example.org/person/alice> ?p ?o .
+    }
+}
+ORDER BY ?p
+
+
+# ============================================================================
+# Query 3: Variable Predicate with FILTER
+# ============================================================================
+# Returns properties only for persons matching age criteria
+
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT ?person ?name ?age ?p ?o WHERE {
+    ?person a foaf:Person .
+    ?person foaf:name ?name .
+    ?person foaf:age ?age .
+    FILTER(?age >= 25 && ?age < 35)
+    OPTIONAL {
+        ?person ?p ?o .
+    }
+}
+ORDER BY ?person ?p
+
+
+# ============================================================================
+# Query 4: Variable Predicate for All Persons
+# ============================================================================
+# Simple query to get all properties of all persons
+
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT ?person ?p ?o WHERE {
+    ?person a foaf:Person .
+    OPTIONAL {
+        ?person ?p ?o .
+    }
+}
+ORDER BY ?person ?p
+
+
+# ============================================================================
+# Query 5: Variable Predicate with Multiple Required Patterns
+# ============================================================================
+# More complex required pattern with variable predicate in OPTIONAL
+
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT ?person ?name ?age ?p ?o WHERE {
+    ?person a foaf:Person .
+    ?person foaf:name ?name .
+    ?person foaf:age ?age .
+    OPTIONAL {
+        ?person ?p ?o .
+    }
+}
+ORDER BY ?person ?p
+
+
+# ============================================================================
+# Query 6: Count Properties by Type
+# ============================================================================
+# Aggregate query counting different property types
+
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT ?person (COUNT(?p) AS ?propertyCount) WHERE {
+    ?person a foaf:Person .
+    OPTIONAL {
+        ?person ?p ?o .
+    }
+}
+GROUP BY ?person
+ORDER BY DESC(?propertyCount)
+
+
+# ============================================================================
+# Performance Note
+# ============================================================================
+# Without variable predicate optimization in OPTIONAL:
+# - Requires 3 separate queries per person (relationships, properties, types)
+# - For 100 persons: 300 database queries
+#
+# With variable predicate optimization in OPTIONAL:
+# - Single query with UNION for all data types
+# - For 100 persons: 1 database query
+# - 300x performance improvement!

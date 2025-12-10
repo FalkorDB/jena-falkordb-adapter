@@ -1071,38 +1071,7 @@ String query = "SELECT ?gf ?gc WHERE { ?gf :grandfather_of ?gc }";
 
 **When to use:** Production deployments where query performance is critical and the inference closure is manageable.
 
-#### Backward Chaining (Lazy Inference) ❌ Pushdown Disabled
-
-With backward chaining, inferred triples are computed **on-demand** during query evaluation. Query pushdown is intentionally disabled because:
-
-1. **Inferred triples don't exist** in FalkorDB - they're derived at query time
-2. **Pushdown would miss inferences** - would only see base triples
-3. **Standard Jena evaluation required** to apply backward chaining rules
-
-```java
-// Backward chaining (NOT supported in current config)
-// Inferred triples computed on-demand during queries
-// Query pushdown disabled for InfModel
-
-Model baseModel = FalkorDBModelFactory.createModel("myGraph");
-Reasoner reasoner = new GenericRuleReasoner(backwardRules);
-InfModel infModel = ModelFactory.createInfModel(reasoner, baseModel);
-
-// Queries against infModel use standard Jena evaluation (no pushdown)
-```
-
-**Note:** The current `config-falkordb.ttl` uses **forward chaining only**, so all queries benefit from pushdown on materialized triples.
-
-### Optimization Support by Inference Mode
-
-| Optimization | Forward Chaining<br/>(config-falkordb.ttl) | Backward Chaining<br/>(Not configured) |
-|-------------|------------------|-------|
-| **Query Pushdown** | ✅ **Fully Enabled** | ❌ Disabled |
-| **Aggregation Pushdown** | ✅ **Fully Enabled** | ❌ Disabled |
-| **Spatial Query Pushdown** | ✅ **Fully Enabled** | ❌ Disabled |
-| **Transaction Batching** | ✅ Enabled | ✅ Enabled |
-| **Magic Property (`falkor:cypher`)** | ✅ Enabled | ✅ Enabled |
-| **Automatic Indexing** | ✅ Enabled | ✅ Enabled |
+**Note:** The `config-falkordb.ttl` uses **forward chaining**, so all queries benefit from pushdown on materialized triples.
 
 ### Example: Query Pushdown with Forward Inference
 

@@ -381,8 +381,8 @@ public class GeoSPARQLToCypherTranslatorTest {
         assertNotNull(result);
         // Bounding box: lat [48.8566, 52.5200], lon [-0.1278, 13.4050]
         // Center: lat = 50.6883, lon = 6.6386
-        assertEquals(50.6883, params.get("route_lat"), 0.01);
-        assertEquals(6.6386, params.get("route_lon"), 0.01);
+        assertEquals(50.6883, params.get("route_lat"), 0.001);
+        assertEquals(6.6386, params.get("route_lon"), 0.001);
         assertEquals(48.8566, params.get("route_minLat"));
         assertEquals(52.5200, params.get("route_maxLat"));
         assertEquals(-0.1278, params.get("route_minLon"));
@@ -481,8 +481,8 @@ public class GeoSPARQLToCypherTranslatorTest {
         
         assertNotNull(result);
         // Bounding box: lat [48.8566, 52.5200], lon [-0.1278, 13.4050]
-        assertEquals(50.6883, params.get("cities_lat"), 0.01);
-        assertEquals(6.6386, params.get("cities_lon"), 0.01);
+        assertEquals(50.6883, params.get("cities_lat"), 0.001);
+        assertEquals(6.6386, params.get("cities_lon"), 0.001);
         assertEquals(48.8566, params.get("cities_minLat"));
         assertEquals(52.5200, params.get("cities_maxLat"));
         assertEquals(-0.1278, params.get("cities_minLon"));

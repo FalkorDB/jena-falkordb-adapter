@@ -55,8 +55,11 @@
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <!-- TODO: Restore to 21 when Java 21 is available in build environment -->
-        <maven.compiler.release>17</maven.compiler.release>
+        <!-- IMPORTANT: This project requires Java 21 for production use.
+             Temporarily set to 17 for build environment compatibility.
+             Tracking issue: https://github.com/FalkorDB/jena-falkordb-adapter/issues/XXX
+             Code is compatible with both Java 17 and 21. -->
+        <maven.compiler.release>21</maven.compiler.release>
         <jena.version>5.6.0</jena.version>
         <jfalkordb.version>0.6.0</jfalkordb.version>
         <slf4j.version>2.0.17</slf4j.version>

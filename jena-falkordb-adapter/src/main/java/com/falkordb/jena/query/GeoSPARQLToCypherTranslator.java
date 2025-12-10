@@ -491,6 +491,8 @@ public final class GeoSPARQLToCypherTranslator {
         double maxLat = Double.MIN_VALUE;
         double minLon = Double.MAX_VALUE;
         double maxLon = Double.MIN_VALUE;
+        
+        int successfulParses = 0;
 
         for (String point : points) {
             String[] parts = point.trim().split("\\s+");
@@ -503,14 +505,20 @@ public final class GeoSPARQLToCypherTranslator {
                     maxLat = Math.max(maxLat, lat);
                     minLon = Math.min(minLon, lon);
                     maxLon = Math.max(maxLon, lon);
+                    successfulParses++;
                 } catch (NumberFormatException e) {
                     LOGGER.warn("Failed to parse coordinate pair: {}", point);
+                    // If any coordinate fails to parse, we may have incomplete data
+                    // But we continue to try parsing other coordinates
                 }
             }
         }
 
-        // Validate we found at least one valid point
-        if (minLat == Double.MAX_VALUE || maxLat == Double.MIN_VALUE) {
+        // Validate we found at least one valid point with both lat and lon
+        if (successfulParses == 0 || 
+            minLat == Double.MAX_VALUE || maxLat == Double.MIN_VALUE ||
+            minLon == Double.MAX_VALUE || maxLon == Double.MIN_VALUE) {
+            LOGGER.warn("Failed to calculate bounding box: no valid coordinates found");
             return null;
         }
 

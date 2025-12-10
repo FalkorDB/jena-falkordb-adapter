@@ -91,7 +91,10 @@ falkor:FalkorDBModel rdfs:subClassOf ja:Model .
     # Disable spatial indexing - NOT NEEDED since FalkorDB handles spatial operations natively
     # All spatial queries are pushed down to FalkorDB's native point() and distance() functions
     # via the GeoSPARQLToCypherTranslator in the query pushdown layer
-    # Setting to false avoids the overhead of building an in-memory spatial index
+    # Setting to false provides two benefits:
+    #   1. Avoids the overhead of building an in-memory spatial index
+    #   2. Prevents DatatypeFormatException when restarting with mixed data types
+    # Note: SafeGeosparqlDataset catches errors if indexing is enabled
     geosparql:indexEnabled         false ;
     
     # Whether to apply default geometry to features

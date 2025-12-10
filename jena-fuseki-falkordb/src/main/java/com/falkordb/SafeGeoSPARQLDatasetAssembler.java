@@ -93,9 +93,15 @@ public class SafeGeoSPARQLDatasetAssembler extends AssemblerBase {
             // Check if this is a spatial index exception in the cause chain
             Throwable cause = e;
             while (cause != null) {
-                if (cause.getClass().getName().contains("SpatialIndexException") ||
-                    cause.getClass().getName().contains("DatatypeFormatException")) {
-                    LOGGER.warn("Spatial/Datatype error detected in cause chain");
+                // Check for specific exception types rather than string matching
+                if (cause instanceof org.apache.jena.datatypes.DatatypeFormatException) {
+                    LOGGER.warn("DatatypeFormatException detected in cause chain");
+                    LOGGER.warn("Falling back to base dataset without spatial index");
+                    return fallbackToBaseDataset(assembler, root);
+                }
+                // Also check class name for SpatialIndexException (not in compile classpath)
+                if (cause.getClass().getName().contains("SpatialIndexException")) {
+                    LOGGER.warn("SpatialIndexException detected in cause chain");
                     LOGGER.warn("Falling back to base dataset without spatial index");
                     return fallbackToBaseDataset(assembler, root);
                 }

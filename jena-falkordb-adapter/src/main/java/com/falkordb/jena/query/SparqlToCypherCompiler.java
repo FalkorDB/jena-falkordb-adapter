@@ -1753,6 +1753,9 @@ public final class SparqlToCypherCompiler {
             allVariables.add(triple.getSubject().getName());
         }
         
+        // Store parameter name for reuse in Parts 2 and 3
+        String subjectParamName = null;
+        
         StringBuilder cypher = new StringBuilder();
         
         // Part 1: Query relationships with OPTIONAL MATCH
@@ -1763,10 +1766,10 @@ public final class SparqlToCypherCompiler {
         if (triple.getSubject().isVariable()) {
             cypher.append("(").append(subjectVar).append(")");
         } else {
-            String paramName = "p" + paramCounter++;
-            parameters.put(paramName, triple.getSubject().getURI());
+            subjectParamName = "p" + paramCounter++;
+            parameters.put(subjectParamName, triple.getSubject().getURI());
             cypher.append("(").append(subjectVar)
-                  .append(":Resource {uri: $").append(paramName).append("})");
+                  .append(":Resource {uri: $").append(subjectParamName).append("})");
         }
         
         // Relationship with variable type
@@ -1819,7 +1822,7 @@ public final class SparqlToCypherCompiler {
         } else {
             // Reuse the parameter from Part 1
             cypher.append("(").append(subjectVar)
-                  .append(":Resource {uri: $p").append(paramCounter - 2).append("})");
+                  .append(":Resource {uri: $").append(subjectParamName).append("})");
         }
         
         cypher.append("\nUNWIND keys(").append(subjectVar).append(") AS _propKey");
@@ -1869,7 +1872,7 @@ public final class SparqlToCypherCompiler {
         } else {
             // Reuse the parameter from Part 1
             cypher.append("(").append(subjectVar)
-                  .append(":Resource {uri: $p").append(paramCounter - 2).append("})");
+                  .append(":Resource {uri: $").append(subjectParamName).append("})");
         }
         
         cypher.append("\nUNWIND labels(").append(subjectVar).append(") AS _label");

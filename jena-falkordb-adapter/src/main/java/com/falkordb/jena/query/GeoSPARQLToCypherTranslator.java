@@ -95,7 +95,7 @@ public final class GeoSPARQLToCypherTranslator {
 
     /** Pattern for extracting POLYGON bounding box from WKT. */
     private static final Pattern POLYGON_PATTERN =
-        Pattern.compile("POLYGON\\s*\\(\\s*\\((.+?)\\)\\s*\\)",
+        Pattern.compile("POLYGON\\s*\\(\\s*\\(([^)]+)\\)\\s*\\)",
             Pattern.CASE_INSENSITIVE);
 
     /** Pattern for extracting LINESTRING coordinates from WKT. */
@@ -105,7 +105,7 @@ public final class GeoSPARQLToCypherTranslator {
 
     /** Pattern for extracting MULTIPOINT coordinates from WKT. */
     private static final Pattern MULTIPOINT_PATTERN =
-        Pattern.compile("MULTIPOINT\\s*\\((.+?)\\)",
+        Pattern.compile("MULTIPOINT\\s*\\((.+)\\)",
             Pattern.CASE_INSENSITIVE);
 
     /**
@@ -488,9 +488,9 @@ public final class GeoSPARQLToCypherTranslator {
         }
 
         double minLat = Double.MAX_VALUE;
-        double maxLat = Double.MIN_VALUE;
+        double maxLat = -Double.MAX_VALUE;
         double minLon = Double.MAX_VALUE;
-        double maxLon = Double.MIN_VALUE;
+        double maxLon = -Double.MAX_VALUE;
         
         int successfulParses = 0;
 
@@ -516,8 +516,8 @@ public final class GeoSPARQLToCypherTranslator {
 
         // Validate we found at least one valid point with both lat and lon
         if (successfulParses == 0 || 
-            minLat == Double.MAX_VALUE || maxLat == Double.MIN_VALUE ||
-            minLon == Double.MAX_VALUE || maxLon == Double.MIN_VALUE) {
+            minLat == Double.MAX_VALUE || maxLat == -Double.MAX_VALUE ||
+            minLon == Double.MAX_VALUE || maxLon == -Double.MAX_VALUE) {
             LOGGER.warn("Failed to calculate bounding box: no valid coordinates found");
             return null;
         }

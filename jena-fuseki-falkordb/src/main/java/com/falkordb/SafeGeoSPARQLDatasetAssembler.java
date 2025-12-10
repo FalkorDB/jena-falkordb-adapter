@@ -130,7 +130,7 @@ public class SafeGeoSPARQLDatasetAssembler extends AssemblerBase {
      * @param assembler the assembler to use
      * @param root the root resource
      * @return the base dataset
-     * @throws org.apache.jena.assembler.exceptions.AssemblerException if the base dataset cannot be retrieved
+     * @throws AssemblerException if the base dataset cannot be retrieved
      */
     private Dataset fallbackToBaseDataset(Assembler assembler, Resource root) {
         // Get the geosparql:dataset property

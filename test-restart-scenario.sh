@@ -151,9 +151,33 @@ if ! curl -s http://localhost:3330/$/ping > /dev/null; then
     exit 1
 fi
 
-# Check for errors in the log
-if grep -i "error" /tmp/fuseki2.log | grep -v "ERROR c.f.SafeGeoSPARQLDatasetAssembler - Error during GeoSPARQL dataset creation" | grep -v "ERROR c.f.SafeGeoSPARQLDatasetAssembler - Failed to retrieve base dataset"; then
+# Check for errors in the log (excluding expected SafeGeoSPARQL fallback messages)
+check_for_unexpected_errors() {
+    local log_file=$1
+    # Expected messages during fallback are OK
+    local expected_patterns=(
+        "ERROR c.f.SafeGeoSPARQLDatasetAssembler - Error during GeoSPARQL dataset creation"
+        "ERROR c.f.SafeGeoSPARQLDatasetAssembler - Failed to retrieve base dataset"
+    )
+    
+    # Get all ERROR lines
+    local errors=$(grep -i "error" "$log_file" || true)
+    
+    # Filter out expected errors
+    for pattern in "${expected_patterns[@]}"; do
+        errors=$(echo "$errors" | grep -v "$pattern" || true)
+    done
+    
+    # Return filtered errors
+    echo "$errors"
+}
+
+# Check for unexpected errors
+UNEXPECTED_ERRORS=$(check_for_unexpected_errors /tmp/fuseki2.log)
+if [ -n "$UNEXPECTED_ERRORS" ]; then
     echo -e "${RED}ERROR: Found unexpected errors in Fuseki log${NC}"
+    echo "$UNEXPECTED_ERRORS"
+    echo ""
     echo "Showing last 100 lines of log:"
     tail -100 /tmp/fuseki2.log
     kill $FUSEKI_PID2 2>/dev/null || true

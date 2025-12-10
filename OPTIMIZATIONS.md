@@ -1200,9 +1200,18 @@ WARN c.falkordb.jena.FalkorDBGraph - Could not create index: <error message>
 
 **Solution**: This is expected and harmless. The adapter tries to create the index each time a graph is initialized, but FalkorDB reports if it already exists. You can safely ignore this message.
 
+### Testing
+
+The automatic index creation is tested implicitly in all integration tests that create FalkorDB models:
+- [FalkorDBGraphTest.java](jena-falkordb-adapter/src/test/java/com/falkordb/jena/FalkorDBGraphTest.java) - Model creation tests (index created on construction)
+- [FalkorDBQueryPushdownTest.java](jena-falkordb-adapter/src/test/java/com/falkordb/jena/query/FalkorDBQueryPushdownTest.java) - Query pushdown tests (benefit from URI index)
+- [FalkorDBAggregationPushdownTest.java](jena-falkordb-adapter/src/test/java/com/falkordb/jena/query/FalkorDBAggregationPushdownTest.java) - Aggregation tests (use indexed URIs)
+
+Every test that creates a FalkorDB model implicitly tests that index creation works without errors. The `ensureIndexes()` method is called in the `FalkorDBGraph` constructor, so any test that successfully creates a model has verified index creation.
+
 ### Related Documentation
 
-- **Implementation**: [FalkorDBGraph.java](jena-falkordb-adapter/src/main/java/com/falkordb/jena/FalkorDBGraph.java)
+- **Implementation**: [FalkorDBGraph.java:133-150](jena-falkordb-adapter/src/main/java/com/falkordb/jena/FalkorDBGraph.java#L133-L150) - `ensureIndexes()` method
 - **Query Pushdown**: See [Query Pushdown section](#2-query-pushdown-sparql-to-cypher)
 - **Performance Guide**: See [Best Practices](#best-practices)
 - **FalkorDB Indexes**: [FalkorDB Index Documentation](https://docs.falkordb.com/commands.html#dbindexes)

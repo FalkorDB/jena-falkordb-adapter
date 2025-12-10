@@ -35,9 +35,16 @@ java -jar jena-falkordb-adapter/target/jena-falkordb-adapter-0.2.0-SNAPSHOT.jar
 
 **Option B: Run the Fuseki SPARQL server**
 ```bash
-java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar
+java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
+  --config jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl
 ```
-Then open http://localhost:3330/ in your browser.
+
+**Accessing the Fuseki Web UI:**
+Open your browser and navigate to **http://localhost:3330** to access the web interface.
+The UI provides:
+- Interactive SPARQL query editor
+- Dataset management and statistics
+- Query history and results visualization
 
 That's it! You should see the demo running or the Fuseki server started.
 

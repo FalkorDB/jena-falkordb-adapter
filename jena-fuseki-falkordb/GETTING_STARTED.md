@@ -28,7 +28,8 @@ docker run -p 6379:6379 -it --rm falkordb/falkordb:latest
 **Option A: Run from the project root**
 ```bash
 mvn clean install -DskipTests
-java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar
+java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
+  --config jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl
 ```
 
 **Option B: Run with Maven exec plugin**
@@ -38,6 +39,19 @@ mvn exec:java -Dexec.mainClass="com.falkordb.FalkorFuseki"
 ```
 
 The server will start on port 3330 by default with the endpoint at `/falkor`.
+
+### Accessing the Fuseki Web UI
+
+Once the server is running, you can access the web interface:
+
+- **URL**: http://localhost:3330
+- **Features**:
+  - Interactive SPARQL query editor
+  - Dataset management and statistics
+  - Query history and results visualization
+  - Server status and configuration information
+
+Simply open your browser and navigate to **http://localhost:3330** to get started.
 
 ### Step 3: Insert and Query Data
 

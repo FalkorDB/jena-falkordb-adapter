@@ -787,9 +787,43 @@ Each example includes:
 - ✅ Sample data in Turtle/JSON-LD/RDF-XML formats
 - ✅ Detailed README with explanations
 
+## Configuration with SafeGeosparqlDataset
+
+The included `config-falkordb.ttl` uses `falkor:SafeGeosparqlDataset` to handle server restarts gracefully:
+
+```turtle
+:geospatial_dataset rdf:type falkor:SafeGeosparqlDataset ;
+    geosparql:inference            true ;
+    geosparql:queryRewrite         true ;
+    geosparql:indexEnabled         true ;
+    geosparql:applyDefaultGeometry false ;
+    geosparql:srsUri               <http://www.opengis.net/def/crs/OGC/1.3/CRS84> ;
+    geosparql:dataset :dataset_rdf .
+```
+
+### Why SafeGeosparqlDataset?
+
+When restarting Fuseki with existing data that contains both geometry and non-geometry literals (like person names, ages, etc.), the standard GeoSPARQL assembler tries to build a spatial index and fails with:
+
+```
+org.apache.jena.datatypes.DatatypeFormatException: Unrecognised Geometry Datatype: 
+http://www.w3.org/2001/XMLSchema#string
+```
+
+The `SafeGeosparqlDataset` catches this error and falls back gracefully:
+
+- ✅ **Server starts successfully** even with mixed data types
+- ✅ **All GeoSPARQL features preserved** (inference, query rewriting, spatial functions)
+- ✅ **Spatial queries work** via FalkorDB native functions (query pushdown)
+- ✅ **No data loss** - all existing data remains accessible
+- ✅ **Clear logging** - informative warnings for troubleshooting
+
+For more details, see [RESTART_ISSUE_FIX.md](RESTART_ISSUE_FIX.md).
+
 ## See Also
 
 - [OPTIMIZATIONS.md](OPTIMIZATIONS.md) - Overview of all performance optimizations
 - [DEMO.md](DEMO.md) - Complete hands-on demo with curl commands
 - [TRACING.md](TRACING.md) - OpenTelemetry tracing and observability
 - [MAGIC_PROPERTY.md](MAGIC_PROPERTY.md) - Direct Cypher execution
+- [RESTART_ISSUE_FIX.md](RESTART_ISSUE_FIX.md) - Fix for server restart issues with mixed data

@@ -147,20 +147,22 @@ WHERE {
 
 ## 4. Query About grandfather_of Using Inference Rules
 
-The `grandfather_of_bwd.rule` file contains a backward-chaining rule that infers grandfather relationships:
+The `grandfather_of_fwd.rule` file contains a forward-chaining rule that infers grandfather relationships:
 
 ```
 [rule_grandfather_of: 
-    (?x ff:grandfather_of ?z)
-    <- 
     (?x ff:father_of ?y)  
     (?y ff:father_of ?z) 
+    ->
+    (?x ff:grandfather_of ?z)
 ]
 ```
 
+This forward-chaining rule means: "When you see that X is the father of Y, and Y is the father of Z, then immediately materialize the triple that X is the grandfather of Z."
+
 ### 4.1 Configuration
 
-The server is already running with [config-falkordb.ttl](jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl) (started in Prerequisites above), which implements forward chaining (eager inference) to materialize relationships.
+The server is already running with [config-falkordb.ttl](jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl) (started in Prerequisites above), which implements forward chaining (eager inference) to materialize relationships immediately when data is added.
 
 See the test [GrandfatherInferenceSystemTest.java](jena-fuseki-falkordb/src/test/java/com/falkordb/GrandfatherInferenceSystemTest.java) for a complete working example.
 

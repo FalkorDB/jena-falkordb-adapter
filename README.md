@@ -730,6 +730,37 @@ redis-cli -p 6379
 > GRAPH.QUERY demo_graph "MATCH (n) RETURN n LIMIT 10"
 ```
 
+### Fuseki Server Restart Issues
+
+**Problem**: Server fails to start with error:
+```
+org.apache.jena.datatypes.DatatypeFormatException: Unrecognised Geometry Datatype: 
+http://www.w3.org/2001/XMLSchema#string
+```
+
+**Cause**: This occurs when restarting Fuseki server with existing data in FalkorDB. GeoSPARQL's spatial index builder tries to process all literals as geometries.
+
+**Solution**: The included `config-falkordb.ttl` uses `falkor:SafeGeosparqlDataset` which handles this gracefully:
+
+```turtle
+:geospatial_dataset rdf:type falkor:SafeGeosparqlDataset ;
+    geosparql:inference            true ;
+    geosparql:queryRewrite         true ;
+    geosparql:indexEnabled         true ;
+    geosparql:applyDefaultGeometry false ;
+    geosparql:dataset :dataset_rdf .
+```
+
+The `SafeGeosparqlDataset` catches spatial index errors during restart and falls back to the base dataset, allowing the server to start successfully. **All GeoSPARQL functionality is preserved** (inference, query rewriting, spatial functions).
+
+**What happens**:
+1. Server tries to build spatial index on startup
+2. If it encounters non-geometry data, it logs a warning
+3. Server continues without spatial index (queries still work via query pushdown)
+4. All other GeoSPARQL features remain fully functional
+
+**Related test**: See [FusekiRestartWithDataTest.java](jena-fuseki-falkordb/src/test/java/com/falkordb/FusekiRestartWithDataTest.java) for validation.
+
 ## Advanced Usage
 
 ### Custom Graph Implementation

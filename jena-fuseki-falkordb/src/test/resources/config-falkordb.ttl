@@ -86,18 +86,16 @@ falkor:FalkorDBModel rdfs:subClassOf ja:Model .
     # Enable query rewriting for optimization
     geosparql:queryRewrite         true ;
     
-    # Enable spatial indexing for better performance
-    geosparql:indexEnabled         true ;
+    # Disable spatial indexing - spatial queries are pushed down to FalkorDB's native graph
+    # FalkorDB handles spatial operations natively, so GeoSPARQL's index is redundant
+    geosparql:indexEnabled         false ;
     
     # Whether to apply default geometry to features
     geosparql:applyDefaultGeometry false ;
-
-    # Index sizes: [Geometry Literal, Geometry Transform, Query Rewrite]
-    # -1 means unlimited
-    geosparql:indexSizes           "-1,-1,-1" ;
     
-    # Index expiry times in milliseconds
-    geosparql:indexExpires         "5000,5000,5000" ;
+    # Spatial Reference System URI - uses WGS84 (latitude/longitude)
+    # This is the default SRS for GeoSPARQL
+    geosparql:srsUri               <http://www.opengis.net/def/crs/OGC/1.3/CRS84> ;
 
     # Base dataset with inference model (middle layer)
     geosparql:dataset :dataset_rdf .

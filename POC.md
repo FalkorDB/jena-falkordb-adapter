@@ -145,22 +145,28 @@ The `grandfather_of_bwd.rule` file contains a backward-chaining rule that infers
 ]
 ```
 
-### 4.1 Setup Inference Model with Rules
+### 4.1 Setup with Three-Layer Onion Architecture
 
-The repository includes a pre-configured file `config-falkordb-lazy-inference.ttl` that uses FalkorDB as the backend with grandfather inference rules. This configuration:
+The repository includes [config-falkordb.ttl](jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl) which implements a three-layer onion architecture:
 
-- Uses FalkorDB (not in-memory) for persistent graph storage
-- Applies backward-chaining inference rules for lazy, on-demand inference
+- **Layer 1 (Outer)**: GeoSPARQL Dataset - handles spatial queries with indexing
+- **Layer 2 (Middle)**: Inference Model - applies **forward chaining (eager inference)** to materialize relationships
+- **Layer 3 (Core)**: FalkorDB Model - persistent graph storage
+
+This configuration:
+- Uses FalkorDB for persistent graph storage
+- Eagerly materializes inferred relationships (e.g., grandfather_of) when base triples (e.g., father_of) are inserted
+- Supports GeoSPARQL spatial queries
 - Provides all standard Fuseki endpoints at `/falkor`
 
-**For this grandfather example, you can create a custom configuration based on the lazy inference pattern**:
+**Start the server:**
 
 ```bash
 java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
-  --config jena-fuseki-falkordb/src/main/resources/config-falkordb-lazy-inference.ttl
+  --config jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl
 ```
 
-The configuration uses FalkorDB as the base model with inference layered on top, so your data is stored in FalkorDB and inference is computed on-demand using backward chaining (lazy inference).
+See the test [GrandfatherInferenceSystemTest.java](jena-fuseki-falkordb/src/test/java/com/falkordb/GrandfatherInferenceSystemTest.java) for a complete working example.
 
 ### 4.2 Load the Data to the Inference Endpoint
 
@@ -257,28 +263,32 @@ This uses Cypher's variable-length path matching `*2..2` to find exactly 2-hop `
 
 ---
 
-## 5. GeoSPARQL with Lazy Inference
+## 5. GeoSPARQL with Forward Inference
 
-This section demonstrates combining **lazy inference** (backward chaining rules) with **GeoSPARQL** spatial queries. This powerful combination enables queries that span both inferred social relationships and geographic data.
+This section demonstrates the three-layer onion architecture combining **GeoSPARQL** spatial queries with **forward chaining inference** and **FalkorDB** storage. This powerful combination enables queries that span both materialized inferred relationships and geographic data.
 
 ### 5.1 Overview
 
-The `config-falkordb-lazy-inference-with-geosparql.ttl` configuration stacks three layers:
+The [config-falkordb.ttl](jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl) configuration implements a three-layer onion architecture:
 
-1. **FalkorDB** - Persistent graph database backend
-2. **Generic Rule Reasoner** - Lazy inference using backward chaining rules
-3. **GeoSPARQL Dataset** - Spatial query capabilities with indexing
+1. **GeoSPARQL Dataset (Outer Layer)** - Spatial query capabilities with indexing and optimization
+2. **Inference Model (Middle Layer)** - Forward chaining (eager inference) materializes relationships immediately
+3. **FalkorDB Model (Core Layer)** - Persistent graph database backend
 
-This enables queries like "Find all people I know transitively (via inference) who are within a specific geographic area (via GeoSPARQL)."
+This enables queries like "Find geographic features and their relationships, with inferred relationships already materialized in storage."
 
-### 5.2 Start Fuseki with GeoSPARQL + Inference Configuration
+### 5.2 Start Fuseki with the Three-Layer Configuration
 
 ```bash
 java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
-  --config jena-fuseki-falkordb/src/main/resources/config-falkordb-lazy-inference-with-geosparql.ttl
+  --config jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl
 ```
 
 The server will start on port 3330 with the service available at `/falkor`.
+
+See the tests for complete working examples:
+- [GeoSPARQLPOCSystemTest.java](jena-fuseki-falkordb/src/test/java/com/falkordb/GeoSPARQLPOCSystemTest.java) - GeoSPARQL queries
+- [FusekiLazyInferenceGeoSPARQLConfigTest.java](jena-fuseki-falkordb/src/test/java/com/falkordb/FusekiLazyInferenceGeoSPARQLConfigTest.java) - Combined spatial and inference queries
 
 ### 5.3 Load Example Data (Social Network with Geographic Locations)
 

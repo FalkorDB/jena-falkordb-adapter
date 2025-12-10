@@ -325,39 +325,29 @@ Access the server:
 
 ### Deployment Option 2: Using Configuration File
 
-For more control, use a TTL configuration file:
+The recommended approach uses the included [config-falkordb.ttl](jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl) file which implements a three-layer onion architecture:
 
-**Step 1:** Create `config-falkordb.ttl`:
-```turtle
-@prefix :        <#> .
-@prefix falkor:  <http://falkordb.com/jena/assembler#> .
-@prefix fuseki:  <http://jena.apache.org/fuseki#> .
-@prefix ja:      <http://jena.hpl.hp.com/2005/11/Assembler#> .
-@prefix rdf:     <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+- **Layer 1 (Outer)**: GeoSPARQL Dataset - handles spatial queries with indexing and optimization
+- **Layer 2 (Middle)**: Inference Model - applies forward chaining rules for eager inference (e.g., grandfather relationships)
+- **Layer 3 (Core)**: FalkorDB Model - physical storage layer connecting to Redis/FalkorDB
 
-[] rdf:type fuseki:Server ;
-   fuseki:services ( :service ) .
-
-:service rdf:type fuseki:Service ;
-    fuseki:name "dataset" ;
-    fuseki:endpoint [ fuseki:operation fuseki:query ; ] ;
-    fuseki:endpoint [ fuseki:operation fuseki:update ; ] ;
-    fuseki:dataset :dataset_rdf .
-
-:dataset_rdf rdf:type ja:RDFDataset ;
-    ja:defaultGraph :falkor_db_model .
-
-:falkor_db_model rdf:type falkor:FalkorDBModel ;
-    falkor:host "localhost" ;
-    falkor:port 6379 ;
-    falkor:graphName "my_graph" .
+**Step 1:** Start FalkorDB:
+```bash
+docker run -p 6379:6379 -it --rm falkordb/falkordb:latest
 ```
 
-**Step 2:** Start the server with config:
+**Step 2:** Start the server with the included configuration:
 ```bash
 java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
-  --config config-falkordb.ttl
+  --config jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl
 ```
+
+The server will be available at `http://localhost:3330/falkor` with full support for:
+- SPARQL queries with GeoSPARQL spatial functions
+- Forward chaining inference (e.g., grandfather relationships are automatically materialized)
+- Persistent storage in FalkorDB
+
+See the full [config-falkordb.ttl](jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl) file for the complete configuration and architecture details.
 
 ### Deployment Option 3: Integrating with Existing Fuseki
 
@@ -372,12 +362,19 @@ cp jena-falkordb-adapter/target/jena-falkordb-adapter-0.2.0-SNAPSHOT.jar \
 cp jena-falkordb-assembler/target/jena-falkordb-assembler-0.2.0-SNAPSHOT.jar \
    /path/to/fuseki/lib/
 
+cp jena-geosparql/target/jena-geosparql-0.2.0-SNAPSHOT.jar \
+   /path/to/fuseki/lib/
+
 # Copy JFalkorDB dependency
 cp ~/.m2/repository/com/falkordb/jfalkordb/0.6.0/jfalkordb-0.6.0.jar \
    /path/to/fuseki/lib/
 ```
 
-**Step 2:** Create assembler configuration (same as Option 2)
+**Step 2:** Copy the configuration file and rules:
+```bash
+cp jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl /path/to/fuseki/
+cp -r rules /path/to/fuseki/
+```
 
 **Step 3:** Start Fuseki with the configuration:
 ```bash

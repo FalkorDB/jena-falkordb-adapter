@@ -462,27 +462,21 @@ This creates two JAR files:
 - `jena-geosparql-0.2.0-SNAPSHOT.jar` - The module JAR
 - `jena-geosparql-0.2.0-SNAPSHOT-jar-with-dependencies.jar` - JAR with all dependencies bundled
 
-### Running Fuseki with GeoSPARQL
+### Running Fuseki with GeoSPARQL + Inference + FalkorDB
 
-**Option A: Use the bundled configuration**
+**Use the included three-layer onion configuration:**
 
 ```bash
-java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar --config config-geosparql.ttl
+java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
+  --config jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl
 ```
 
-**Option B: Use the standalone GeoSPARQL JAR with Apache Jena Fuseki**
+This configuration provides:
+- **GeoSPARQL** - Spatial queries with indexing and optimization
+- **Forward Inference** - Eager materialization of inferred relationships  
+- **FalkorDB Storage** - Persistent graph database backend
 
-1. Copy the JAR with dependencies to Fuseki's lib directory:
-   ```bash
-   cp jena-geosparql/target/jena-geosparql-0.2.0-SNAPSHOT-jar-with-dependencies.jar /path/to/fuseki/lib/
-   ```
-
-2. Create a GeoSPARQL configuration file (see `jena-fuseki-falkordb/src/main/resources/config-geosparql.ttl` for an example)
-
-3. Start Fuseki with the config:
-   ```bash
-   java -Xmx4G -cp fuseki-server.jar:lib/* org.apache.jena.fuseki.main.cmds.FusekiServerCmd --config config-geosparql.ttl
-   ```
+See [config-falkordb.ttl](jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl) for the complete three-layer architecture configuration.
 
 ### GeoSPARQL Configuration Example
 

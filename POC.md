@@ -273,7 +273,7 @@ The server is already running with [config-falkordb.ttl](jena-fuseki-falkordb/sr
 
 See the tests for complete working examples:
 - [GeoSPARQLPOCSystemTest.java](jena-fuseki-falkordb/src/test/java/com/falkordb/GeoSPARQLPOCSystemTest.java) - GeoSPARQL queries
-- [FusekiLazyInferenceGeoSPARQLConfigTest.java](jena-fuseki-falkordb/src/test/java/com/falkordb/FusekiLazyInferenceGeoSPARQLConfigTest.java) - Combined spatial and forward inference queries
+- [GrandfatherInferenceSystemTest.java](jena-fuseki-falkordb/src/test/java/com/falkordb/GrandfatherInferenceSystemTest.java) - Forward chaining inference tests
 
 ### 5.2 Load Example Data (Social Network with Geographic Locations)
 
@@ -442,10 +442,10 @@ curl -G http://localhost:3330/falkor/query \
 
 ### 5.10 Key Benefits
 
-✅ **Lazy Inference**: Rules compute transitive relationships on-demand, not upfront  
+✅ **Forward Inference**: Rules eagerly materialize inferred relationships immediately when data is added  
 ✅ **Spatial Queries**: Full GeoSPARQL support for points, polygons, and spatial functions  
-✅ **Combined Queries**: Seamlessly mix inference and spatial predicates  
-✅ **Performance**: FalkorDB backend with spatial indexing  
+✅ **Combined Queries**: Seamlessly mix materialized inference and spatial predicates  
+✅ **Performance**: FalkorDB backend with spatial indexing and query pushdown on materialized triples  
 ✅ **Standards Compliant**: Uses standard SPARQL, GeoSPARQL, and Jena inference
 
 ---

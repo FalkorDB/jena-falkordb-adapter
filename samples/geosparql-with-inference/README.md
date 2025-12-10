@@ -225,13 +225,15 @@ This configuration can be extended with:
 
 ## Testing
 
-The system test `FusekiLazyInferenceGeoSPARQLConfigTest.java` provides additional examples and validates the configuration:
+The system tests provide additional examples and validate the configuration:
 
 ```bash
-mvn test -pl jena-fuseki-falkordb -Dtest=FusekiLazyInferenceGeoSPARQLConfigTest
-```
+# Test forward chaining inference
+mvn test -pl jena-fuseki-falkordb -Dtest=GrandfatherInferenceSystemTest
 
-> **Note**: Despite the test name containing "Lazy", it has been updated to test forward chaining inference with the unified config-falkordb.ttl configuration.
+# Test GeoSPARQL queries
+mvn test -pl jena-fuseki-falkordb -Dtest=GeoSPARQLPOCSystemTest
+```
 
 ## Troubleshooting
 

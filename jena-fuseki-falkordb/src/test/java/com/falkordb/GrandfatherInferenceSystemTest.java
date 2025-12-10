@@ -123,7 +123,7 @@ public class GrandfatherInferenceSystemTest {
     }
 
     @Test
-    @DisplayName("System Test: Load fathers_father.ttl and query grandfather_of using config-falkordb-lazy-inference.ttl pattern")
+    @DisplayName("System Test: Load fathers_father.ttl and query grandfather_of using config-falkordb.ttl with forward chaining")
     public void testLoadFathersFatherAndQueryGrandfather() {
         // Step 1: Load the fathers_father.ttl data file using SPARQL INSERT
         // This mimics: curl -X POST http://localhost:3330/falkor/data \

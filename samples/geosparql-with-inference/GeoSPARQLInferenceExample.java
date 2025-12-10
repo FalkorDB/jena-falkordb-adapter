@@ -13,16 +13,16 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
- * Example demonstrating combined lazy inference and GeoSPARQL queries.
+ * Example demonstrating combined forward inference (eager) and GeoSPARQL queries.
  * 
  * This example shows how to:
- * 1. Start a Fuseki server with the combined configuration
+ * 1. Start a Fuseki server with the three-layer onion configuration
  * 2. Load geographic and social network data
- * 3. Query using both inference and spatial predicates
+ * 3. Query using both materialized inference and spatial predicates
  * 
  * Prerequisites:
  * - FalkorDB running on localhost:6379
- * - Configuration file: config-falkordb-lazy-inference-with-geosparql.ttl
+ * - Configuration file: config-falkordb.ttl
  * - Data file: samples/geosparql-with-inference/data-example.ttl
  */
 public class GeoSPARQLInferenceExample {
@@ -31,10 +31,10 @@ public class GeoSPARQLInferenceExample {
     private static final String SERVICE_NAME = "falkor";
     
     public static void main(String[] args) throws Exception {
-        System.out.println("=== GeoSPARQL with Lazy Inference Example ===\n");
+        System.out.println("=== GeoSPARQL with Forward Inference Example ===\n");
         
         // Path to configuration file
-        String configPath = "jena-fuseki-falkordb/src/main/resources/config-falkordb-lazy-inference-with-geosparql.ttl";
+        String configPath = "jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl";
         
         if (!Files.exists(Path.of(configPath))) {
             System.err.println("Configuration file not found: " + configPath);
@@ -171,7 +171,7 @@ public class GeoSPARQLInferenceExample {
             "PREFIX ex:     <http://example.org/> " +
             "SELECT ?friendName ?location " +
             "WHERE { " +
-            "  ex:alice social:knows_transitively ?friend . " +  // Lazy inference
+            "  ex:alice social:knows ?friend . " +  // Direct relationships
             "  ?friend ex:name ?friendName ; " +
             "          geo:hasGeometry ?geom . " +
             "  ?geom geo:asWKT ?location . " +                    // GeoSPARQL

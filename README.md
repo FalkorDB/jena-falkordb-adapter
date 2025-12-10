@@ -272,15 +272,20 @@ mvn clean install
 
 **Step 3:** Run the Fuseki server
 ```bash
-# Run Fuseki server with the three-layer config
+# Run Fuseki server with the three-layer config (recommended)
 java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
   --config jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl
 
-# OR run the Fuseki SPARQL server
+# OR run with environment variables (simpler, uses default settings)
 java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar
 ```
 
 The Fuseki server will start at http://localhost:3330/ with the SPARQL endpoint at `/falkor`.
+
+**Accessing the Fuseki Web UI:**
+- Open your browser and navigate to **http://localhost:3330/**
+- The web interface provides a query editor, dataset management, and server statistics
+- You can run SPARQL queries directly from the browser UI
 
 ### Option 2: Using the Setup Script
 
@@ -345,6 +350,9 @@ The server will be available at `http://localhost:3330/falkor` with full support
 - SPARQL queries with GeoSPARQL spatial functions
 - Forward chaining inference (e.g., grandfather relationships are automatically materialized)
 - Persistent storage in FalkorDB
+
+**Accessing the Fuseki Web UI:**
+Open your browser and navigate to **http://localhost:3330/** to access the web interface for interactive querying and dataset management.
 
 See the full [config-falkordb.ttl](jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl) file for the complete configuration and architecture details.
 
@@ -958,14 +966,20 @@ try {
 
 ### Running with Fuseki Server
 
-You can also run examples via the Fuseki server:
+You can also run examples via the Fuseki server. The Fuseki server provides a web-based UI for interactive querying:
 
 **Step 1:** Start Fuseki with FalkorDB backend:
 ```bash
-java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar
+java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
+  --config jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl
 ```
 
-**Step 2:** Load sample data via HTTP:
+**Step 2:** Access the Fuseki Web UI:
+- Open your browser and navigate to **http://localhost:3330/**
+- The web interface provides a query editor, dataset management, and server statistics
+- Select the `/falkor` dataset to run queries
+
+**Step 3:** Load sample data via HTTP:
 ```bash
 curl -X POST http://localhost:3330/falkor/update \
   -H "Content-Type: text/turtle" \
@@ -1015,11 +1029,16 @@ Execution time: 15ms
 
 For interactive exploration, use the Fuseki web UI:
 
-1. Start Fuseki: `java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar`
-2. Open browser: http://localhost:3330/
-3. Navigate to the query editor
-4. Load queries from `samples/*/queries.sparql`
-5. Execute and view results
+1. Start Fuseki:
+   ```bash
+   java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
+     --config jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl
+   ```
+2. Open browser and navigate to: **http://localhost:3330/**
+3. Select the `/falkor` dataset from the dataset list
+4. Navigate to the query editor tab
+5. Load queries from `samples/*/queries.sparql`
+6. Execute and view results in the browser
 
 ### Tracing and Observability
 
@@ -1180,8 +1199,12 @@ mvn clean package
 # Run the adapter demo
 java -jar jena-falkordb-adapter/target/jena-falkordb-adapter-0.2.0-SNAPSHOT.jar
 
-# Run the Fuseki server with FalkorDB
+# Run the Fuseki server with FalkorDB (uses environment variables or defaults)
 java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar
+
+# OR run with config file (recommended for production)
+java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
+  --config jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl
 ```
 
 ### Running the Fuseki Server
@@ -1199,7 +1222,7 @@ java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar
 ```
 
 Then access:
-- **Web UI**: http://localhost:3330/
+- **Web UI**: http://localhost:3330/ (open in your browser for interactive querying)
 - **SPARQL Endpoint**: http://localhost:3330/falkor
 
 Developer notes:

@@ -73,7 +73,7 @@ public class GeoSPARQLToCypherTranslatorTest {
     }
 
     @Test
-    @DisplayName("Parse WKT POLYGON and extract first point")
+    @DisplayName("Parse WKT POLYGON and extract bounding box center")
     public void testParsePolygonWKT() {
         String wkt = "POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))";
         Map<String, Object> params = new HashMap<>();
@@ -82,12 +82,18 @@ public class GeoSPARQLToCypherTranslatorTest {
         
         assertNotNull(result, "Result should not be null for polygon");
         assertTrue(result.contains("point({"), "Should contain point({ expression");
-        assertEquals(0.0, params.get("poly_lat"), "Should extract first point latitude");
-        assertEquals(0.0, params.get("poly_lon"), "Should extract first point longitude");
+        // Center point of bounding box: lat (0+10)/2 = 5.0, lon (0+10)/2 = 5.0
+        assertEquals(5.0, params.get("poly_lat"), "Should extract bounding box center latitude");
+        assertEquals(5.0, params.get("poly_lon"), "Should extract bounding box center longitude");
+        // Check bounding box parameters
+        assertEquals(0.0, params.get("poly_minLat"), "Should store min latitude");
+        assertEquals(10.0, params.get("poly_maxLat"), "Should store max latitude");
+        assertEquals(0.0, params.get("poly_minLon"), "Should store min longitude");
+        assertEquals(10.0, params.get("poly_maxLon"), "Should store max longitude");
     }
 
     @Test
-    @DisplayName("Parse WKT POLYGON with complex coordinates")
+    @DisplayName("Parse WKT POLYGON with complex coordinates and compute correct bounding box")
     public void testParseComplexPolygon() {
         String wkt = "POLYGON((-0.15 51.50, -0.15 51.52, -0.10 51.52, -0.10 51.50, -0.15 51.50))";
         Map<String, Object> params = new HashMap<>();
@@ -95,8 +101,14 @@ public class GeoSPARQLToCypherTranslatorTest {
         String result = GeoSPARQLToCypherTranslator.parseWKTToPoint(wkt, "rect", params);
         
         assertNotNull(result);
-        assertEquals(51.50, params.get("rect_lat"));
-        assertEquals(-0.15, params.get("rect_lon"));
+        // Center point: lat (51.50+51.52)/2 = 51.51, lon (-0.15+-0.10)/2 = -0.125
+        assertEquals(51.51, params.get("rect_lat"), 0.001);
+        assertEquals(-0.125, params.get("rect_lon"), 0.001);
+        // Check bounding box parameters
+        assertEquals(51.50, params.get("rect_minLat"));
+        assertEquals(51.52, params.get("rect_maxLat"));
+        assertEquals(-0.15, params.get("rect_minLon"));
+        assertEquals(-0.10, params.get("rect_maxLon"));
     }
 
     @Test
@@ -309,5 +321,287 @@ public class GeoSPARQLToCypherTranslatorTest {
             "Should contain latitude parameter");
         assertTrue(params.containsKey("test_lon") || params.keySet().stream().anyMatch(k -> k.endsWith("_lon")), 
             "Should contain longitude parameter");
+    }
+
+    // ========================================
+    // Tests for LINESTRING geometry type
+    // ========================================
+
+    @Test
+    @DisplayName("Parse WKT LINESTRING and compute bounding box center")
+    public void testParseLinestringWKT() {
+        String wkt = "LINESTRING(0 0, 5 5, 10 0)";
+        Map<String, Object> params = new HashMap<>();
+        
+        String result = GeoSPARQLToCypherTranslator.parseWKTToPoint(wkt, "line", params);
+        
+        assertNotNull(result, "Result should not be null for linestring");
+        assertTrue(result.contains("point({"), "Should contain point({ expression");
+        // Bounding box: lat [0, 5], lon [0, 10]
+        // Center: lat = 2.5, lon = 5.0
+        assertEquals(2.5, params.get("line_lat"), "Should extract bounding box center latitude");
+        assertEquals(5.0, params.get("line_lon"), "Should extract bounding box center longitude");
+        // Check bounding box parameters
+        assertEquals(0.0, params.get("line_minLat"));
+        assertEquals(5.0, params.get("line_maxLat"));
+        assertEquals(0.0, params.get("line_minLon"));
+        assertEquals(10.0, params.get("line_maxLon"));
+    }
+
+    @Test
+    @DisplayName("Parse WKT LINESTRING with case insensitivity")
+    public void testLinestringCaseInsensitivity() {
+        String wkt1 = "LINESTRING(0 0, 10 10)";
+        String wkt2 = "linestring(0 0, 10 10)";
+        String wkt3 = "LineString(0 0, 10 10)";
+        
+        Map<String, Object> params1 = new HashMap<>();
+        Map<String, Object> params2 = new HashMap<>();
+        Map<String, Object> params3 = new HashMap<>();
+        
+        String result1 = GeoSPARQLToCypherTranslator.parseWKTToPoint(wkt1, "l", params1);
+        String result2 = GeoSPARQLToCypherTranslator.parseWKTToPoint(wkt2, "l", params2);
+        String result3 = GeoSPARQLToCypherTranslator.parseWKTToPoint(wkt3, "l", params3);
+        
+        assertNotNull(result1);
+        assertNotNull(result2);
+        assertNotNull(result3);
+        assertEquals(params1.get("l_lat"), params2.get("l_lat"));
+        assertEquals(params1.get("l_lat"), params3.get("l_lat"));
+    }
+
+    @Test
+    @DisplayName("Parse complex LINESTRING with negative coordinates")
+    public void testComplexLinestring() {
+        String wkt = "LINESTRING(-0.1278 51.5074, 2.3522 48.8566, 13.4050 52.5200)";
+        Map<String, Object> params = new HashMap<>();
+        
+        String result = GeoSPARQLToCypherTranslator.parseWKTToPoint(wkt, "route", params);
+        
+        assertNotNull(result);
+        // Bounding box: lat [48.8566, 52.5200], lon [-0.1278, 13.4050]
+        // Center: lat = 50.6883, lon = 6.6386
+        assertEquals(50.6883, params.get("route_lat"), 0.01);
+        assertEquals(6.6386, params.get("route_lon"), 0.01);
+        assertEquals(48.8566, params.get("route_minLat"));
+        assertEquals(52.5200, params.get("route_maxLat"));
+        assertEquals(-0.1278, params.get("route_minLon"));
+        assertEquals(13.4050, params.get("route_maxLon"));
+    }
+
+    @Test
+    @DisplayName("Extract latitude from LINESTRING")
+    public void testExtractLatitudeFromLinestring() {
+        String wkt = "LINESTRING(0 0, 5 5, 10 0)";
+        
+        Double lat = GeoSPARQLToCypherTranslator.extractLatitude(wkt);
+        
+        assertNotNull(lat, "Latitude should be extracted from linestring");
+        assertEquals(2.5, lat, 0.001, "Should extract center latitude of bounding box");
+    }
+
+    @Test
+    @DisplayName("Extract longitude from LINESTRING")
+    public void testExtractLongitudeFromLinestring() {
+        String wkt = "LINESTRING(0 0, 5 5, 10 0)";
+        
+        Double lon = GeoSPARQLToCypherTranslator.extractLongitude(wkt);
+        
+        assertNotNull(lon, "Longitude should be extracted from linestring");
+        assertEquals(5.0, lon, 0.001, "Should extract center longitude of bounding box");
+    }
+
+    // ========================================
+    // Tests for MULTIPOINT geometry type
+    // ========================================
+
+    @Test
+    @DisplayName("Parse WKT MULTIPOINT and compute bounding box center")
+    public void testParseMultipointWKT() {
+        String wkt = "MULTIPOINT((0 0), (5 5), (10 10))";
+        Map<String, Object> params = new HashMap<>();
+        
+        String result = GeoSPARQLToCypherTranslator.parseWKTToPoint(wkt, "multi", params);
+        
+        assertNotNull(result, "Result should not be null for multipoint");
+        assertTrue(result.contains("point({"), "Should contain point({ expression");
+        // Bounding box: lat [0, 10], lon [0, 10]
+        // Center: lat = 5.0, lon = 5.0
+        assertEquals(5.0, params.get("multi_lat"), "Should extract bounding box center latitude");
+        assertEquals(5.0, params.get("multi_lon"), "Should extract bounding box center longitude");
+        // Check bounding box parameters
+        assertEquals(0.0, params.get("multi_minLat"));
+        assertEquals(10.0, params.get("multi_maxLat"));
+        assertEquals(0.0, params.get("multi_minLon"));
+        assertEquals(10.0, params.get("multi_maxLon"));
+    }
+
+    @Test
+    @DisplayName("Parse WKT MULTIPOINT without parentheses around points")
+    public void testParseMultipointWithoutParens() {
+        String wkt = "MULTIPOINT(0 0, 5 5, 10 10)";
+        Map<String, Object> params = new HashMap<>();
+        
+        String result = GeoSPARQLToCypherTranslator.parseWKTToPoint(wkt, "mp", params);
+        
+        assertNotNull(result, "Result should not be null for multipoint without parens");
+        assertEquals(5.0, params.get("mp_lat"));
+        assertEquals(5.0, params.get("mp_lon"));
+    }
+
+    @Test
+    @DisplayName("Parse WKT MULTIPOINT with case insensitivity")
+    public void testMultipointCaseInsensitivity() {
+        String wkt1 = "MULTIPOINT((0 0), (10 10))";
+        String wkt2 = "multipoint((0 0), (10 10))";
+        String wkt3 = "MultiPoint((0 0), (10 10))";
+        
+        Map<String, Object> params1 = new HashMap<>();
+        Map<String, Object> params2 = new HashMap<>();
+        Map<String, Object> params3 = new HashMap<>();
+        
+        String result1 = GeoSPARQLToCypherTranslator.parseWKTToPoint(wkt1, "m", params1);
+        String result2 = GeoSPARQLToCypherTranslator.parseWKTToPoint(wkt2, "m", params2);
+        String result3 = GeoSPARQLToCypherTranslator.parseWKTToPoint(wkt3, "m", params3);
+        
+        assertNotNull(result1);
+        assertNotNull(result2);
+        assertNotNull(result3);
+        assertEquals(params1.get("m_lat"), params2.get("m_lat"));
+        assertEquals(params1.get("m_lat"), params3.get("m_lat"));
+    }
+
+    @Test
+    @DisplayName("Parse complex MULTIPOINT with negative coordinates")
+    public void testComplexMultipoint() {
+        String wkt = "MULTIPOINT((-0.1278 51.5074), (2.3522 48.8566), (13.4050 52.5200))";
+        Map<String, Object> params = new HashMap<>();
+        
+        String result = GeoSPARQLToCypherTranslator.parseWKTToPoint(wkt, "cities", params);
+        
+        assertNotNull(result);
+        // Bounding box: lat [48.8566, 52.5200], lon [-0.1278, 13.4050]
+        assertEquals(50.6883, params.get("cities_lat"), 0.01);
+        assertEquals(6.6386, params.get("cities_lon"), 0.01);
+        assertEquals(48.8566, params.get("cities_minLat"));
+        assertEquals(52.5200, params.get("cities_maxLat"));
+        assertEquals(-0.1278, params.get("cities_minLon"));
+        assertEquals(13.4050, params.get("cities_maxLon"));
+    }
+
+    @Test
+    @DisplayName("Extract latitude from MULTIPOINT")
+    public void testExtractLatitudeFromMultipoint() {
+        String wkt = "MULTIPOINT((0 0), (10 10))";
+        
+        Double lat = GeoSPARQLToCypherTranslator.extractLatitude(wkt);
+        
+        assertNotNull(lat, "Latitude should be extracted from multipoint");
+        assertEquals(5.0, lat, 0.001, "Should extract center latitude of bounding box");
+    }
+
+    @Test
+    @DisplayName("Extract longitude from MULTIPOINT")
+    public void testExtractLongitudeFromMultipoint() {
+        String wkt = "MULTIPOINT((0 0), (10 10))";
+        
+        Double lon = GeoSPARQLToCypherTranslator.extractLongitude(wkt);
+        
+        assertNotNull(lon, "Longitude should be extracted from multipoint");
+        assertEquals(5.0, lon, 0.001, "Should extract center longitude of bounding box");
+    }
+
+    // ========================================
+    // Tests for extractBoundingBox method
+    // ========================================
+
+    @Test
+    @DisplayName("Extract bounding box from POINT")
+    public void testExtractBoundingBoxFromPoint() {
+        String wkt = "POINT(-0.1278 51.5074)";
+        
+        double[] bbox = GeoSPARQLToCypherTranslator.extractBoundingBox(wkt);
+        
+        assertNotNull(bbox, "Bounding box should be extracted");
+        assertEquals(4, bbox.length, "Bounding box should have 4 values");
+        // For a point, min and max are the same
+        assertEquals(51.5074, bbox[0], 0.001); // minLat
+        assertEquals(51.5074, bbox[1], 0.001); // maxLat
+        assertEquals(-0.1278, bbox[2], 0.001); // minLon
+        assertEquals(-0.1278, bbox[3], 0.001); // maxLon
+    }
+
+    @Test
+    @DisplayName("Extract bounding box from POLYGON")
+    public void testExtractBoundingBoxFromPolygon() {
+        String wkt = "POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))";
+        
+        double[] bbox = GeoSPARQLToCypherTranslator.extractBoundingBox(wkt);
+        
+        assertNotNull(bbox);
+        assertEquals(0.0, bbox[0], 0.001); // minLat
+        assertEquals(10.0, bbox[1], 0.001); // maxLat
+        assertEquals(0.0, bbox[2], 0.001); // minLon
+        assertEquals(10.0, bbox[3], 0.001); // maxLon
+    }
+
+    @Test
+    @DisplayName("Extract bounding box from LINESTRING")
+    public void testExtractBoundingBoxFromLinestring() {
+        String wkt = "LINESTRING(0 0, 5 5, 10 0)";
+        
+        double[] bbox = GeoSPARQLToCypherTranslator.extractBoundingBox(wkt);
+        
+        assertNotNull(bbox);
+        assertEquals(0.0, bbox[0], 0.001); // minLat
+        assertEquals(5.0, bbox[1], 0.001); // maxLat
+        assertEquals(0.0, bbox[2], 0.001); // minLon
+        assertEquals(10.0, bbox[3], 0.001); // maxLon
+    }
+
+    @Test
+    @DisplayName("Extract bounding box from MULTIPOINT")
+    public void testExtractBoundingBoxFromMultipoint() {
+        String wkt = "MULTIPOINT((0 0), (10 10))";
+        
+        double[] bbox = GeoSPARQLToCypherTranslator.extractBoundingBox(wkt);
+        
+        assertNotNull(bbox);
+        assertEquals(0.0, bbox[0], 0.001); // minLat
+        assertEquals(10.0, bbox[1], 0.001); // maxLat
+        assertEquals(0.0, bbox[2], 0.001); // minLon
+        assertEquals(10.0, bbox[3], 0.001); // maxLon
+    }
+
+    @Test
+    @DisplayName("Extract bounding box from invalid WKT returns null")
+    public void testExtractBoundingBoxFromInvalidWKT() {
+        String wkt = "INVALID WKT";
+        
+        double[] bbox = GeoSPARQLToCypherTranslator.extractBoundingBox(wkt);
+        
+        assertNull(bbox, "Should return null for invalid WKT");
+    }
+
+    // ========================================
+    // Tests for updated extract methods with all geometry types
+    // ========================================
+
+    @Test
+    @DisplayName("Extract latitude works with all geometry types")
+    public void testExtractLatitudeAllTypes() {
+        assertEquals(51.5074, GeoSPARQLToCypherTranslator.extractLatitude("POINT(-0.1278 51.5074)"), 0.001);
+        assertEquals(5.0, GeoSPARQLToCypherTranslator.extractLatitude("POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))"), 0.001);
+        assertEquals(2.5, GeoSPARQLToCypherTranslator.extractLatitude("LINESTRING(0 0, 5 5, 10 0)"), 0.001);
+        assertEquals(5.0, GeoSPARQLToCypherTranslator.extractLatitude("MULTIPOINT((0 0), (10 10))"), 0.001);
+    }
+
+    @Test
+    @DisplayName("Extract longitude works with all geometry types")
+    public void testExtractLongitudeAllTypes() {
+        assertEquals(-0.1278, GeoSPARQLToCypherTranslator.extractLongitude("POINT(-0.1278 51.5074)"), 0.001);
+        assertEquals(5.0, GeoSPARQLToCypherTranslator.extractLongitude("POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))"), 0.001);
+        assertEquals(5.0, GeoSPARQLToCypherTranslator.extractLongitude("LINESTRING(0 0, 5 5, 10 0)"), 0.001);
+        assertEquals(5.0, GeoSPARQLToCypherTranslator.extractLongitude("MULTIPOINT((0 0), (10 10))"), 0.001);
     }
 }

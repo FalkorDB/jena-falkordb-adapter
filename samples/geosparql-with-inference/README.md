@@ -34,7 +34,7 @@ Alice -> Bob -> Carol
          Bob -> Dave -> Eve
 ```
 
-With forward inference using grandfather rules, when father_of relationships are inserted, grandfather_of relationships are automatically materialized.
+With forward inference using `grandfather_of_fwd.rule`, when father_of relationships are inserted, grandfather_of relationships are automatically materialized.
 
 ### Geographic Data
 

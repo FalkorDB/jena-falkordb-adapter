@@ -1520,10 +1520,12 @@ RETURN city.uri AS city,
 
 ### Supported Geometry Types
 
-- ✅ **POINT** - Full support with latitude/longitude
-- ⚠️ **POLYGON** - Partial support (bounding box approximation)
-- ❌ **LINESTRING** - Planned for future release
-- ❌ **MULTIPOINT** - Planned for future release
+- ✅ **POINT** - Full support with exact latitude/longitude coordinates
+- ✅ **POLYGON** - Full support with complete bounding box calculation
+- ✅ **LINESTRING** - Full support with complete bounding box calculation
+- ✅ **MULTIPOINT** - Full support with complete bounding box calculation
+
+**Bounding Box Support**: For complex geometries (POLYGON, LINESTRING, MULTIPOINT), the adapter calculates the complete bounding box (min/max latitude/longitude) and uses the center point as a representative location. All bounding box parameters are stored for potential range queries.
 
 ### Performance Gains
 

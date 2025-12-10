@@ -265,8 +265,8 @@ public final class FalkorDBOpExecutor extends OpExecutor {
                 span.setStatus(StatusCode.OK);
                 
                 if (LOGGER.isWarnEnabled()) {
-                    LOGGER.warn("FILTER pushdown optimization not applicable "
-                        + "(no filter expressions), using Jena fallback implementation");
+                    LOGGER.warn("FILTER pushdown optimization not applicable: "
+                        + "no filter expressions found, using Jena fallback implementation");
                 }
                 return super.execute(opFilter, input);
             }
@@ -414,12 +414,13 @@ public final class FalkorDBOpExecutor extends OpExecutor {
             // Check if both sides are BGPs (after unwrapping filter)
             if (!(left instanceof OpBGP) || !(right instanceof OpBGP)) {
                 span.setAttribute(ATTR_FALLBACK, true);
-                span.addEvent("Left or right is not BGP, falling back");
+                String side = !(left instanceof OpBGP) ? "left" : "right";
+                span.addEvent("OPTIONAL " + side + " side is not BGP, falling back");
                 span.setStatus(StatusCode.OK);
                 
                 if (LOGGER.isWarnEnabled()) {
-                    LOGGER.warn("OPTIONAL pattern pushdown optimization not applicable "
-                        + "(left or right side is not a Basic Graph Pattern), "
+                    LOGGER.warn("OPTIONAL pattern pushdown optimization not applicable: "
+                        + side + " side is not a Basic Graph Pattern, "
                         + "using Jena fallback implementation");
                 }
                 return super.execute(opLeftJoin, input);
@@ -529,12 +530,13 @@ public final class FalkorDBOpExecutor extends OpExecutor {
             // Check if both sides are BGPs
             if (!(left instanceof OpBGP) || !(right instanceof OpBGP)) {
                 span.setAttribute(ATTR_FALLBACK, true);
-                span.addEvent("Left or right is not BGP, falling back");
+                String side = !(left instanceof OpBGP) ? "left" : "right";
+                span.addEvent("UNION " + side + " side is not BGP, falling back");
                 span.setStatus(StatusCode.OK);
                 
                 if (LOGGER.isWarnEnabled()) {
-                    LOGGER.warn("UNION pattern pushdown optimization not applicable "
-                        + "(left or right side is not a Basic Graph Pattern), "
+                    LOGGER.warn("UNION pattern pushdown optimization not applicable: "
+                        + side + " side is not a Basic Graph Pattern, "
                         + "using Jena fallback implementation");
                 }
                 return super.execute(opUnion, input);

@@ -353,7 +353,7 @@ This executes as a single database operation, with NULL returned for persons wit
 | OPTIONAL with multiple triples | ✅ | `OPTIONAL { ?s foaf:knows ?f . ?f foaf:name ?n }` |
 | Concrete subjects | ✅ | `OPTIONAL { <alice> foaf:email ?email }` |
 | FILTER in required part | ✅ | `FILTER(?age < 30)` before OPTIONAL |
-| Variable predicates in OPTIONAL | ❌ (fallback) | Not yet supported |
+| Variable predicates in OPTIONAL | ✅ | `OPTIONAL { ?person ?p ?o }` (uses UNION for relationships, properties, and types) |
 
 **FILTER Support**: FILTER expressions in the required pattern are translated to Cypher WHERE clauses. Supported operators include comparisons (`<`, `<=`, `>`, `>=`, `=`, `<>`), logical operators (`AND`, `OR`, `NOT`), and work with both literal properties and node variables.
 
@@ -586,9 +586,180 @@ OPTIONAL MATCH (person)-[:email]->(email:Resource)
 RETURN person.uri AS person, person.`foaf:name` AS name, email.uri AS email
 ```
 
+**Example 6: Variable Predicates in OPTIONAL**
+
+> **Status**: ✅ **IMPLEMENTED**  
+> **Tests**: See [SparqlToCypherCompilerTest.java](jena-falkordb-adapter/src/test/java/com/falkordb/jena/query/SparqlToCypherCompilerTest.java) (`testOptionalWithVariablePredicateCompilesWithUnion`, `testOptionalVariablePredicateThreePartUnion`, and 7 more tests) and [FalkorDBQueryPushdownTest.java](jena-falkordb-adapter/src/test/java/com/falkordb/jena/query/FalkorDBQueryPushdownTest.java) (`testOptionalVariablePredicateReturnsAllTripleTypes`, `testOptionalVariablePredicateWithFilter`, and 4 more tests)  
+> **Examples**: See [samples/optional-patterns-variable-predicate/](samples/optional-patterns-variable-predicate/)
+
+Variable predicates in OPTIONAL patterns are now supported using a three-part UNION approach that queries relationships, properties, and types.
+
+```sparql
+# SPARQL: Find all persons with all their optional properties
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT ?person ?name ?p ?o WHERE {
+    ?person a foaf:Person .
+    ?person foaf:name ?name .
+    OPTIONAL { ?person ?p ?o }
+}
+```
+
+```cypher
+# Generated Cypher (three-part UNION with OPTIONAL MATCH):
+
+# Required pattern
+MATCH (person:Resource:`http://xmlns.com/foaf/0.1/Person`)
+WHERE person.`http://xmlns.com/foaf/0.1/name` IS NOT NULL
+
+# Part 1: OPTIONAL relationships (edges)
+OPTIONAL MATCH (person)-[_r]->(o:Resource)
+RETURN person.uri AS person, 
+       person.`http://xmlns.com/foaf/0.1/name` AS name,
+       type(_r) AS p,
+       o.uri AS o
+
+UNION ALL
+
+# Part 2: OPTIONAL properties (node attributes)
+MATCH (person:Resource:`http://xmlns.com/foaf/0.1/Person`)
+WHERE person.`http://xmlns.com/foaf/0.1/name` IS NOT NULL
+OPTIONAL MATCH (person)
+UNWIND keys(person) AS _propKey
+WITH person, _propKey WHERE _propKey <> 'uri'
+RETURN person.uri AS person, 
+       person.`http://xmlns.com/foaf/0.1/name` AS name,
+       _propKey AS p,
+       person[_propKey] AS o
+
+UNION ALL
+
+# Part 3: OPTIONAL types (node labels as rdf:type)
+MATCH (person:Resource:`http://xmlns.com/foaf/0.1/Person`)
+WHERE person.`http://xmlns.com/foaf/0.1/name` IS NOT NULL
+OPTIONAL MATCH (person)
+UNWIND labels(person) AS _label
+WITH person, _label WHERE _label <> 'Resource'
+RETURN person.uri AS person, 
+       person.`http://xmlns.com/foaf/0.1/name` AS name,
+       'http://www.w3.org/1999/02/22-rdf-syntax-ns#type' AS p,
+       _label AS o
+```
+
+**Key Features:**
+
+- ✅ **Three-part UNION**: Queries relationships (edges), properties (node attributes), and types (labels) separately
+- ✅ **NULL handling**: Returns NULL when no optional data exists
+- ✅ **Preserves required variables**: All required variables appear in every UNION branch
+- ✅ **Works with FILTER**: FILTER expressions on required patterns are applied correctly
+- ✅ **Single database query**: One round-trip instead of N+1 queries
+- ✅ **Native OPTIONAL MATCH**: Uses Cypher's OPTIONAL MATCH for efficient execution
+
+**Java Usage Example:**
+
+```java
+import com.falkordb.jena.FalkorDBModelFactory;
+import org.apache.jena.rdf.model.Model;
+import org.apache.jena.query.*;
+
+Model model = FalkorDBModelFactory.createModel("myGraph");
+
+// Setup: Create persons with various properties
+var alice = model.createResource("http://example.org/person/alice");
+var bob = model.createResource("http://example.org/person/bob");
+
+var personType = model.createResource("http://xmlns.com/foaf/0.1/Person");
+var nameProperty = model.createProperty("http://xmlns.com/foaf/0.1/name");
+var emailProperty = model.createProperty("http://xmlns.com/foaf/0.1/email");
+var knowsProperty = model.createProperty("http://xmlns.com/foaf/0.1/knows");
+
+// Alice has name, email, and knows Bob
+alice.addProperty(RDF.type, personType);
+alice.addProperty(nameProperty, "Alice");
+alice.addProperty(emailProperty, "alice@example.org");
+alice.addProperty(knowsProperty, bob);
+
+// Bob only has name
+bob.addProperty(RDF.type, personType);
+bob.addProperty(nameProperty, "Bob");
+
+// Query with variable predicate in OPTIONAL
+String sparql = """
+    PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+    SELECT ?person ?name ?p ?o WHERE {
+        ?person a foaf:Person .
+        ?person foaf:name ?name .
+        OPTIONAL { ?person ?p ?o }
+    }
+    ORDER BY ?person ?p
+    """;
+
+Query query = QueryFactory.create(sparql);
+try (QueryExecution qexec = QueryExecutionFactory.create(query, model)) {
+    ResultSet results = qexec.execSelect();
+    
+    String currentPerson = null;
+    List<String> properties = new ArrayList<>();
+    
+    while (results.hasNext()) {
+        QuerySolution solution = results.nextSolution();
+        String person = solution.getResource("person").getURI();
+        String name = solution.getLiteral("name").getString();
+        
+        if (!person.equals(currentPerson)) {
+            if (currentPerson != null) {
+                System.out.println(currentPerson + " properties: " + properties);
+            }
+            currentPerson = person;
+            properties = new ArrayList<>();
+        }
+        
+        if (solution.contains("p") && solution.contains("o")) {
+            String predicate = solution.get("p").toString();
+            String object = solution.get("o").toString();
+            properties.add(predicate + " -> " + object);
+        }
+    }
+    
+    if (currentPerson != null) {
+        System.out.println(currentPerson + " properties: " + properties);
+    }
+}
+
+// Output:
+// Alice properties include: rdf:type -> Person, name -> Alice, email -> alice@example.org, knows -> bob
+// Bob properties include: rdf:type -> Person, name -> Bob
+```
+
+**Performance Comparison:**
+
+| Scenario | Without Variable Predicate Pushdown | With Variable Predicate Pushdown | Improvement |
+|----------|-------------------------------------|----------------------------------|-------------|
+| Query all properties of 100 resources | 100 × 3 queries (relationships, properties, types) = 300 queries | 1 query (UNION) | 300x fewer calls |
+| Resources with mixed data types | Separate queries for each type | Single UNION query | 3x fewer calls |
+| Large result sets | Multiple round-trips with result assembly | Single query with all results | Minimal network overhead |
+
+**With FILTER Support:**
+
+Variable predicates in OPTIONAL work seamlessly with FILTER expressions:
+
+```sparql
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT ?person ?age ?p ?o WHERE {
+    ?person a foaf:Person .
+    ?person foaf:age ?age .
+    FILTER(?age >= 18 && ?age < 65)
+    OPTIONAL { ?person ?p ?o }
+}
+```
+
+The FILTER is applied to the required pattern before all three OPTIONAL MATCH branches, ensuring correct results with optimal performance.
+
 **Limitations:**
 
-- Variable predicates in OPTIONAL patterns not yet supported (will fall back)
+- Only single-triple patterns with variable predicates in OPTIONAL are supported
+- Multiple triples with variable predicates in the same OPTIONAL block will fall back to standard evaluation
 - Complex nested OPTIONAL patterns may fall back to standard evaluation
 - FILTER clauses within OPTIONAL blocks (not the required part) may not fully push down
 
@@ -599,6 +770,12 @@ See [samples/optional-patterns/](samples/optional-patterns/) for:
 - SPARQL query patterns with generated Cypher
 - Sample data with partial information
 - Detailed README with best practices
+
+See [samples/optional-patterns-variable-predicate/](samples/optional-patterns-variable-predicate/) for:
+- Complete variable predicate examples in all formats
+- Java code, SPARQL queries, sample data (Turtle, JSON-LD, RDF/XML)
+- Performance analysis and best practices
+- Integration with Fuseki using config-falkordb.ttl
 
 ### Complete Examples
 

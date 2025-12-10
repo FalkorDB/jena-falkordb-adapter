@@ -46,7 +46,7 @@ Find locations within a rectangular region defined by lat/lon ranges.
 ### Start FalkorDB
 
 ```bash
-docker run -p 6379:6379 -d falkordb/falkordb:latest
+docker-compose -f docker-compose-tracing.yaml up -d
 ```
 
 ### Build and Run

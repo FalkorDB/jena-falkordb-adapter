@@ -59,7 +59,7 @@
              Temporarily set to 17 for build environment compatibility.
              Tracking issue: https://github.com/FalkorDB/jena-falkordb-adapter/issues/XXX
              Code is compatible with both Java 17 and 21. -->
-        <maven.compiler.release>21</maven.compiler.release>
+        <maven.compiler.release>17</maven.compiler.release>
         <jena.version>5.6.0</jena.version>
         <jfalkordb.version>0.6.0</jfalkordb.version>
         <slf4j.version>2.0.17</slf4j.version>
@@ -184,7 +184,7 @@
                     <artifactId>maven-compiler-plugin</artifactId>
                     <version>3.14.1</version>
                     <configuration>
-                        <release>21</release>
+                        <release>${maven.compiler.release}</release>
                     </configuration>
                 </plugin>
 

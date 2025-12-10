@@ -24,6 +24,74 @@ Comprehensive code examples for all optimizations are available in the [`samples
 
 Each example includes complete working code in multiple formats. See [`samples/README.md`](samples/README.md) for details.
 
+## Optimization Fallback Behavior
+
+When query optimizations cannot be applied due to limitations or unsupported patterns, the adapter automatically falls back to using Jena's standard evaluation engine. This ensures correctness while still attempting to optimize whenever possible.
+
+### Warning Logs for Fallbacks
+
+**Important**: As of the latest version, the adapter emits **WARN level logs** whenever an optimization limitation causes fallback to Jena's implementation. These warnings help identify queries that could benefit from optimization improvements or pattern restructuring.
+
+**Log Format**: All fallback warnings follow this consistent pattern:
+```
+WARN com.falkordb.jena.query.FalkorDBOpExecutor - [OPTIMIZATION_TYPE] pushdown optimization not applicable, using Jena fallback implementation: [reason]
+```
+
+**Example Warning Messages**:
+```
+WARN - BGP query pushdown optimization not applicable, using Jena fallback implementation: Variable predicate in multi-triple pattern
+WARN - FILTER pushdown optimization not applicable (multiple filter expressions not yet supported), using Jena fallback implementation
+WARN - OPTIONAL pattern pushdown optimization not applicable (left or right side is not a Basic Graph Pattern), using Jena fallback implementation
+```
+
+### When Fallbacks Occur
+
+Fallbacks happen in the following scenarios:
+
+| Optimization | Fallback Trigger | Warning Message Includes |
+|-------------|-----------------|-------------------------|
+| **BGP Pushdown** | Variable predicates in multi-triple BGPs, complex patterns | "BGP query pushdown optimization not applicable" |
+| **FILTER Pushdown** | Multiple filter expressions, non-BGP sub-operations | "FILTER pushdown optimization not applicable" |
+| **OPTIONAL Pushdown** | Non-BGP left or right patterns, complex nested patterns | "OPTIONAL pattern pushdown optimization not applicable" |
+| **UNION Pushdown** | Non-BGP branch patterns, complex unions | "UNION pattern pushdown optimization not applicable" |
+| **GROUP Pushdown** | Non-BGP sub-operations, unsupported aggregation functions | "GROUP BY aggregation pushdown optimization not applicable" |
+
+### Monitoring Fallbacks
+
+**Using Logs**: Configure your logging framework to capture WARN level messages from `com.falkordb.jena.query.FalkorDBOpExecutor`:
+
+```xml
+<!-- logback.xml -->
+<logger name="com.falkordb.jena.query.FalkorDBOpExecutor" level="WARN"/>
+```
+
+**Using OpenTelemetry**: Fallback events are also recorded in trace spans with the attribute `falkordb.fallback=true`:
+
+```java
+// Trace spans include fallback information
+Span span = tracer.spanBuilder("FalkorDBOpExecutor.execute")
+    .setAttribute("falkordb.fallback", true)
+    .addEvent("Falling back to standard execution: [reason]")
+    .startSpan();
+```
+
+View fallback traces in Jaeger UI at `http://localhost:16686` when running with `docker-compose-tracing.yaml`.
+
+### Optimization vs. Correctness
+
+The fallback mechanism ensures **100% correctness** - all SPARQL queries return correct results whether optimized or not:
+
+- ✅ **Optimized path**: Queries use native Cypher for performance (Nx-N²x faster)
+- ✅ **Fallback path**: Queries use Jena's standard evaluation for compatibility (correct but slower)
+
+**Best Practice**: Review WARN logs periodically to identify frequently falling back queries. These may benefit from query restructuring or future optimization support.
+
+### Tests for Fallback Behavior
+
+Fallback behavior is tested in:
+- [FalkorDBOpExecutorTest.java](jena-falkordb-adapter/src/test/java/com/falkordb/jena/query/FalkorDBOpExecutorTest.java) - Unit tests for fallback logic
+- [FalkorDBQueryPushdownTest.java](jena-falkordb-adapter/src/test/java/com/falkordb/jena/query/FalkorDBQueryPushdownTest.java) - Integration tests verifying fallback correctness
+
 ## 1. Batch Writes via Transactions
 
 > **Tests**: See [FalkorDBTransactionHandlerTest.java](jena-falkordb-adapter/src/test/java/com/falkordb/jena/FalkorDBTransactionHandlerTest.java)  

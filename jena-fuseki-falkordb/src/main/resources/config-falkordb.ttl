@@ -79,16 +79,19 @@ falkor:FalkorDBModel rdfs:subClassOf ja:Model .
 
 # Level 1 (Outer Layer): GeoSPARQL Dataset Configuration
 # This wraps the inference dataset with GeoSPARQL capabilities
-:geospatial_dataset rdf:type geosparql:GeosparqlDataset ;
+# IMPORTANT: Using falkor:SafeGeosparqlDataset instead of geosparql:GeosparqlDataset
+# to prevent spatial index building errors when restarting with existing data
+:geospatial_dataset rdf:type falkor:SafeGeosparqlDataset ;
     # Enable GeoSPARQL inference (derives additional spatial relations)
     geosparql:inference            true ;
     
     # Enable query rewriting for optimization
     geosparql:queryRewrite         true ;
     
-    # Disable spatial indexing - spatial queries are pushed down to FalkorDB's native graph
-    # FalkorDB handles spatial operations natively, so GeoSPARQL's index is redundant
-    geosparql:indexEnabled         false ;
+    # Enable spatial indexing - SafeGeosparqlDataset will handle errors gracefully
+    # FalkorDB handles spatial operations natively via query pushdown
+    # The SafeGeosparqlDataset catches errors during index building on restart
+    geosparql:indexEnabled         true ;
     
     # Whether to apply default geometry to features
     geosparql:applyDefaultGeometry false ;

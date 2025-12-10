@@ -145,10 +145,11 @@ WHERE {
 
 ### Recommended: Configuration File (Assembler Mode)
 
-Always run the Fuseki server with the config-falkordb.ttl configuration file:
+Always run the Fuseki server with the config-falkordb.ttl configuration file (from project root directory):
 
 ```bash
-java -jar jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar --config config-falkordb.ttl
+java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
+  --config jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl
 ```
 
 This provides the three-layer architecture with GeoSPARQL support, forward inference, and FalkorDB storage.
@@ -360,13 +361,14 @@ docker run -p 6379:6379 -it --rm falkordb/falkordb:latest
 
 **Problem:** `Config file not found` error
 
-**Solution:** Verify the config file path is correct and accessible:
+**Solution:** Make sure you're running from the project root directory and verify the config file exists:
 ```bash
-# Check if file exists
-ls -la config-falkordb.ttl
+# Check if file exists (from project root)
+ls -la jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl
 
-# Use absolute path if needed
-java -jar jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar --config /full/path/to/config-falkordb.ttl
+# Run from project root directory
+java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
+  --config jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl
 ```
 
 ### Query Returns Empty Results
@@ -403,15 +405,10 @@ Options:
   --config <file>  Path to TTL configuration file
   --help           Show help message
 
-Examples:
-  # Start with default settings
-  java -jar jena-fuseki-falkordb.jar
-
-  # Start with config file
-  java -jar jena-fuseki-falkordb.jar --config config-falkordb.ttl
-
-  # Start with environment variables
-  FALKORDB_HOST=192.168.1.100 java -jar jena-fuseki-falkordb.jar
+Examples (run from project root directory):
+  # Start with config file (recommended)
+  java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
+    --config jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl
 ```
 
 ---

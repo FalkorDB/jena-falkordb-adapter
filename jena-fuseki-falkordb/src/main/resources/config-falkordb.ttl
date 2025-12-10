@@ -1,7 +1,19 @@
-# FalkorDB Fuseki Configuration Example
+# FalkorDB + Eager Inference + GeoSPARQL Configuration
 #
-# This configuration file demonstrates how to configure Apache Jena Fuseki
-# to use FalkorDB as the backend database via the assembler mechanism.
+# ARCHITECTURE (The "Three-Layer Onion"):
+# ---------------------------
+# Level 1 (Top): GeoSPARQL Dataset (<#geospatial_dataset>)
+#       - Intercepts spatial queries (e.g., geof:sfWithin)
+#       - Wraps the Inference Model
+#
+# Level 2 (Middle): Inference Model (<#inf_model>)
+#       - Runs in 'forward' (eager) mode
+#       - Immediately materializes "grandfather" triples when "father" triples are added
+#       - Wraps the FalkorDB Model
+#
+# Level 3 (Bottom): FalkorDB Model (<#falkor_model>)
+#       - Physical storage layer
+#       - Connects to Redis/FalkorDB
 #
 # To use this configuration:
 # 1. Start FalkorDB: docker run -p 6379:6379 -it --rm falkordb/falkordb:latest
@@ -12,12 +24,16 @@
 # - FalkorDB must be running on localhost:6379 (or as configured below)
 # - The jena-fuseki-falkordb JAR must include the assembler module
 
-@prefix :        <#> .
-@prefix falkor:  <http://falkordb.com/jena/assembler#> .
-@prefix fuseki:  <http://jena.apache.org/fuseki#> .
-@prefix ja:      <http://jena.hpl.hp.com/2005/11/Assembler#> .
-@prefix rdf:     <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
-@prefix rdfs:    <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix :          <#> .
+@prefix fuseki:    <http://jena.apache.org/fuseki#> .
+@prefix rdf:       <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:      <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix ja:        <http://jena.hpl.hp.com/2005/11/Assembler#> .
+@prefix falkor:    <http://falkordb.com/jena/assembler#> .
+@prefix geosparql: <http://jena.apache.org/geosparql#> .
+
+# Declare FalkorDBModel as a subclass of ja:Model for assembler compatibility
+falkor:FalkorDBModel rdfs:subClassOf ja:Model .
 
 # Fuseki server configuration
 [] rdf:type fuseki:Server ;
@@ -25,7 +41,7 @@
      :service
    ) .
 
-# The FalkorDB-backed service
+# The FalkorDB-backed service with three-layer onion architecture
 :service rdf:type fuseki:Service ;
     # Service name - endpoint will be available at /falkor
     fuseki:name "falkor" ;
@@ -58,16 +74,57 @@
         fuseki:name "data"
     ] ;
     
-    # Link to the FalkorDB dataset
-    fuseki:dataset :dataset_rdf .
+    # Link to the GeoSPARQL dataset (outer layer)
+    fuseki:dataset :geospatial_dataset .
 
-# RDF Dataset wrapping FalkorDB model
-# This is needed because Fuseki expects a Dataset, not a Model
+# Level 1 (Outer Layer): GeoSPARQL Dataset Configuration
+# This wraps the inference dataset with GeoSPARQL capabilities
+:geospatial_dataset rdf:type geosparql:GeosparqlDataset ;
+    # Enable GeoSPARQL inference (derives additional spatial relations)
+    geosparql:inference            true ;
+    
+    # Enable query rewriting for optimization
+    geosparql:queryRewrite         true ;
+    
+    # Enable spatial indexing for better performance
+    geosparql:indexEnabled         true ;
+    
+    # Whether to apply default geometry to features
+    geosparql:applyDefaultGeometry false ;
+
+    # Index sizes: [Geometry Literal, Geometry Transform, Query Rewrite]
+    # -1 means unlimited
+    geosparql:indexSizes           "-1,-1,-1" ;
+    
+    # Index expiry times in milliseconds
+    geosparql:indexExpires         "5000,5000,5000" ;
+
+    # Base dataset with inference model (middle layer)
+    geosparql:dataset :dataset_rdf .
+
+# RDF Dataset wrapping the inference model
+# This is needed because GeoSPARQL expects a Dataset, not a Model
 :dataset_rdf rdf:type ja:RDFDataset ;
-    ja:defaultGraph :falkor_db_model .
+    ja:defaultGraph :inf_model .
 
-# FalkorDB-backed model configuration
-:falkor_db_model rdf:type falkor:FalkorDBModel ;
+# Level 2 (Middle Layer): Inference Model with Generic Rule Reasoner
+# This model wraps the FalkorDB base model and applies forward chaining rules
+# Forward chaining (eager inference) materializes inferred triples immediately
+# when new data is added
+:inf_model rdf:type ja:InfModel ;
+    ja:baseModel :falkor_model ;
+    ja:reasoner [
+        # Use Generic Rule Reasoner
+        # See: https://jena.apache.org/documentation/inference/
+        ja:reasonerURL <http://jena.hpl.hp.com/2003/GenericRuleReasoner> ;
+        # Load forward chaining rules from file for eager inference
+        # Forward rules materialize grandfather relationships immediately
+        ja:rulesFrom <file:rules/grandfather_of_fwd.rule> ;
+    ] .
+
+# Level 3 (Core/Bottom Layer): FalkorDB-backed model configuration
+# This is the physical storage layer
+:falkor_model rdf:type falkor:FalkorDBModel ;
     # FalkorDB connection settings (all optional with defaults shown)
     falkor:host "localhost" ;  # Default: "localhost"
     falkor:port 6379 ;         # Default: 6379

@@ -49,12 +49,19 @@ All locations use real London coordinates:
 
 ### Prerequisites
 
-1. **Start FalkorDB**:
+1. **Start FalkorDB with tracing**:
    ```bash
-   docker run -p 6379:6379 -it --rm falkordb/falkordb:latest
+   docker-compose -f docker-compose-tracing.yaml up -d
    ```
 
-2. **Build the project**:
+2. **Install Java and Maven using SDKMAN**:
+   ```bash
+   curl -s "https://get.sdkman.io" | bash
+   source "$HOME/.sdkman/bin/sdkman-init.sh"
+   sdk env install
+   ```
+
+3. **Build the project**:
    ```bash
    mvn clean install
    ```
@@ -62,12 +69,11 @@ All locations use real London coordinates:
 ### Start Fuseki Server
 
 ```bash
-cd jena-fuseki-falkordb/target
-java -jar jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
-  --config ../src/main/resources/config-falkordb-lazy-inference-with-geosparql.ttl
+java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
+  --config jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl
 ```
 
-The server will start on the default port (3030) with the service available at `/falkor`.
+The server will start on port 3330 with the service available at `/falkor`.
 
 ### Load the Example Data
 

@@ -4,21 +4,34 @@ This document demonstrates key features of the Jena-FalkorDB adapter with practi
 
 ## Prerequisites
 
-1. **Start FalkorDB**:
+1. **Install Java and Maven using SDKMAN**:
    ```bash
-   docker run -p 6379:6379 -it --rm falkordb/falkordb:latest
+   # Install SDKMAN
+   curl -s "https://get.sdkman.io" | bash
+   source "$HOME/.sdkman/bin/sdkman-init.sh"
+   
+   # Install Java 21.0.5-graal and Maven 3.9.11 (from .sdkmanrc)
+   sdk env install
    ```
 
-2. **Build and Start Fuseki Server**:
+2. **Start FalkorDB with tracing**:
    ```bash
-   mvn clean install -DskipTests
-   java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar
+   docker-compose -f docker-compose-tracing.yaml up -d
    ```
 
-3. **Verify Fuseki is running**:
+3. **Build and Start Fuseki Server**:
+   ```bash
+   mvn clean install
+   java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
+     --config jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl
+   ```
+
+4. **Verify Fuseki is running**:
    ```bash
    curl -s http://localhost:3330/$/ping
    ```
+
+> **Note:** docker-compose must be running for tests to pass.
 
 ---
 

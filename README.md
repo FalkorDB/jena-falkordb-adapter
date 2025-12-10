@@ -129,22 +129,36 @@ A standalone SPARQL endpoint server built on Apache Jena Fuseki with FalkorDB as
 
 ## Prerequisites
 
-- Java 17 or newer (tested with 21 and 25)
-- Maven 3.6 or newer
-- FalkorDB running (via Docker or direct installation)
+### Install Java and Maven
 
-> **Tip:** You can use [sdkman](https://sdkman.io/) to easily install and manage Java and Maven versions.
-## Setup
-
-### 1. Install FalkorDB
-
-Using Docker (recommended):
+Install Java 21.0.5-graal and Maven 3.9.11 using SDKMAN (matching versions in `.sdkmanrc`):
 
 ```bash
-docker run -p 6379:6379 -it --rm falkordb/falkordb:latest
+# Install SDKMAN if not already installed
+curl -s "https://get.sdkman.io" | bash
+source "$HOME/.sdkman/bin/sdkman-init.sh"
+
+# Install Java and Maven from project's .sdkmanrc
+sdk env install
+
+# Verify installations
+java -version  # Should show: java version "21.0.5" ... (GraalVM)
+mvn -version   # Should show: Apache Maven 3.9.11
 ```
 
-Or install directly from: https://www.falkordb.com/
+### Install FalkorDB with Tracing
+
+Start FalkorDB and Jaeger using docker-compose (required for development and testing):
+
+```bash
+docker-compose -f docker-compose-tracing.yaml up -d
+```
+
+This starts:
+- **FalkorDB** on `localhost:6379`
+- **Jaeger UI** on `http://localhost:16686` (for viewing traces)
+
+> **Note:** The docker-compose setup is required for building and running tests.
 
 ### 2. Clone and Build the Project
 
@@ -238,22 +252,29 @@ Note: snapshots live in the OSSRH snapshots repository; once a release is publis
 
 The fastest way to get started with the Jena-FalkorDB Adapter:
 
-**Step 1:** Start FalkorDB
+**Step 1:** Start FalkorDB with Tracing
 ```bash
-docker run -p 6379:6379 -it --rm falkordb/falkordb:latest
+docker-compose -f docker-compose-tracing.yaml up -d
 ```
 
 **Step 2:** Clone and build the project
 ```bash
 git clone https://github.com/FalkorDB/jena-falkordb-adapter.git
 cd jena-falkordb-adapter
-mvn clean install -DskipTests
+
+# Install Java and Maven using SDKMAN (see Prerequisites)
+sdk env install
+
+mvn clean install
 ```
 
-**Step 3:** Run the demo or Fuseki server
+> **Note:** The docker-compose must be running for tests to pass.
+
+**Step 3:** Run the Fuseki server
 ```bash
-# Run the adapter demo
-java -jar jena-falkordb-adapter/target/jena-falkordb-adapter-0.2.0-SNAPSHOT.jar
+# Run Fuseki server with the three-layer config
+java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
+  --config jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl
 
 # OR run the Fuseki SPARQL server
 java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar
@@ -301,29 +322,7 @@ See [GETTING_STARTED.md](GETTING_STARTED.md) for detailed setup instructions, tr
 
 The `jena-fuseki-falkordb` module can be deployed as a standalone SPARQL endpoint server. There are several deployment options:
 
-### Deployment Option 1: Using the Bundled JAR
-
-The simplest deployment method using the pre-built executable JAR:
-
-```bash
-# Build the JAR
-mvn clean package -pl jena-fuseki-falkordb -am
-
-# Run with environment variables
-export FALKORDB_HOST=localhost
-export FALKORDB_PORT=6379
-export FALKORDB_GRAPH=my_knowledge_graph
-export FUSEKI_PORT=3330
-
-java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar
-```
-
-Access the server:
-- **Web UI:** http://localhost:3330/
-- **SPARQL Query Endpoint:** http://localhost:3330/falkor/query
-- **SPARQL Update Endpoint:** http://localhost:3330/falkor/update
-
-### Deployment Option 2: Using Configuration File
+### Deployment Option 1: Using Configuration File (Recommended)
 
 The recommended approach uses the included [config-falkordb.ttl](jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl) file which implements a three-layer onion architecture:
 
@@ -331,9 +330,9 @@ The recommended approach uses the included [config-falkordb.ttl](jena-fuseki-fal
 - **Layer 2 (Middle)**: Inference Model - applies forward chaining rules for eager inference (e.g., grandfather relationships)
 - **Layer 3 (Core)**: FalkorDB Model - physical storage layer connecting to Redis/FalkorDB
 
-**Step 1:** Start FalkorDB:
+**Step 1:** Start FalkorDB with tracing:
 ```bash
-docker run -p 6379:6379 -it --rm falkordb/falkordb:latest
+docker-compose -f docker-compose-tracing.yaml up -d
 ```
 
 **Step 2:** Start the server with the included configuration:

@@ -201,8 +201,10 @@ public final class FalkorDBOpExecutor extends OpExecutor {
             span.addEvent("Falling back to standard execution: " 
                 + e.getMessage());
 
-            if (LOGGER.isDebugEnabled()) {
-                LOGGER.debug("BGP pushdown failed, falling back: {}",
+            // Warn when optimization limitation causes fallback to Jena
+            if (LOGGER.isWarnEnabled()) {
+                LOGGER.warn("BGP query pushdown optimization not applicable, "
+                    + "using Jena fallback implementation: {}",
                     e.getMessage());
             }
 
@@ -261,6 +263,11 @@ public final class FalkorDBOpExecutor extends OpExecutor {
                 span.setAttribute(ATTR_FALLBACK, true);
                 span.addEvent("No filter expressions, falling back");
                 span.setStatus(StatusCode.OK);
+                
+                if (LOGGER.isWarnEnabled()) {
+                    LOGGER.warn("FILTER pushdown optimization not applicable "
+                        + "(no filter expressions), using Jena fallback implementation");
+                }
                 return super.execute(opFilter, input);
             }
             
@@ -270,6 +277,12 @@ public final class FalkorDBOpExecutor extends OpExecutor {
                 span.setAttribute(ATTR_FALLBACK, true);
                 span.addEvent("Multiple filter expressions not yet optimized");
                 span.setStatus(StatusCode.OK);
+                
+                if (LOGGER.isWarnEnabled()) {
+                    LOGGER.warn("FILTER pushdown optimization not applicable "
+                        + "(multiple filter expressions not yet supported), "
+                        + "using Jena fallback implementation");
+                }
                 return super.execute(opFilter, input);
             }
             
@@ -278,6 +291,12 @@ public final class FalkorDBOpExecutor extends OpExecutor {
                 span.setAttribute(ATTR_FALLBACK, true);
                 span.addEvent("Sub-operation is not BGP, falling back");
                 span.setStatus(StatusCode.OK);
+                
+                if (LOGGER.isWarnEnabled()) {
+                    LOGGER.warn("FILTER pushdown optimization not applicable "
+                        + "(sub-operation is not a Basic Graph Pattern), "
+                        + "using Jena fallback implementation");
+                }
                 return super.execute(opFilter, input);
             }
             
@@ -326,8 +345,10 @@ public final class FalkorDBOpExecutor extends OpExecutor {
             span.addEvent("Falling back to standard execution: " 
                 + e.getMessage());
 
-            if (LOGGER.isDebugEnabled()) {
-                LOGGER.debug("FILTER pushdown failed, falling back: {}",
+            // Warn when optimization limitation causes fallback to Jena
+            if (LOGGER.isWarnEnabled()) {
+                LOGGER.warn("FILTER pushdown optimization not applicable, "
+                    + "using Jena fallback implementation: {}",
                     e.getMessage());
             }
 
@@ -395,6 +416,12 @@ public final class FalkorDBOpExecutor extends OpExecutor {
                 span.setAttribute(ATTR_FALLBACK, true);
                 span.addEvent("Left or right is not BGP, falling back");
                 span.setStatus(StatusCode.OK);
+                
+                if (LOGGER.isWarnEnabled()) {
+                    LOGGER.warn("OPTIONAL pattern pushdown optimization not applicable "
+                        + "(left or right side is not a Basic Graph Pattern), "
+                        + "using Jena fallback implementation");
+                }
                 return super.execute(opLeftJoin, input);
             }
             
@@ -443,8 +470,10 @@ public final class FalkorDBOpExecutor extends OpExecutor {
             span.addEvent("Falling back to standard execution: " 
                 + e.getMessage());
 
-            if (LOGGER.isDebugEnabled()) {
-                LOGGER.debug("OPTIONAL pushdown failed, falling back: {}",
+            // Warn when optimization limitation causes fallback to Jena
+            if (LOGGER.isWarnEnabled()) {
+                LOGGER.warn("OPTIONAL pattern pushdown optimization not applicable, "
+                    + "using Jena fallback implementation: {}",
                     e.getMessage());
             }
 
@@ -502,6 +531,12 @@ public final class FalkorDBOpExecutor extends OpExecutor {
                 span.setAttribute(ATTR_FALLBACK, true);
                 span.addEvent("Left or right is not BGP, falling back");
                 span.setStatus(StatusCode.OK);
+                
+                if (LOGGER.isWarnEnabled()) {
+                    LOGGER.warn("UNION pattern pushdown optimization not applicable "
+                        + "(left or right side is not a Basic Graph Pattern), "
+                        + "using Jena fallback implementation");
+                }
                 return super.execute(opUnion, input);
             }
             
@@ -550,8 +585,10 @@ public final class FalkorDBOpExecutor extends OpExecutor {
             span.addEvent("Falling back to standard execution: " 
                 + e.getMessage());
 
-            if (LOGGER.isDebugEnabled()) {
-                LOGGER.debug("UNION pushdown failed, falling back: {}",
+            // Warn when optimization limitation causes fallback to Jena
+            if (LOGGER.isWarnEnabled()) {
+                LOGGER.warn("UNION pattern pushdown optimization not applicable, "
+                    + "using Jena fallback implementation: {}",
                     e.getMessage());
             }
 
@@ -607,6 +644,12 @@ public final class FalkorDBOpExecutor extends OpExecutor {
                 span.setAttribute(ATTR_FALLBACK, true);
                 span.addEvent("SubOp is not BGP, falling back");
                 span.setStatus(StatusCode.OK);
+                
+                if (LOGGER.isWarnEnabled()) {
+                    LOGGER.warn("GROUP BY aggregation pushdown optimization not applicable "
+                        + "(sub-operation is not a Basic Graph Pattern), "
+                        + "using Jena fallback implementation");
+                }
                 return super.execute(opGroup, input);
             }
 
@@ -681,8 +724,10 @@ public final class FalkorDBOpExecutor extends OpExecutor {
             span.addEvent("Falling back to standard execution: "
                 + e.getMessage());
 
-            if (LOGGER.isDebugEnabled()) {
-                LOGGER.debug("GROUP pushdown failed, falling back: {}",
+            // Warn when optimization limitation causes fallback to Jena
+            if (LOGGER.isWarnEnabled()) {
+                LOGGER.warn("GROUP BY aggregation pushdown optimization not applicable, "
+                    + "using Jena fallback implementation: {}",
                     e.getMessage());
             }
 

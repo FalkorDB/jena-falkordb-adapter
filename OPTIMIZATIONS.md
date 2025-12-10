@@ -1096,7 +1096,15 @@ This results in high data transfer and slow spatial queries.
 
 ### The Solution
 
-The geospatial pushdown mechanism translates GeoSPARQL functions to FalkorDB's native `point()` and `distance()` functions:
+The geospatial pushdown mechanism translates GeoSPARQL functions to FalkorDB's native `point()` and `distance()` functions.
+
+**Configuration Note**: In `config-falkordb.ttl`, the GeoSPARQL spatial index is **disabled** (`geosparql:indexEnabled false`) because:
+- ✅ Spatial queries are pushed down to FalkorDB's native graph operations
+- ✅ FalkorDB handles spatial indexing and queries natively  
+- ✅ Maintaining a separate GeoSPARQL in-memory index would be redundant and wasteful
+- ✅ Direct pushdown to FalkorDB is more efficient than two-layer processing
+
+This configuration ensures optimal performance by leveraging FalkorDB's native spatial capabilities without redundant overhead.
 
 **GeoSPARQL Query:**
 ```sparql

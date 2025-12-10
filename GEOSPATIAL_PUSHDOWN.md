@@ -63,12 +63,22 @@ The adapter currently supports translation of the following GeoSPARQL functions:
 
 ### Supported Geometry Types
 
-| Geometry Type | Support Level | Translation |
-|--------------|--------------|-------------|
-| POINT | ✅ Full support | Translated to `point({latitude, longitude})` |
-| POLYGON | ⚠️ Partial support | Bounding box extracted for approximation |
-| LINESTRING | ❌ Not yet supported | Planned for future release |
-| MULTIPOINT | ❌ Not yet supported | Planned for future release |
+| Geometry Type | Support Level | Translation | Bounding Box |
+|--------------|--------------|-------------|--------------|
+| POINT | ✅ Full support | Exact coordinates translated to `point({latitude, longitude})` | Single point |
+| POLYGON | ✅ Full support | Complete bounding box calculated; center point used as approximation | ✅ Min/max lat/lon |
+| LINESTRING | ✅ Full support | Complete bounding box calculated; center point used as approximation | ✅ Min/max lat/lon |
+| MULTIPOINT | ✅ Full support | Complete bounding box calculated; center point used as approximation | ✅ Min/max lat/lon |
+
+**Bounding Box Support:**  
+For POLYGON, LINESTRING, and MULTIPOINT geometries, the adapter calculates the complete bounding box (minimum and maximum latitude/longitude values). The center point of this bounding box is used as a representative location for the `point()` function. The bounding box parameters are stored and can be used for range queries:
+
+- `{prefix}_minLat` - Minimum latitude of bounding box
+- `{prefix}_maxLat` - Maximum latitude of bounding box
+- `{prefix}_minLon` - Minimum longitude of bounding box
+- `{prefix}_maxLon` - Maximum longitude of bounding box
+- `{prefix}_lat` - Center latitude (for point() expression)
+- `{prefix}_lon` - Center longitude (for point() expression)
 
 ## How It Works
 
@@ -207,6 +217,301 @@ try (QueryExecution qexec = QueryExecutionFactory.create(query, model)) {
     ResultSet results = qexec.execSelect();
     ResultSetFormatter.out(System.out, results, query);
 }
+```
+
+## Geometry Type Examples
+
+### Example 4: POINT Geometry
+
+The most straightforward geometry type with exact coordinates:
+
+**Turtle (TTL) Format:**
+```turtle
+@prefix ex: <http://example.org/> .
+@prefix geo: <http://www.opengis.net/ont/geosparql#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+ex:london a ex:Location ;
+    rdfs:label "London" ;
+    geo:hasGeometry [
+        geo:asWKT "POINT(-0.1278 51.5074)"^^geo:wktLiteral
+    ] .
+```
+
+**JSON-LD Format:**
+```json
+{
+  "@context": {
+    "ex": "http://example.org/",
+    "geo": "http://www.opengis.net/ont/geosparql#",
+    "rdfs": "http://www.w3.org/2000/01/rdf-schema#"
+  },
+  "@id": "ex:london",
+  "@type": "ex:Location",
+  "rdfs:label": "London",
+  "geo:hasGeometry": {
+    "geo:asWKT": {
+      "@value": "POINT(-0.1278 51.5074)",
+      "@type": "geo:wktLiteral"
+    }
+  }
+}
+```
+
+**RDF/XML Format:**
+```xml
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:ex="http://example.org/"
+         xmlns:geo="http://www.opengis.net/ont/geosparql#"
+         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#">
+  <ex:Location rdf:about="http://example.org/london">
+    <rdfs:label>London</rdfs:label>
+    <geo:hasGeometry>
+      <rdf:Description>
+        <geo:asWKT rdf:datatype="http://www.opengis.net/ont/geosparql#wktLiteral">POINT(-0.1278 51.5074)</geo:asWKT>
+      </rdf:Description>
+    </geo:hasGeometry>
+  </ex:Location>
+</rdf:RDF>
+```
+
+**Parsing Result:**
+- Exact coordinates: latitude = 51.5074, longitude = -0.1278
+- Generated Cypher: `point({latitude: 51.5074, longitude: -0.1278})`
+
+### Example 5: POLYGON Geometry
+
+Represents a closed area with complete bounding box calculation:
+
+**Turtle (TTL) Format:**
+```turtle
+@prefix ex: <http://example.org/> .
+@prefix geo: <http://www.opengis.net/ont/geosparql#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+ex:hyde_park a ex:Park ;
+    rdfs:label "Hyde Park" ;
+    geo:hasGeometry [
+        geo:asWKT "POLYGON((-0.1791 51.5074, -0.1791 51.5123, -0.1626 51.5123, -0.1626 51.5074, -0.1791 51.5074))"^^geo:wktLiteral
+    ] .
+```
+
+**JSON-LD Format:**
+```json
+{
+  "@context": {
+    "ex": "http://example.org/",
+    "geo": "http://www.opengis.net/ont/geosparql#",
+    "rdfs": "http://www.w3.org/2000/01/rdf-schema#"
+  },
+  "@id": "ex:hyde_park",
+  "@type": "ex:Park",
+  "rdfs:label": "Hyde Park",
+  "geo:hasGeometry": {
+    "geo:asWKT": {
+      "@value": "POLYGON((-0.1791 51.5074, -0.1791 51.5123, -0.1626 51.5123, -0.1626 51.5074, -0.1791 51.5074))",
+      "@type": "geo:wktLiteral"
+    }
+  }
+}
+```
+
+**RDF/XML Format:**
+```xml
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:ex="http://example.org/"
+         xmlns:geo="http://www.opengis.net/ont/geosparql#"
+         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#">
+  <ex:Park rdf:about="http://example.org/hyde_park">
+    <rdfs:label>Hyde Park</rdfs:label>
+    <geo:hasGeometry>
+      <rdf:Description>
+        <geo:asWKT rdf:datatype="http://www.opengis.net/ont/geosparql#wktLiteral">POLYGON((-0.1791 51.5074, -0.1791 51.5123, -0.1626 51.5123, -0.1626 51.5074, -0.1791 51.5074))</geo:asWKT>
+      </rdf:Description>
+    </geo:hasGeometry>
+  </ex:Park>
+</rdf:RDF>
+```
+
+**Parsing Result:**
+- Bounding box: minLat = 51.5074, maxLat = 51.5123, minLon = -0.1791, maxLon = -0.1626
+- Center point: latitude = 51.50985, longitude = -0.17085
+- Generated Cypher: `point({latitude: 51.50985, longitude: -0.17085})`
+- Bounding box parameters stored for range queries
+
+### Example 6: LINESTRING Geometry
+
+Represents a route or path with bounding box calculation:
+
+**Turtle (TTL) Format:**
+```turtle
+@prefix ex: <http://example.org/> .
+@prefix geo: <http://www.opengis.net/ont/geosparql#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+ex:thames_path a ex:Route ;
+    rdfs:label "Thames Path" ;
+    geo:hasGeometry [
+        geo:asWKT "LINESTRING(-0.1278 51.5074, -0.0759 51.5048, -0.0277 51.5033, 0.0000 51.4934)"^^geo:wktLiteral
+    ] .
+```
+
+**JSON-LD Format:**
+```json
+{
+  "@context": {
+    "ex": "http://example.org/",
+    "geo": "http://www.opengis.net/ont/geosparql#",
+    "rdfs": "http://www.w3.org/2000/01/rdf-schema#"
+  },
+  "@id": "ex:thames_path",
+  "@type": "ex:Route",
+  "rdfs:label": "Thames Path",
+  "geo:hasGeometry": {
+    "geo:asWKT": {
+      "@value": "LINESTRING(-0.1278 51.5074, -0.0759 51.5048, -0.0277 51.5033, 0.0000 51.4934)",
+      "@type": "geo:wktLiteral"
+    }
+  }
+}
+```
+
+**RDF/XML Format:**
+```xml
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:ex="http://example.org/"
+         xmlns:geo="http://www.opengis.net/ont/geosparql#"
+         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#">
+  <ex:Route rdf:about="http://example.org/thames_path">
+    <rdfs:label>Thames Path</rdfs:label>
+    <geo:hasGeometry>
+      <rdf:Description>
+        <geo:asWKT rdf:datatype="http://www.opengis.net/ont/geosparql#wktLiteral">LINESTRING(-0.1278 51.5074, -0.0759 51.5048, -0.0277 51.5033, 0.0000 51.4934)</geo:asWKT>
+      </rdf:Description>
+    </geo:hasGeometry>
+  </ex:Route>
+</rdf:RDF>
+```
+
+**Parsing Result:**
+- Bounding box: minLat = 51.4934, maxLat = 51.5074, minLon = -0.1278, maxLon = 0.0000
+- Center point: latitude = 51.5004, longitude = -0.0639
+- Generated Cypher: `point({latitude: 51.5004, longitude: -0.0639})`
+- Bounding box parameters stored for range queries
+
+### Example 7: MULTIPOINT Geometry
+
+Represents multiple discrete points with bounding box calculation:
+
+**Turtle (TTL) Format:**
+```turtle
+@prefix ex: <http://example.org/> .
+@prefix geo: <http://www.opengis.net/ont/geosparql#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+ex:european_capitals a ex:PointSet ;
+    rdfs:label "European Capitals" ;
+    geo:hasGeometry [
+        geo:asWKT "MULTIPOINT((-0.1278 51.5074), (2.3522 48.8566), (13.4050 52.5200))"^^geo:wktLiteral
+    ] .
+```
+
+**JSON-LD Format:**
+```json
+{
+  "@context": {
+    "ex": "http://example.org/",
+    "geo": "http://www.opengis.net/ont/geosparql#",
+    "rdfs": "http://www.w3.org/2000/01/rdf-schema#"
+  },
+  "@id": "ex:european_capitals",
+  "@type": "ex:PointSet",
+  "rdfs:label": "European Capitals",
+  "geo:hasGeometry": {
+    "geo:asWKT": {
+      "@value": "MULTIPOINT((-0.1278 51.5074), (2.3522 48.8566), (13.4050 52.5200))",
+      "@type": "geo:wktLiteral"
+    }
+  }
+}
+```
+
+**RDF/XML Format:**
+```xml
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:ex="http://example.org/"
+         xmlns:geo="http://www.opengis.net/ont/geosparql#"
+         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#">
+  <ex:PointSet rdf:about="http://example.org/european_capitals">
+    <rdfs:label>European Capitals</rdfs:label>
+    <geo:hasGeometry>
+      <rdf:Description>
+        <geo:asWKT rdf:datatype="http://www.opengis.net/ont/geosparql#wktLiteral">MULTIPOINT((-0.1278 51.5074), (2.3522 48.8566), (13.4050 52.5200))</geo:asWKT>
+      </rdf:Description>
+    </geo:hasGeometry>
+  </ex:PointSet>
+</rdf:RDF>
+```
+
+**Parsing Result:**
+- Bounding box: minLat = 48.8566, maxLat = 52.5200, minLon = -0.1278, maxLon = 13.4050
+- Center point: latitude = 50.6883, longitude = 6.6386
+- Generated Cypher: `point({latitude: 50.6883, longitude: 6.6386})`
+- Bounding box parameters stored for range queries
+
+### Example 8: Querying All Geometry Types
+
+**SPARQL Query:**
+```sparql
+PREFIX geo: <http://www.opengis.net/ont/geosparql#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+SELECT ?location ?label ?wkt WHERE {
+  ?location geo:hasGeometry ?geom .
+  ?location rdfs:label ?label .
+  ?geom geo:asWKT ?wkt .
+}
+ORDER BY ?label
+```
+
+**Java Code:**
+```java
+import com.falkordb.jena.FalkorDBModelFactory;
+import com.falkordb.jena.query.GeoSPARQLToCypherTranslator;
+import org.apache.jena.rdf.model.*;
+import org.apache.jena.query.*;
+
+Model model = FalkorDBModelFactory.createModel("geo_graph");
+
+// Parse and extract bounding box from any WKT geometry
+String polygonWKT = "POLYGON((-0.1791 51.5074, -0.1791 51.5123, -0.1626 51.5123, -0.1626 51.5074, -0.1791 51.5074))";
+double[] bbox = GeoSPARQLToCypherTranslator.extractBoundingBox(polygonWKT);
+
+System.out.println("Bounding Box:");
+System.out.println("  Min Latitude: " + bbox[0]);
+System.out.println("  Max Latitude: " + bbox[1]);
+System.out.println("  Min Longitude: " + bbox[2]);
+System.out.println("  Max Longitude: " + bbox[3]);
+
+// Extract center point
+Double centerLat = GeoSPARQLToCypherTranslator.extractLatitude(polygonWKT);
+Double centerLon = GeoSPARQLToCypherTranslator.extractLongitude(polygonWKT);
+
+System.out.println("Center Point:");
+System.out.println("  Latitude: " + centerLat);
+System.out.println("  Longitude: " + centerLon);
+```
+
+**Output:**
+```
+Bounding Box:
+  Min Latitude: 51.5074
+  Max Latitude: 51.5123
+  Min Longitude: -0.1791
+  Max Longitude: -0.1626
+Center Point:
+  Latitude: 51.50985
+  Longitude: -0.17085
 ```
 
 ## Advanced Usage

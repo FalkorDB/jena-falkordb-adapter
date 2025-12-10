@@ -59,15 +59,53 @@ mvn clean install
 mvn exec:java -Dexec.mainClass="com.falkordb.samples.GeospatialPushdownExample"
 ```
 
+## Supported Geometry Types
+
+This example demonstrates **all 4 supported WKT geometry types**:
+
+| Type | Example | Use Case | Bounding Box |
+|------|---------|----------|--------------|
+| POINT | `POINT(-0.1278 51.5074)` | Exact locations (cities, landmarks) | Single point |
+| POLYGON | `POLYGON((lon1 lat1, ...))` | Areas, regions, parks, boundaries | ✅ Calculated |
+| LINESTRING | `LINESTRING(lon1 lat1, ...)` | Routes, paths, roads, rivers | ✅ Calculated |
+| MULTIPOINT | `MULTIPOINT((lon1 lat1), ...)` | Collections of discrete points | ✅ Calculated |
+
+**Bounding Box Support:**  
+For complex geometries (POLYGON, LINESTRING, MULTIPOINT), the adapter automatically:
+1. Calculates the complete bounding box (min/max latitude/longitude)
+2. Stores all bounding box parameters (minLat, maxLat, minLon, maxLon)
+3. Computes the center point as a representative location
+4. Enables efficient spatial filtering and range queries
+
 ## Sample Data
 
-Sample data includes major cities with their coordinates:
+### POINT Geometries
+Major European cities with exact coordinates:
 
-- London: 51.5074°N, 0.1278°W
-- Paris: 48.8566°N, 2.3522°E
-- Berlin: 52.5200°N, 13.4050°E
-- Madrid: 40.4168°N, 3.7038°W
-- Rome: 41.9028°N, 12.4964°E
+- **London**: 51.5074°N, 0.1278°W
+- **Paris**: 48.8566°N, 2.3522°E
+- **Berlin**: 52.5200°N, 13.4050°E
+- **Madrid**: 40.4168°N, 3.7038°W
+- **Rome**: 41.9028°N, 12.4964°E
+
+### POLYGON Geometries
+- **Hyde Park (London)**: Rectangular park area
+  - WKT: `POLYGON((-0.1791 51.5074, -0.1791 51.5123, -0.1626 51.5123, -0.1626 51.5074, -0.1791 51.5074))`
+  - Bounding box: 51.5074°N-51.5123°N, 0.1791°W-0.1626°W
+  - Center point: 51.50985°N, 0.17085°W
+
+### LINESTRING Geometries
+- **Thames Path**: Multi-segment route along the River Thames
+  - WKT: `LINESTRING(-0.1278 51.5074, -0.0759 51.5048, -0.0277 51.5033, 0.0000 51.4934)`
+  - Bounding box: 51.4934°N-51.5074°N, 0.1278°W-0°E
+  - Center point: 51.5004°N, 0.0639°W
+
+### MULTIPOINT Geometries
+- **European Capitals**: Collection of three capital city locations
+  - WKT: `MULTIPOINT((-0.1278 51.5074), (2.3522 48.8566), (13.4050 52.5200))`
+  - Cities: London, Paris, Berlin
+  - Bounding box: 48.8566°N-52.5200°N, 0.1278°W-13.4050°E
+  - Center point: 50.6883°N, 6.6386°E
 
 ## Data Formats
 

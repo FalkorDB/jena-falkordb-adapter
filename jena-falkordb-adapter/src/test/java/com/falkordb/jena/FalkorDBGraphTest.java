@@ -200,11 +200,7 @@ public class FalkorDBGraphTest {
             
             // Query for all resources of type Person
             var iter = model.listStatements(null, RDF.type, personType);
-            var count = 0;
-            while (iter.hasNext()) {
-                iter.next();
-                count++;
-            }
+            var count = iter.toList().size();
             
             assertEquals(2, count, "Should find two Person instances");
         } finally {

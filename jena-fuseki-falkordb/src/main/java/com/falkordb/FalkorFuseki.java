@@ -13,6 +13,8 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URL;
 import java.net.URLConnection;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import org.apache.jena.fuseki.main.FusekiServer;
 import org.apache.jena.query.Dataset;
 import org.apache.jena.query.DatasetFactory;
@@ -343,9 +345,27 @@ public final class FalkorFuseki {
             if (pathInfo == null || "/".equals(pathInfo)) {
                 pathInfo = "/index.html";
             }
-
+            
+            // Sanitize pathInfo
+            // Reject suspicious paths
+            if (pathInfo.contains("..") || pathInfo.contains("\\") || pathInfo.contains("%") ) {
+                response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid resource path");
+                return;
+            }
+            // Remove leading slashes so resource path is always relative within resourceBase
+            String sanitizedPathInfo = pathInfo;
+            while (sanitizedPathInfo.startsWith("/")) {
+                sanitizedPathInfo = sanitizedPathInfo.substring(1);
+            }
+            // Normalize path (defense in depth)
+            Path normalized = Paths.get(sanitizedPathInfo).normalize();
+            // Prevent directory traversal
+            if (normalized.isAbsolute() || normalized.startsWith("..")) {
+                response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid resource path");
+                return;
+            }
             // Build resource path
-            String resourcePath = resourceBase + pathInfo;
+            String resourcePath = resourceBase + "/" + normalized.toString().replace("\\", "/");
 
             // Try to load resource from classpath
             URL resource = getClass().getClassLoader().getResource(resourcePath);

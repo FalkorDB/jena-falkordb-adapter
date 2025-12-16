@@ -32,7 +32,7 @@ if command -v java &> /dev/null; then
     JAVA_VERSION=$(java -version 2>&1 | awk -F '"' '/version/ {print $2}')
     print_success "Java found: $JAVA_VERSION"
 else
-    print_error "Java not found. Please install Java 21 or higher."
+    print_error "Java not found. Please install Java 17 or higher."
     exit 1
 fi
 

@@ -3,16 +3,16 @@ package com.falkordb;
 import com.falkordb.jena.FalkorDBModelFactory;
 import com.falkordb.jena.tracing.TracingUtil;
 import com.falkordb.tracing.FusekiTracingFilter;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServlet;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.URL;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.util.Enumeration;
-import java.util.jar.JarEntry;
-import java.util.jar.JarFile;
+import java.net.URLConnection;
 import org.apache.jena.fuseki.main.FusekiServer;
 import org.apache.jena.query.Dataset;
 import org.apache.jena.query.DatasetFactory;
@@ -250,88 +250,88 @@ public final class FalkorFuseki {
     }
 
     /**
-     * Setup the Fuseki web UI by extracting webapp resources from JAR.
-     * The webapp resources are packaged in the JAR under the "webapp/" directory
-     * from the jena-fuseki-ui dependency. This method extracts them to a
-     * temporary directory and configures the server to serve them.
+     * Setup the Fuseki web UI by serving webapp resources from classpath.
+     * This creates a custom servlet that serves the webapp files directly
+     * from the JAR without extraction.
      *
      * @param serverBuilder the FusekiServer.Builder to configure
      */
     private static void setupWebappUI(
             final FusekiServer.Builder serverBuilder) {
-        try {
-            // Get the webapp resource URL
-            URL webappUrl = FalkorFuseki.class.getClassLoader()
-                .getResource("webapp/");
-            
-            if (webappUrl == null) {
-                if (LOGGER.isWarnEnabled()) {
-                    LOGGER.warn("Webapp resources not found in classpath. "
-                        + "Web UI will not be available.");
-                }
-                return;
-            }
-
-            String protocol = webappUrl.getProtocol();
-            
-            if ("file".equals(protocol)) {
-                // Running from filesystem (development mode)
-                String webappPath = webappUrl.getPath();
-                serverBuilder.staticFileBase(webappPath);
-                if (LOGGER.isInfoEnabled()) {
-                    LOGGER.info("Serving Fuseki UI from: {}", webappPath);
-                }
-            } else if ("jar".equals(protocol)) {
-                // Running from JAR - extract webapp to temp directory
-                Path tempDir = Files.createTempDirectory("fuseki-webapp-");
-                tempDir.toFile().deleteOnExit();
-                
-                extractWebappFromJar(tempDir);
-                
-                // Point to the webapp subdirectory within the temp directory
-                String webappPath = tempDir.resolve("webapp").toString();
-                serverBuilder.staticFileBase(webappPath);
-                if (LOGGER.isInfoEnabled()) {
-                    LOGGER.info("Serving Fuseki UI from extracted resources: {}",
-                        webappPath);
-                }
-            }
-        } catch (IOException e) {
+        // Check if webapp resources are available in classpath
+        URL webappUrl = FalkorFuseki.class.getClassLoader()
+            .getResource("webapp/index.html");
+        
+        if (webappUrl == null) {
             if (LOGGER.isWarnEnabled()) {
-                LOGGER.warn("Failed to setup webapp UI: {}", e.getMessage());
+                LOGGER.warn("Webapp resources not found in classpath. "
+                    + "Web UI will not be available.");
             }
+            return;
+        }
+
+        // Add a servlet that serves static files from classpath
+        serverBuilder.addServlet("/*", new ClasspathResourceServlet("webapp"));
+        
+        if (LOGGER.isInfoEnabled()) {
+            LOGGER.info("Serving Fuseki UI from classpath resources");
         }
     }
 
     /**
-     * Extract webapp resources from the JAR to a temporary directory.
-     *
-     * @param targetDir the directory to extract resources to
-     * @throws IOException if extraction fails
+     * Servlet that serves static resources from the classpath.
+     * This allows serving the webapp files directly from the JAR
+     * without extracting them to the filesystem.
      */
-    private static void extractWebappFromJar(final Path targetDir)
-            throws IOException {
-        // Get the JAR file containing this class
-        String jarPath = FalkorFuseki.class.getProtectionDomain()
-            .getCodeSource().getLocation().getPath();
-        
-        try (JarFile jarFile = new JarFile(jarPath)) {
-            Enumeration<JarEntry> entries = jarFile.entries();
-            
-            while (entries.hasMoreElements()) {
-                JarEntry entry = entries.nextElement();
-                String name = entry.getName();
-                
-                // Extract only webapp/ resources
-                if (name.startsWith("webapp/") && !entry.isDirectory()) {
-                    Path targetFile = targetDir.resolve(name);
-                    Files.createDirectories(targetFile.getParent());
-                    
-                    try (InputStream is = jarFile.getInputStream(entry)) {
-                        Files.copy(is, targetFile,
-                            StandardCopyOption.REPLACE_EXISTING);
-                        targetFile.toFile().deleteOnExit();
-                    }
+    private static class ClasspathResourceServlet extends HttpServlet {
+        private static final long serialVersionUID = 1L;
+        private final String resourceBase;
+
+        /**
+         * Create a new ClasspathResourceServlet.
+         *
+         * @param resourceBase the base path in the classpath (e.g., "webapp")
+         */
+        ClasspathResourceServlet(final String resourceBase) {
+            this.resourceBase = resourceBase;
+        }
+
+        @Override
+        protected void doGet(final HttpServletRequest request,
+                final HttpServletResponse response)
+                throws ServletException, IOException {
+            String pathInfo = request.getPathInfo();
+            if (pathInfo == null || "/".equals(pathInfo)) {
+                pathInfo = "/index.html";
+            }
+
+            // Build resource path
+            String resourcePath = resourceBase + pathInfo;
+
+            // Try to load resource from classpath
+            URL resource = getClass().getClassLoader().getResource(resourcePath);
+            if (resource == null) {
+                response.sendError(HttpServletResponse.SC_NOT_FOUND);
+                return;
+            }
+
+            // Set content type based on file extension
+            String contentType = getServletContext().getMimeType(pathInfo);
+            if (contentType == null) {
+                contentType = URLConnection.guessContentTypeFromName(pathInfo);
+            }
+            if (contentType == null) {
+                contentType = "application/octet-stream";
+            }
+            response.setContentType(contentType);
+
+            // Stream the resource content
+            try (InputStream in = resource.openStream();
+                 OutputStream out = response.getOutputStream()) {
+                byte[] buffer = new byte[8192];
+                int bytesRead;
+                while ((bytesRead = in.read(buffer)) != -1) {
+                    out.write(buffer, 0, bytesRead);
                 }
             }
         }

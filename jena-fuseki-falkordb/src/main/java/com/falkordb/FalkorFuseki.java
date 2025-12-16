@@ -254,23 +254,32 @@ public final class FalkorFuseki {
      * This creates a custom servlet that serves the webapp files directly
      * from the JAR without extraction.
      *
+     * <p>The servlet is registered with a wildcard pattern (/*) but will only
+     * handle requests that don't match Fuseki's dataset endpoints (e.g., /falkor/*)
+     * because those are registered first with higher priority.</p>
+     *
      * @param serverBuilder the FusekiServer.Builder to configure
      */
     private static void setupWebappUI(
             final FusekiServer.Builder serverBuilder) {
         // Check if webapp resources are available in classpath
+        // The jena-fuseki-ui module should provide index.html and other resources
         URL webappUrl = FalkorFuseki.class.getClassLoader()
             .getResource("webapp/index.html");
         
         if (webappUrl == null) {
             if (LOGGER.isWarnEnabled()) {
                 LOGGER.warn("Webapp resources not found in classpath. "
-                    + "Web UI will not be available.");
+                    + "Web UI will not be available. "
+                    + "Ensure jena-fuseki-ui dependency is included.");
             }
             return;
         }
 
         // Add a servlet that serves static files from classpath
+        // This will handle requests to root (/) and static resources (/static/*)
+        // but not interfere with dataset endpoints like /falkor/* which are
+        // registered with higher priority by Fuseki
         serverBuilder.addServlet("/*", new ClasspathResourceServlet("webapp"));
         
         if (LOGGER.isInfoEnabled()) {

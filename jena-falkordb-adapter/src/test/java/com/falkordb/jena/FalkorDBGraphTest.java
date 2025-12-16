@@ -666,6 +666,74 @@ public class FalkorDBGraphTest {
             assertNotNull(resource.getProperty(prop1));
             assertNotNull(resource.getProperty(prop2));
             assertNotNull(resource.getProperty(prop3));
+            
+            // Query with patterns to ensure findPropertyTriples is called
+            var iter1 = model.listStatements(resource, prop1, (org.apache.jena.rdf.model.RDFNode) null);
+            assertTrue(iter1.hasNext(), "Should find integer property via query");
+            assertEquals(100, iter1.next().getInt());
+            
+            var iter2 = model.listStatements(resource, prop2, (org.apache.jena.rdf.model.RDFNode) null);
+            assertTrue(iter2.hasNext(), "Should find double property via query");
+            assertEquals(200.5, iter2.next().getDouble(), 0.01);
+            
+            var iter3 = model.listStatements(resource, prop3, (org.apache.jena.rdf.model.RDFNode) null);
+            assertTrue(iter3.hasNext(), "Should find boolean property via query");
+            assertTrue(iter3.next().getBoolean());
+        } finally {
+            model.close();
+        }
+    }
+
+    @Test
+    @DisplayName("Test all type patterns are exercised in retrieval")
+    public void testTypedLiteralRetrieval() {
+        var model = createTestModel();
+        try {
+            var resource = model.createResource("http://test.example.org/typed1");
+            
+            // Add one of each type
+            resource.addProperty(model.createProperty("http://test.example.org/int"), model.createTypedLiteral(123));
+            resource.addProperty(model.createProperty("http://test.example.org/long"), model.createTypedLiteral(456789L));
+            resource.addProperty(model.createProperty("http://test.example.org/double"), model.createTypedLiteral(3.14));
+            resource.addProperty(model.createProperty("http://test.example.org/float"), model.createTypedLiteral(2.5f));
+            resource.addProperty(model.createProperty("http://test.example.org/bool"), model.createTypedLiteral(false));
+            resource.addProperty(model.createProperty("http://test.example.org/string"), "test");
+            
+            // Query all properties - this exercises findPropertyTriples with all type branches
+            var allStmts = model.listStatements(resource, null, (org.apache.jena.rdf.model.RDFNode) null);
+            var stmtList = allStmts.toList();
+            
+            assertEquals(6, stmtList.size(), "Should retrieve all 6 properties");
+            
+            // Verify each type is correctly retrieved (exercises instanceof patterns)
+            boolean hasInt = false, hasLong = false, hasDouble = false;
+            boolean hasFloat = false, hasBool = false, hasString = false;
+            
+            for (var stmt : stmtList) {
+                var obj = stmt.getObject();
+                if (obj.isLiteral()) {
+                    var lit = obj.asLiteral();
+                    var val = lit.getValue();
+                    
+                    // Check the actual value type
+                    if (val instanceof Integer || val instanceof Long) {
+                        hasInt = true;
+                    } else if (val instanceof Double) {
+                        hasDouble = true;
+                    } else if (val instanceof Float) {
+                        hasFloat = true;
+                    } else if (val instanceof Boolean) {
+                        hasBool = true;
+                    } else if (val instanceof String) {
+                        hasString = true;
+                    }
+                }
+            }
+            
+            assertTrue(hasInt, "Should have integer/long type");
+            assertTrue(hasDouble || hasFloat, "Should have double or float type");
+            assertTrue(hasBool, "Should have boolean type");
+            assertTrue(hasString, "Should have string type");
         } finally {
             model.close();
         }

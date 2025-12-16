@@ -333,7 +333,9 @@ public final class FalkorFuseki {
             // Skip Fuseki admin endpoints (starting with /$) and dataset endpoints
             if (pathInfo != null && (pathInfo.startsWith("/$") 
                     || pathInfo.startsWith("/falkor"))) {
-                // Don't handle admin or dataset endpoints - let Fuseki handle them
+                // Return 404 to allow Jetty to pass the request to the next handler
+                // (Fuseki's admin and dataset handlers) in the filter chain.
+                // This is the proper way to "pass through" in a servlet.
                 response.sendError(HttpServletResponse.SC_NOT_FOUND);
                 return;
             }
@@ -448,7 +450,21 @@ public final class FalkorFuseki {
             if (LOGGER.isInfoEnabled()) {
                 LOGGER.info("Fuseki admin module enabled");
             }
-        } catch (Exception e) {
+        } catch (ClassNotFoundException e) {
+            if (LOGGER.isWarnEnabled()) {
+                LOGGER.warn("Fuseki admin module class not found: {}. "
+                    + "Server management endpoints may not be available. "
+                    + "Ensure jena-fuseki-main dependency is included.", 
+                    e.getMessage());
+            }
+        } catch (NoSuchMethodException e) {
+            if (LOGGER.isWarnEnabled()) {
+                LOGGER.warn("Fuseki admin module method not found: {}. "
+                    + "This may indicate an incompatible Jena version. "
+                    + "Server management endpoints may not be available.", 
+                    e.getMessage());
+            }
+        } catch (ReflectiveOperationException e) {
             if (LOGGER.isWarnEnabled()) {
                 LOGGER.warn("Failed to enable Fuseki admin module: {}. "
                     + "Server management endpoints may not be available.",

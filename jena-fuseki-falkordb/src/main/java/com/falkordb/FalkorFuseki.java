@@ -4,7 +4,15 @@ import com.falkordb.jena.FalkorDBModelFactory;
 import com.falkordb.jena.tracing.TracingUtil;
 import com.falkordb.tracing.FusekiTracingFilter;
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
 import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.util.Enumeration;
+import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
 import org.apache.jena.fuseki.main.FusekiServer;
 import org.apache.jena.query.Dataset;
 import org.apache.jena.query.DatasetFactory;
@@ -175,6 +183,9 @@ public final class FalkorFuseki {
             .port(fusekiPort)
             .parseConfigFile(configFile.getAbsolutePath());
 
+        // Enable Fuseki UI by serving webapp resources from classpath
+        setupWebappUI(serverBuilder);
+
         // Configure tracing
         configureTracing(serverBuilder);
 
@@ -223,6 +234,9 @@ public final class FalkorFuseki {
                 .port(fusekiPort)
                 .add(DEFAULT_DATASET_PATH, ds);
 
+        // Enable Fuseki UI by serving webapp resources from classpath
+        setupWebappUI(serverBuilder);
+
         // Configure tracing
         configureTracing(serverBuilder);
 
@@ -232,6 +246,94 @@ public final class FalkorFuseki {
         if (LOGGER.isInfoEnabled()) {
             LOGGER.info("Server running. SPARQL endpoint: "
                 + "http://localhost:{}{}", fusekiPort, DEFAULT_DATASET_PATH);
+        }
+    }
+
+    /**
+     * Setup the Fuseki web UI by extracting webapp resources from JAR.
+     * The webapp resources are packaged in the JAR under the "webapp/" directory
+     * from the jena-fuseki-ui dependency. This method extracts them to a
+     * temporary directory and configures the server to serve them.
+     *
+     * @param serverBuilder the FusekiServer.Builder to configure
+     */
+    private static void setupWebappUI(
+            final FusekiServer.Builder serverBuilder) {
+        try {
+            // Get the webapp resource URL
+            URL webappUrl = FalkorFuseki.class.getClassLoader()
+                .getResource("webapp/");
+            
+            if (webappUrl == null) {
+                if (LOGGER.isWarnEnabled()) {
+                    LOGGER.warn("Webapp resources not found in classpath. "
+                        + "Web UI will not be available.");
+                }
+                return;
+            }
+
+            String protocol = webappUrl.getProtocol();
+            
+            if ("file".equals(protocol)) {
+                // Running from filesystem (development mode)
+                String webappPath = webappUrl.getPath();
+                serverBuilder.staticFileBase(webappPath);
+                if (LOGGER.isInfoEnabled()) {
+                    LOGGER.info("Serving Fuseki UI from: {}", webappPath);
+                }
+            } else if ("jar".equals(protocol)) {
+                // Running from JAR - extract webapp to temp directory
+                Path tempDir = Files.createTempDirectory("fuseki-webapp-");
+                tempDir.toFile().deleteOnExit();
+                
+                extractWebappFromJar(tempDir);
+                
+                // Point to the webapp subdirectory within the temp directory
+                String webappPath = tempDir.resolve("webapp").toString();
+                serverBuilder.staticFileBase(webappPath);
+                if (LOGGER.isInfoEnabled()) {
+                    LOGGER.info("Serving Fuseki UI from extracted resources: {}",
+                        webappPath);
+                }
+            }
+        } catch (IOException e) {
+            if (LOGGER.isWarnEnabled()) {
+                LOGGER.warn("Failed to setup webapp UI: {}", e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Extract webapp resources from the JAR to a temporary directory.
+     *
+     * @param targetDir the directory to extract resources to
+     * @throws IOException if extraction fails
+     */
+    private static void extractWebappFromJar(final Path targetDir)
+            throws IOException {
+        // Get the JAR file containing this class
+        String jarPath = FalkorFuseki.class.getProtectionDomain()
+            .getCodeSource().getLocation().getPath();
+        
+        try (JarFile jarFile = new JarFile(jarPath)) {
+            Enumeration<JarEntry> entries = jarFile.entries();
+            
+            while (entries.hasMoreElements()) {
+                JarEntry entry = entries.nextElement();
+                String name = entry.getName();
+                
+                // Extract only webapp/ resources
+                if (name.startsWith("webapp/") && !entry.isDirectory()) {
+                    Path targetFile = targetDir.resolve(name);
+                    Files.createDirectories(targetFile.getParent());
+                    
+                    try (InputStream is = jarFile.getInputStream(entry)) {
+                        Files.copy(is, targetFile,
+                            StandardCopyOption.REPLACE_EXISTING);
+                        targetFile.toFile().deleteOnExit();
+                    }
+                }
+            }
         }
     }
 

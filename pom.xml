@@ -55,8 +55,10 @@
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <!-- Java 21 is required for production use -->
-        <maven.compiler.release>21</maven.compiler.release>
+        <!-- Java 25 with all modern features enabled -->
+        <maven.compiler.release>25</maven.compiler.release>
+        <maven.compiler.source>25</maven.compiler.source>
+        <maven.compiler.target>25</maven.compiler.target>
         <jena.version>5.6.0</jena.version>
         <jfalkordb.version>0.6.0</jfalkordb.version>
         <slf4j.version>2.0.17</slf4j.version>

@@ -200,11 +200,7 @@ public class FalkorDBGraphTest {
             
             // Query for all resources of type Person
             var iter = model.listStatements(null, RDF.type, personType);
-            var count = 0;
-            while (iter.hasNext()) {
-                iter.next();
-                count++;
-            }
+            var count = iter.toList().size();
             
             assertEquals(2, count, "Should find two Person instances");
         } finally {
@@ -566,6 +562,178 @@ public class FalkorDBGraphTest {
             
             model.remove(stmt);
             assertFalse(model.contains(stmt), "Should not contain statement after removing");
+        } finally {
+            model.close();
+        }
+    }
+
+    @Test
+    @DisplayName("Test storing and retrieving all typed literals")
+    public void testAllTypedLiterals() {
+        var model = createTestModel();
+        try {
+            var resource = model.createResource("http://test.example.org/resource1");
+            
+            // Test Integer
+            var intProp = model.createProperty("http://test.example.org/intValue");
+            resource.addProperty(intProp, model.createTypedLiteral(42));
+            
+            // Test Long
+            var longProp = model.createProperty("http://test.example.org/longValue");
+            resource.addProperty(longProp, model.createTypedLiteral(9999999999L));
+            
+            // Test Double
+            var doubleProp = model.createProperty("http://test.example.org/doubleValue");
+            resource.addProperty(doubleProp, model.createTypedLiteral(3.14159));
+            
+            // Test Float
+            var floatProp = model.createProperty("http://test.example.org/floatValue");
+            resource.addProperty(floatProp, model.createTypedLiteral(2.71828f));
+            
+            // Test Boolean true
+            var boolTrueProp = model.createProperty("http://test.example.org/boolTrue");
+            resource.addProperty(boolTrueProp, model.createTypedLiteral(true));
+            
+            // Test Boolean false
+            var boolFalseProp = model.createProperty("http://test.example.org/boolFalse");
+            resource.addProperty(boolFalseProp, model.createTypedLiteral(false));
+            
+            // Test String
+            var stringProp = model.createProperty("http://test.example.org/stringValue");
+            resource.addProperty(stringProp, "Hello World");
+            
+            assertEquals(7, model.size(), "Model should contain 7 typed literal triples");
+            
+            // Verify retrieval of Integer
+            var intStmt = resource.getProperty(intProp);
+            assertNotNull(intStmt, "Integer property should be retrievable");
+            assertEquals(42, intStmt.getInt(), "Integer value should match");
+            
+            // Verify retrieval of Long
+            var longStmt = resource.getProperty(longProp);
+            assertNotNull(longStmt, "Long property should be retrievable");
+            assertEquals(9999999999L, longStmt.getLong(), "Long value should match");
+            
+            // Verify retrieval of Double
+            var doubleStmt = resource.getProperty(doubleProp);
+            assertNotNull(doubleStmt, "Double property should be retrievable");
+            assertEquals(3.14159, doubleStmt.getDouble(), 0.00001, "Double value should match");
+            
+            // Verify retrieval of Float
+            var floatStmt = resource.getProperty(floatProp);
+            assertNotNull(floatStmt, "Float property should be retrievable");
+            assertEquals(2.71828f, floatStmt.getFloat(), 0.00001f, "Float value should match");
+            
+            // Verify retrieval of Boolean true
+            var boolTrueStmt = resource.getProperty(boolTrueProp);
+            assertNotNull(boolTrueStmt, "Boolean true property should be retrievable");
+            assertTrue(boolTrueStmt.getBoolean(), "Boolean true value should be true");
+            
+            // Verify retrieval of Boolean false
+            var boolFalseStmt = resource.getProperty(boolFalseProp);
+            assertNotNull(boolFalseStmt, "Boolean false property should be retrievable");
+            assertFalse(boolFalseStmt.getBoolean(), "Boolean false value should be false");
+            
+            // Verify retrieval of String
+            var stringStmt = resource.getProperty(stringProp);
+            assertNotNull(stringStmt, "String property should be retrievable");
+            assertEquals("Hello World", stringStmt.getString(), "String value should match");
+            
+        } finally {
+            model.close();
+        }
+    }
+
+    @Test
+    @DisplayName("Test pattern matching with Number and Boolean instances")
+    public void testPatternMatchingLiterals() {
+        var model = createTestModel();
+        try {
+            var resource = model.createResource("http://test.example.org/pattern1");
+            
+            // Add different number types to ensure pattern matching works
+            var prop1 = model.createProperty("http://test.example.org/prop1");
+            var prop2 = model.createProperty("http://test.example.org/prop2");
+            var prop3 = model.createProperty("http://test.example.org/prop3");
+            
+            resource.addProperty(prop1, model.createTypedLiteral(100));
+            resource.addProperty(prop2, model.createTypedLiteral(200.5));
+            resource.addProperty(prop3, model.createTypedLiteral(true));
+            
+            assertEquals(3, model.size(), "Should have 3 properties");
+            
+            // Verify all can be retrieved (tests pattern matching path)
+            assertNotNull(resource.getProperty(prop1));
+            assertNotNull(resource.getProperty(prop2));
+            assertNotNull(resource.getProperty(prop3));
+            
+            // Query with patterns to ensure findPropertyTriples is called
+            var iter1 = model.listStatements(resource, prop1, (org.apache.jena.rdf.model.RDFNode) null);
+            assertTrue(iter1.hasNext(), "Should find integer property via query");
+            assertEquals(100, iter1.next().getInt());
+            
+            var iter2 = model.listStatements(resource, prop2, (org.apache.jena.rdf.model.RDFNode) null);
+            assertTrue(iter2.hasNext(), "Should find double property via query");
+            assertEquals(200.5, iter2.next().getDouble(), 0.01);
+            
+            var iter3 = model.listStatements(resource, prop3, (org.apache.jena.rdf.model.RDFNode) null);
+            assertTrue(iter3.hasNext(), "Should find boolean property via query");
+            assertTrue(iter3.next().getBoolean());
+        } finally {
+            model.close();
+        }
+    }
+
+    @Test
+    @DisplayName("Test all type patterns are exercised in retrieval")
+    public void testTypedLiteralRetrieval() {
+        var model = createTestModel();
+        try {
+            var resource = model.createResource("http://test.example.org/typed1");
+            
+            // Add one of each type
+            resource.addProperty(model.createProperty("http://test.example.org/int"), model.createTypedLiteral(123));
+            resource.addProperty(model.createProperty("http://test.example.org/long"), model.createTypedLiteral(456789L));
+            resource.addProperty(model.createProperty("http://test.example.org/double"), model.createTypedLiteral(3.14));
+            resource.addProperty(model.createProperty("http://test.example.org/float"), model.createTypedLiteral(2.5f));
+            resource.addProperty(model.createProperty("http://test.example.org/bool"), model.createTypedLiteral(false));
+            resource.addProperty(model.createProperty("http://test.example.org/string"), "test");
+            
+            // Query all properties - this exercises findPropertyTriples with all type branches
+            var allStmts = model.listStatements(resource, null, (org.apache.jena.rdf.model.RDFNode) null);
+            var stmtList = allStmts.toList();
+            
+            assertEquals(6, stmtList.size(), "Should retrieve all 6 properties");
+            
+            // Verify each type is correctly retrieved (exercises instanceof patterns)
+            boolean hasInt = false, hasLong = false, hasDouble = false;
+            boolean hasFloat = false, hasBool = false, hasString = false;
+            
+            for (var stmt : stmtList) {
+                var obj = stmt.getObject();
+                if (obj.isLiteral()) {
+                    var lit = obj.asLiteral();
+                    var val = lit.getValue();
+                    
+                    // Check the actual value type
+                    if (val instanceof Integer || val instanceof Long) {
+                        hasInt = true;
+                    } else if (val instanceof Double) {
+                        hasDouble = true;
+                    } else if (val instanceof Float) {
+                        hasFloat = true;
+                    } else if (val instanceof Boolean) {
+                        hasBool = true;
+                    } else if (val instanceof String) {
+                        hasString = true;
+                    }
+                }
+            }
+            
+            assertTrue(hasInt, "Should have integer/long type");
+            assertTrue(hasDouble || hasFloat, "Should have double or float type");
+            assertTrue(hasBool, "Should have boolean type");
+            assertTrue(hasString, "Should have string type");
         } finally {
             model.close();
         }

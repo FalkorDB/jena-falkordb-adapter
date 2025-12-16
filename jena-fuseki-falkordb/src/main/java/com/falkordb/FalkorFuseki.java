@@ -181,10 +181,19 @@ public final class FalkorFuseki {
 
         FusekiServer.Builder serverBuilder = FusekiServer.create()
             .port(fusekiPort)
-            .parseConfigFile(configFile.getAbsolutePath());
+            .parseConfigFile(configFile.getAbsolutePath())
+            .enablePing(true)
+            .enableStats(true)
+            .enableMetrics(true)
+            .enableCompact(true)
+            .enableTasks(true);
 
         // Enable Fuseki UI by serving webapp resources from classpath
+        // This must be done BEFORE enableAdminModule to avoid servlet conflicts
         setupWebappUI(serverBuilder);
+
+        // Enable admin module for server management endpoints
+        enableAdminModule(serverBuilder);
 
         // Configure tracing
         configureTracing(serverBuilder);
@@ -232,10 +241,19 @@ public final class FalkorFuseki {
 
         FusekiServer.Builder serverBuilder = FusekiServer.create()
                 .port(fusekiPort)
-                .add(DEFAULT_DATASET_PATH, ds);
+                .add(DEFAULT_DATASET_PATH, ds)
+                .enablePing(true)
+                .enableStats(true)
+                .enableMetrics(true)
+                .enableCompact(true)
+                .enableTasks(true);
 
         // Enable Fuseki UI by serving webapp resources from classpath
+        // This must be done BEFORE enableAdminModule to avoid servlet conflicts
         setupWebappUI(serverBuilder);
+
+        // Enable admin module for server management endpoints
+        enableAdminModule(serverBuilder);
 
         // Configure tracing
         configureTracing(serverBuilder);
@@ -277,9 +295,7 @@ public final class FalkorFuseki {
         }
 
         // Add a servlet that serves static files from classpath
-        // This will handle requests to root (/) and static resources (/static/*)
-        // but not interfere with dataset endpoints like /falkor/* which are
-        // registered with higher priority by Fuseki
+        // Use wildcard to catch all requests, but skip admin endpoints
         serverBuilder.addServlet("/*", new ClasspathResourceServlet("webapp"));
         
         if (LOGGER.isInfoEnabled()) {
@@ -291,6 +307,9 @@ public final class FalkorFuseki {
      * Servlet that serves static resources from the classpath.
      * This allows serving the webapp files directly from the JAR
      * without extracting them to the filesystem.
+     * 
+     * <p>This servlet will pass through requests that start with /$
+     * (Fuseki admin endpoints) or that don't have corresponding resources.</p>
      */
     private static class ClasspathResourceServlet extends HttpServlet {
         private static final long serialVersionUID = 1L;
@@ -310,6 +329,15 @@ public final class FalkorFuseki {
                 final HttpServletResponse response)
                 throws ServletException, IOException {
             String pathInfo = request.getPathInfo();
+            
+            // Skip Fuseki admin endpoints (starting with /$) and dataset endpoints
+            if (pathInfo != null && (pathInfo.startsWith("/$") 
+                    || pathInfo.startsWith("/falkor"))) {
+                // Don't handle admin or dataset endpoints - let Fuseki handle them
+                response.sendError(HttpServletResponse.SC_NOT_FOUND);
+                return;
+            }
+            
             if (pathInfo == null || "/".equals(pathInfo)) {
                 pathInfo = "/index.html";
             }
@@ -320,6 +348,8 @@ public final class FalkorFuseki {
             // Try to load resource from classpath
             URL resource = getClass().getClassLoader().getResource(resourcePath);
             if (resource == null) {
+                // Resource not found in classpath - return 404
+                // This allows other handlers to potentially handle it
                 response.sendError(HttpServletResponse.SC_NOT_FOUND);
                 return;
             }
@@ -380,6 +410,51 @@ public final class FalkorFuseki {
             }
         }
         return defaultValue;
+    }
+
+    /**
+     * Enable Fuseki admin module for server management endpoints.
+     * This registers the admin module which provides endpoints like /$/datasets,
+     * /$/server, etc. that are needed by the Fuseki UI.
+     *
+     * @param serverBuilder the FusekiServer.Builder to configure
+     */
+    private static void enableAdminModule(
+            final FusekiServer.Builder serverBuilder) {
+        try {
+            // Load the FMod_Admin class dynamically
+            Class<?> adminModuleClass = Class.forName(
+                "org.apache.jena.fuseki.mod.admin.FMod_Admin");
+            
+            // Create an instance using the create() factory method
+            java.lang.reflect.Method createMethod = 
+                adminModuleClass.getMethod("create");
+            Object adminModule = createMethod.invoke(null);
+            
+            // Get the current modules and add the admin module
+            org.apache.jena.fuseki.main.sys.FusekiModules modules = 
+                serverBuilder.fusekiModules();
+            
+            // The FusekiModules class doesn't expose an add method,
+            // so we need to call prepare directly on the module
+            java.lang.reflect.Method prepareMethod = 
+                adminModuleClass.getMethod("prepare",
+                    org.apache.jena.fuseki.main.FusekiServer.Builder.class,
+                    java.util.Set.class,
+                    org.apache.jena.rdf.model.Model.class);
+            prepareMethod.invoke(adminModule, serverBuilder,
+                new java.util.HashSet<>(), null);
+            
+            if (LOGGER.isInfoEnabled()) {
+                LOGGER.info("Fuseki admin module enabled");
+            }
+        } catch (Exception e) {
+            if (LOGGER.isWarnEnabled()) {
+                LOGGER.warn("Failed to enable Fuseki admin module: {}. "
+                    + "Server management endpoints may not be available.",
+                    e.getMessage());
+            }
+        }
     }
 
     /**

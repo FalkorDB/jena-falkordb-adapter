@@ -6,3 +6,4 @@ logs/
 dependency-reduced-pom.xml
 .idea
 *.ipreffective-pom.xml
+run/

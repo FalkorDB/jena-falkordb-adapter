@@ -3,8 +3,18 @@ package com.falkordb;
 import com.falkordb.jena.FalkorDBModelFactory;
 import com.falkordb.jena.tracing.TracingUtil;
 import com.falkordb.tracing.FusekiTracingFilter;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServlet;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.URL;
+import java.net.URLConnection;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import org.apache.jena.fuseki.main.FusekiServer;
 import org.apache.jena.query.Dataset;
 import org.apache.jena.query.DatasetFactory;
@@ -55,13 +65,6 @@ public final class FalkorFuseki {
     private static final int DEFAULT_FUSEKI_PORT = 3330;
     /** Default dataset path. */
     private static final String DEFAULT_DATASET_PATH = "/falkor";
-    /** Classpath resource path for webapp. */
-    private static final String WEBAPP_RESOURCE_PATH = "webapp";
-    /** Development webapp path relative to module root. */
-    private static final String DEV_WEBAPP_PATH = "src/main/resources/webapp";
-    /** Module webapp path when running from project root. */
-    private static final String MODULE_WEBAPP_PATH =
-        "jena-fuseki-falkordb/" + DEV_WEBAPP_PATH;
     /** Default config file name in classpath. */
     private static final String DEFAULT_CONFIG_RESOURCE = "config-falkordb.ttl";
 
@@ -180,19 +183,22 @@ public final class FalkorFuseki {
 
         FusekiServer.Builder serverBuilder = FusekiServer.create()
             .port(fusekiPort)
-            .parseConfigFile(configFile.getAbsolutePath());
+            .parseConfigFile(configFile.getAbsolutePath())
+            .enablePing(true)
+            .enableStats(true)
+            .enableMetrics(true)
+            .enableCompact(true)
+            .enableTasks(true);
+
+        // Enable Fuseki UI by serving webapp resources from classpath
+        // This must be done BEFORE enableAdminModule to avoid servlet conflicts
+        setupWebappUI(serverBuilder);
+
+        // Enable admin module for server management endpoints
+        enableAdminModule(serverBuilder);
 
         // Configure tracing
         configureTracing(serverBuilder);
-
-        // Try to set up static files
-        String staticBase = getStaticFileBase();
-        if (staticBase != null) {
-            serverBuilder.staticFileBase(staticBase);
-            if (LOGGER.isInfoEnabled()) {
-                LOGGER.info("Serving static files from: {}", staticBase);
-            }
-        }
 
         FusekiServer server = serverBuilder.build();
         server.start();
@@ -237,19 +243,22 @@ public final class FalkorFuseki {
 
         FusekiServer.Builder serverBuilder = FusekiServer.create()
                 .port(fusekiPort)
-                .add(DEFAULT_DATASET_PATH, ds);
+                .add(DEFAULT_DATASET_PATH, ds)
+                .enablePing(true)
+                .enableStats(true)
+                .enableMetrics(true)
+                .enableCompact(true)
+                .enableTasks(true);
+
+        // Enable Fuseki UI by serving webapp resources from classpath
+        // This must be done BEFORE enableAdminModule to avoid servlet conflicts
+        setupWebappUI(serverBuilder);
+
+        // Enable admin module for server management endpoints
+        enableAdminModule(serverBuilder);
 
         // Configure tracing
         configureTracing(serverBuilder);
-
-        // Try to set up static files from classpath or filesystem
-        String staticBase = getStaticFileBase();
-        if (staticBase != null) {
-            serverBuilder.staticFileBase(staticBase);
-            if (LOGGER.isInfoEnabled()) {
-                LOGGER.info("Serving static files from: {}", staticBase);
-            }
-        }
 
         FusekiServer server = serverBuilder.build();
         server.start();
@@ -261,65 +270,132 @@ public final class FalkorFuseki {
     }
 
     /**
-     * Gets the static file base path.
-     * First checks for STATIC_FILES_BASE environment variable,
-     * then tries to get resources from the classpath,
-     * then falls back to filesystem paths if running from source.
+     * Setup the Fuseki web UI by serving webapp resources from classpath.
+     * This creates a custom servlet that serves the webapp files directly
+     * from the JAR without extraction.
      *
-     * @return the static file base path, or null if not available
+     * <p>The servlet is registered with a wildcard pattern (/*) but will only
+     * handle requests that don't match Fuseki's dataset endpoints (e.g., /falkor/*)
+     * because those are registered first with higher priority.</p>
+     *
+     * @param serverBuilder the FusekiServer.Builder to configure
      */
-    private static String getStaticFileBase() {
-        // First check for explicit configuration via environment variable
-        String envPath = System.getenv("STATIC_FILES_BASE");
-        if (envPath != null && !envPath.isEmpty()) {
-            File envFile = new File(envPath);
-            try {
-                String canonicalPath = envFile.getCanonicalPath();
-                File canonicalFile = new File(canonicalPath);
-                if (canonicalFile.exists() && canonicalFile.isDirectory()) {
-                    return canonicalPath;
-                } else {
-                    if (LOGGER.isWarnEnabled()) {
-                        LOGGER.warn("STATIC_FILES_BASE '{}' does not exist or is not a directory", envPath);
-                    }
-                }
-            } catch (java.io.IOException e) {
-                if (LOGGER.isWarnEnabled()) {
-                    LOGGER.warn("Invalid path in STATIC_FILES_BASE: {}", envPath);
+    private static void setupWebappUI(
+            final FusekiServer.Builder serverBuilder) {
+        // Check if webapp resources are available in classpath
+        // The jena-fuseki-ui module should provide index.html and other resources
+        URL webappUrl = FalkorFuseki.class.getClassLoader()
+            .getResource("webapp/index.html");
+        
+        if (webappUrl == null) {
+            if (LOGGER.isWarnEnabled()) {
+                LOGGER.warn("Webapp resources not found in classpath. "
+                    + "Web UI will not be available. "
+                    + "Ensure jena-fuseki-ui dependency is included.");
+            }
+            return;
+        }
+
+        // Add a servlet that serves static files from classpath
+        // Use wildcard to catch all requests, but skip admin endpoints
+        serverBuilder.addServlet("/*", new ClasspathResourceServlet("webapp"));
+        
+        if (LOGGER.isInfoEnabled()) {
+            LOGGER.info("Serving Fuseki UI from classpath resources");
+        }
+    }
+
+    /**
+     * Servlet that serves static resources from the classpath.
+     * This allows serving the webapp files directly from the JAR
+     * without extracting them to the filesystem.
+     * 
+     * <p>This servlet will pass through requests that start with /$
+     * (Fuseki admin endpoints) or that don't have corresponding resources.</p>
+     */
+    private static class ClasspathResourceServlet extends HttpServlet {
+        private static final long serialVersionUID = 1L;
+        private final String resourceBase;
+
+        /**
+         * Create a new ClasspathResourceServlet.
+         *
+         * @param resourceBase the base path in the classpath (e.g., "webapp")
+         */
+        ClasspathResourceServlet(final String resourceBase) {
+            this.resourceBase = resourceBase;
+        }
+
+        @Override
+        protected void doGet(final HttpServletRequest request,
+                final HttpServletResponse response)
+                throws ServletException, IOException {
+            String pathInfo = request.getPathInfo();
+            
+            // Skip Fuseki admin endpoints (starting with /$) and dataset endpoints
+            if (pathInfo != null && (pathInfo.startsWith("/$") 
+                    || pathInfo.startsWith("/falkor"))) {
+                // Return 404 to allow Jetty to pass the request to the next handler
+                // (Fuseki's admin and dataset handlers) in the filter chain.
+                // This is the proper way to "pass through" in a servlet.
+                response.sendError(HttpServletResponse.SC_NOT_FOUND);
+                return;
+            }
+            
+            if (pathInfo == null || "/".equals(pathInfo)) {
+                pathInfo = "/index.html";
+            }
+            
+            // Sanitize pathInfo
+            // Reject suspicious paths
+            if (pathInfo.contains("..") || pathInfo.contains("\\") || pathInfo.contains("%") ) {
+                response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid resource path");
+                return;
+            }
+            // Remove leading slashes so resource path is always relative within resourceBase
+            String sanitizedPathInfo = pathInfo;
+            while (sanitizedPathInfo.startsWith("/")) {
+                sanitizedPathInfo = sanitizedPathInfo.substring(1);
+            }
+            // Normalize path (defense in depth)
+            Path normalized = Paths.get(sanitizedPathInfo).normalize();
+            // Prevent directory traversal
+            if (normalized.isAbsolute() || normalized.startsWith("..")) {
+                response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid resource path");
+                return;
+            }
+            // Build resource path
+            String resourcePath = resourceBase + "/" + normalized.toString().replace("\\", "/");
+
+            // Try to load resource from classpath
+            URL resource = getClass().getClassLoader().getResource(resourcePath);
+            if (resource == null) {
+                // Resource not found in classpath - return 404
+                // This allows other handlers to potentially handle it
+                response.sendError(HttpServletResponse.SC_NOT_FOUND);
+                return;
+            }
+
+            // Set content type based on file extension
+            String contentType = getServletContext().getMimeType(pathInfo);
+            if (contentType == null) {
+                contentType = URLConnection.guessContentTypeFromName(pathInfo);
+            }
+            if (contentType == null) {
+                contentType = "application/octet-stream";
+            }
+            response.setContentType(contentType);
+
+            // Stream the resource content
+            try (InputStream in = resource.openStream();
+                 OutputStream out = response.getOutputStream()) {
+                byte[] buffer = new byte[8192];
+                int bytesRead;
+                while ((bytesRead = in.read(buffer)) != -1) {
+                    out.write(buffer, 0, bytesRead);
                 }
             }
         }
-
-        // Try to get from classpath resource
-        URL resourceUrl = FalkorFuseki.class.getClassLoader()
-            .getResource(WEBAPP_RESOURCE_PATH);
-        if (resourceUrl != null) {
-            String protocol = resourceUrl.getProtocol();
-            if ("file".equals(protocol)) {
-                // Running from filesystem (e.g., IDE or mvn exec)
-                return resourceUrl.getPath();
-            }
-            // Running from JAR - Fuseki can't serve from JAR directly
-            // Return null and let Fuseki use its default behavior
-        }
-
-        // Fallback: try src/main/resources/webapp for development
-        File devPath = new File(DEV_WEBAPP_PATH);
-        if (devPath.exists() && devPath.isDirectory()) {
-            return devPath.getAbsolutePath();
-        }
-
-        // Try jena-fuseki-falkordb subdir for running from root
-        File submodulePath = new File(MODULE_WEBAPP_PATH);
-        if (submodulePath.exists() && submodulePath.isDirectory()) {
-            return submodulePath.getAbsolutePath();
-        }
-
-        if (LOGGER.isWarnEnabled()) {
-            LOGGER.warn("Static files not available. "
-                + "Web UI may not be accessible.");
-        }
-        return null;
     }
 
     /**
@@ -356,6 +432,65 @@ public final class FalkorFuseki {
             }
         }
         return defaultValue;
+    }
+
+    /**
+     * Enable Fuseki admin module for server management endpoints.
+     * This registers the admin module which provides endpoints like /$/datasets,
+     * /$/server, etc. that are needed by the Fuseki UI.
+     *
+     * @param serverBuilder the FusekiServer.Builder to configure
+     */
+    private static void enableAdminModule(
+            final FusekiServer.Builder serverBuilder) {
+        try {
+            // Load the FMod_Admin class dynamically
+            Class<?> adminModuleClass = Class.forName(
+                "org.apache.jena.fuseki.mod.admin.FMod_Admin");
+            
+            // Create an instance using the create() factory method
+            java.lang.reflect.Method createMethod = 
+                adminModuleClass.getMethod("create");
+            Object adminModule = createMethod.invoke(null);
+            
+            // Get the current modules and add the admin module
+            org.apache.jena.fuseki.main.sys.FusekiModules modules = 
+                serverBuilder.fusekiModules();
+            
+            // The FusekiModules class doesn't expose an add method,
+            // so we need to call prepare directly on the module
+            java.lang.reflect.Method prepareMethod = 
+                adminModuleClass.getMethod("prepare",
+                    org.apache.jena.fuseki.main.FusekiServer.Builder.class,
+                    java.util.Set.class,
+                    org.apache.jena.rdf.model.Model.class);
+            prepareMethod.invoke(adminModule, serverBuilder,
+                new java.util.HashSet<>(), null);
+            
+            if (LOGGER.isInfoEnabled()) {
+                LOGGER.info("Fuseki admin module enabled");
+            }
+        } catch (ClassNotFoundException e) {
+            if (LOGGER.isWarnEnabled()) {
+                LOGGER.warn("Fuseki admin module class not found: {}. "
+                    + "Server management endpoints may not be available. "
+                    + "Ensure jena-fuseki-main dependency is included.", 
+                    e.getMessage());
+            }
+        } catch (NoSuchMethodException e) {
+            if (LOGGER.isWarnEnabled()) {
+                LOGGER.warn("Fuseki admin module method not found: {}. "
+                    + "This may indicate an incompatible Jena version. "
+                    + "Server management endpoints may not be available.", 
+                    e.getMessage());
+            }
+        } catch (ReflectiveOperationException e) {
+            if (LOGGER.isWarnEnabled()) {
+                LOGGER.warn("Failed to enable Fuseki admin module: {}. "
+                    + "Server management endpoints may not be available.",
+                    e.getMessage());
+            }
+        }
     }
 
     /**

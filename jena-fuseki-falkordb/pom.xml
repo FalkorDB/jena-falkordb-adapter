@@ -42,6 +42,13 @@
             <artifactId>jena-fuseki-main</artifactId>
         </dependency>
 
+        <!-- Apache Jena Fuseki UI -->
+        <dependency>
+            <groupId>org.apache.jena</groupId>
+            <artifactId>jena-fuseki-ui</artifactId>
+            <version>${jena.version}</version>
+        </dependency>
+
         <!-- SLF4J API -->
         <dependency>
             <groupId>org.slf4j</groupId>

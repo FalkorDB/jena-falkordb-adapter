@@ -10,7 +10,7 @@ This document demonstrates key features of the Jena-FalkorDB adapter with practi
    curl -s "https://get.sdkman.io" | bash
    source "$HOME/.sdkman/bin/sdkman-init.sh"
    
-   # Install Java 21.0.5-graal and Maven 3.9.11 (from .sdkmanrc)
+   # Install Java 25.0.1-graal and Maven 3.9.11 (from .sdkmanrc)
    sdk env install
    ```
 
@@ -50,12 +50,22 @@ Apache Jena Fuseki provides a web-based user interface for managing datasets and
   - File upload capabilities
   - Server information and configuration
 
+**Screenshot of the Fuseki UI:**
+
+![Apache Jena Fuseki UI](https://github.com/user-attachments/assets/31d1aedd-83ec-4827-8c87-f304d46a3116)
+
+The standard Apache Jena Fuseki UI provides a clean, modern interface for interacting with your SPARQL endpoints. The interface includes:
+- **Navigation menu** - Access to datasets, management, and help sections
+- **Dataset browser** - View and manage available datasets
+- **Server status indicator** - Monitor server health and connectivity
+- **Query interface** - Interactive SPARQL query editor (accessible via the dataset actions)
+
 **Quick Start with the UI:**
 1. Open your browser to http://localhost:3330/
-2. Click on the **"query"** tab
-3. Select your dataset (e.g., `/falkor`)
-4. Enter a SPARQL query in the editor
-5. Click **"Execute"** to run the query
+2. Click on a dataset name (e.g., `falkor`) to access its query interface
+3. In the query tab, enter a SPARQL query in the editor
+4. Click **"Execute"** to run the query
+5. View results in table, JSON, or other formats
 
 ### REST API Endpoints
 

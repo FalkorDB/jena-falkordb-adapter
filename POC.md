@@ -28,7 +28,7 @@ This document demonstrates key features of the Jena-FalkorDB adapter with practi
 
 4. **Verify Fuseki is running**:
    ```bash
-   curl -s http://localhost:3330/$/ping
+   curl -s http://localhost:3330/#/ping
    ```
 
 > **Note:** docker-compose must be running for tests to pass.
@@ -61,13 +61,13 @@ Apache Jena Fuseki provides a web-based user interface for managing datasets and
 
 The Fuseki server exposes standard SPARQL Protocol endpoints:
 
-| Endpoint | Method | Purpose | Content-Type |
-|----------|--------|---------|--------------|
-| `http://localhost:3330/falkor/query` | GET/POST | SPARQL SELECT/ASK queries | `application/sparql-query` |
+| Endpoint                              | Method | Purpose | Content-Type |
+|---------------------------------------|--------|---------|--------------|
+| `http://localhost:3330/falkor/query`  | GET/POST | SPARQL SELECT/ASK queries | `application/sparql-query` |
 | `http://localhost:3330/falkor/update` | POST | SPARQL UPDATE operations | `application/sparql-update` |
-| `http://localhost:3330/falkor/data` | GET/POST/PUT/DELETE | Graph Store Protocol (upload/download data) | `text/turtle`, `application/rdf+xml`, etc. |
-| `http://localhost:3330/$/ping` | GET | Health check endpoint | - |
-| `http://localhost:3330/$/stats` | GET | Server statistics | `application/json` |
+| `http://localhost:3330/falkor/data`   | GET/POST/PUT/DELETE | Graph Store Protocol (upload/download data) | `text/turtle`, `application/rdf+xml`, etc. |
+| `http://localhost:3330/#/ping`        | GET | Health check endpoint | - |
+| `http://localhost:3330/#/stats`       | GET | Server statistics | `application/json` |
 
 **Example REST API Usage:**
 
@@ -92,7 +92,7 @@ curl -X POST http://localhost:3330/falkor/update \
   --data 'INSERT DATA { <http://example.org/subject> <http://example.org/predicate> "object" . }'
 
 # Get server stats
-curl http://localhost:3330/$/stats
+curl http://localhost:3330/#/stats
 ```
 
 **Available Result Formats:**

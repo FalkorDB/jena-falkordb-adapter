@@ -52,7 +52,7 @@ Apache Jena Fuseki provides a web-based user interface for managing datasets and
 
 **Screenshot of the Fuseki UI:**
 
-![Apache Jena Fuseki UI](https://github.com/user-attachments/assets/0670c61f-3083-464f-8455-2e2b6c4e45c6)
+![Apache Jena Fuseki UI](https://github.com/user-attachments/assets/31d1aedd-83ec-4827-8c87-f304d46a3116)
 
 The standard Apache Jena Fuseki UI provides a clean, modern interface for interacting with your SPARQL endpoints. The interface includes:
 - **Navigation menu** - Access to datasets, management, and help sections

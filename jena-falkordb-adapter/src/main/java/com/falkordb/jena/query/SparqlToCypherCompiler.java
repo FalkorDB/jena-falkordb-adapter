@@ -856,12 +856,17 @@ public final class SparqlToCypherCompiler {
             }
         }
 
-        // NEW: Handle ambiguous variable objects in multi-triple patterns
-        // Instead of throwing an exception, we'll generate UNION queries for each ambiguous variable
+        // NEW: Multi-triple patterns with ambiguous variable objects
+        // The VariableAnalyzer correctly identifies these, but the optimization is not yet complete
+        // For now, fall back to standard evaluation to maintain correctness
+        // TODO: Complete the translateWithAmbiguousVariables implementation to handle all cases
         if (!variableObjectTriples.isEmpty() && triples.size() > 1) {
-            LOGGER.debug("Multi-triple BGP with {} ambiguous variable objects - generating UNION-based query",
+            LOGGER.debug("Multi-triple BGP with {} ambiguous variable objects - falling back to standard evaluation",
                     variableObjectTriples.size());
-            return translateWithAmbiguousVariables(bgp, analysis, variableObjectTriples);
+            throw new CannotCompileException(
+                "Multi-triple patterns with ambiguous variable objects not yet optimized. " +
+                "The VariableAnalyzer correctly identifies these patterns, but full optimization " +
+                "requires more work to handle filters and complex patterns correctly.");
         }
         
         // Build the Cypher query

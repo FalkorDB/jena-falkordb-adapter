@@ -2039,9 +2039,20 @@ public class FalkorDBQueryPushdownTest {
     // ========================================================================
     // Tests for Multi-Triple Patterns with Ambiguous Variable Objects
     // ========================================================================
+    //
+    // NOTE: These tests verify that the VariableAnalyzer correctly identifies
+    // ambiguous variables, but the full pushdown optimization is not yet implemented.
+    // For now, these patterns fall back to standard Jena evaluation, which still
+    // returns correct results (just without the performance benefit of pushdown).
+    //
+    // The infrastructure is in place (VariableAnalyzer, translateWithAmbiguousVariables)
+    // but needs refinement to handle filters and complex patterns correctly.
+    //
+    // These tests verify CORRECTNESS via fallback, not OPTIMIZATION.
+    // ========================================================================
 
     @Test
-    @DisplayName("Test multi-triple pattern with ambiguous variable object")
+    @DisplayName("Test multi-triple pattern with ambiguous variable object - fallback to standard eval")
     public void testMultiTriplePatternWithAmbiguousVariable() {
         // Add test data: person with name and age
         var alice = model.createResource("http://example.org/person/alice");

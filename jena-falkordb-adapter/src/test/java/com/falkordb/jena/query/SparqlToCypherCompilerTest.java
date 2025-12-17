@@ -48,11 +48,24 @@ public class SparqlToCypherCompilerTest {
             NodeFactory.createVariable("fof")
         ));
 
-        // Should throw CannotCompileException because ?fof is a variable object
-        // not used as a subject in a multi-triple pattern
-        assertThrows(SparqlToCypherCompiler.CannotCompileException.class, () -> {
+        // ?fof is ambiguous (not used as subject)
+        // With partial optimization, this should now compile with UNION
+        SparqlToCypherCompiler.CompilationResult result =
             SparqlToCypherCompiler.translate(bgp);
-        }, "Multi-triple patterns with ambiguous variable objects should not compile");
+        
+        assertNotNull(result, "Should compile multi-triple pattern with partial optimization");
+        assertNotNull(result.cypherQuery(), "Should generate Cypher query");
+        assertTrue(result.cypherQuery().contains("MATCH"),
+            "Should contain MATCH clauses");
+        assertTrue(result.cypherQuery().contains("UNION ALL"),
+            "Should use UNION for ambiguous variable");
+        
+        // ?friend is used as subject, so it's a node (relationship)
+        // ?fof is ambiguous, handled with partial optimization
+        assertTrue(result.cypherQuery().contains("friend"),
+            "Should include friend variable");
+        assertTrue(result.cypherQuery().contains("fof"),
+            "Should include fof variable");
     }
 
     @Test
@@ -194,7 +207,7 @@ public class SparqlToCypherCompilerTest {
     @DisplayName("Test friends of friends pattern with all relationships compiles")
     public void testFriendsOfFriendsAllRelationshipsPattern() throws Exception {
         // ?a foaf:knows ?b . ?b foaf:knows ?c . ?c foaf:knows ?d .
-        // All variable objects are used as subjects - pure relationship pattern
+        // All variable objects are used as subjects except ?d - which is ambiguous
         BasicPattern bgp = new BasicPattern();
         bgp.add(Triple.create(
             NodeFactory.createVariable("a"),
@@ -213,10 +226,16 @@ public class SparqlToCypherCompilerTest {
         ));
 
         // ?d is not used as subject, so it's ambiguous (relationship or property)
-        // Should throw CannotCompileException
-        assertThrows(SparqlToCypherCompiler.CannotCompileException.class, () -> {
+        // With partial optimization, this should now compile with UNION
+        SparqlToCypherCompiler.CompilationResult result =
             SparqlToCypherCompiler.translate(bgp);
-        }, "Multi-triple patterns with ambiguous variable objects should not compile");
+        
+        assertNotNull(result, "Should compile multi-triple pattern with partial optimization");
+        assertNotNull(result.cypherQuery(), "Should generate Cypher query");
+        assertTrue(result.cypherQuery().contains("MATCH"),
+            "Should contain MATCH clauses");
+        assertTrue(result.cypherQuery().contains("UNION ALL"),
+            "Should use UNION for ambiguous variable");
     }
 
     @Test
@@ -288,7 +307,7 @@ public class SparqlToCypherCompilerTest {
     public void testFriendsOfFriendsWithConcreteStartPattern() throws Exception {
         // <http://example.org/alice> foaf:knows ?friend .
         // ?friend foaf:knows ?fof .
-        // ?friend is used as subject, but ?fof is not - falls back
+        // ?friend is used as subject, but ?fof is not - ambiguous
         BasicPattern bgp = new BasicPattern();
         bgp.add(Triple.create(
             NodeFactory.createURI("http://example.org/alice"),
@@ -302,10 +321,16 @@ public class SparqlToCypherCompilerTest {
         ));
 
         // ?fof is not used as subject, so it's ambiguous (relationship or property)
-        // Should throw CannotCompileException
-        assertThrows(SparqlToCypherCompiler.CannotCompileException.class, () -> {
+        // With partial optimization, this should now compile with UNION
+        SparqlToCypherCompiler.CompilationResult result =
             SparqlToCypherCompiler.translate(bgp);
-        }, "Multi-triple patterns with ambiguous variable objects should not compile");
+        
+        assertNotNull(result, "Should compile multi-triple pattern with partial optimization");
+        assertNotNull(result.cypherQuery(), "Should generate Cypher query");
+        assertTrue(result.cypherQuery().contains("MATCH"),
+            "Should contain MATCH clauses");
+        assertTrue(result.cypherQuery().contains("UNION ALL"),
+            "Should use UNION for ambiguous variable");
     }
 
     @Test

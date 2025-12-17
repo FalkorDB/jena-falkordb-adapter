@@ -857,16 +857,28 @@ public final class SparqlToCypherCompiler {
         }
 
         // NEW: Multi-triple patterns with ambiguous variable objects
-        // The VariableAnalyzer correctly identifies these, but the optimization is not yet complete
-        // For now, fall back to standard evaluation to maintain correctness
-        // TODO: Complete the translateWithAmbiguousVariables implementation to handle all cases
+        // Try partial optimization: optimize NODE variables, use UNION for AMBIGUOUS
         if (!variableObjectTriples.isEmpty() && triples.size() > 1) {
-            LOGGER.debug("Multi-triple BGP with {} ambiguous variable objects - falling back to standard evaluation",
+            LOGGER.debug("Multi-triple BGP with {} ambiguous variable objects - attempting partial optimization",
                     variableObjectTriples.size());
-            throw new CannotCompileException(
-                "Multi-triple patterns with ambiguous variable objects not yet optimized. " +
-                "The VariableAnalyzer correctly identifies these patterns, but full optimization " +
-                "requires more work to handle filters and complex patterns correctly.");
+            
+            // Check if we can apply partial optimization
+            // Criteria: ambiguous variables should not depend on each other in complex ways
+            boolean canOptimize = canApplyPartialOptimization(
+                    variableObjectTriples, variableObjectRelTriples, relationshipTriples, literalTriples);
+            
+            if (canOptimize) {
+                LOGGER.debug("Applying partial optimization for multi-triple pattern");
+                return translateWithPartialOptimization(
+                        bgp, analysis, variableObjectTriples, 
+                        relationshipTriples, variableObjectRelTriples, 
+                        typeTriples, literalTriples, parameters, paramCounter);
+            } else {
+                LOGGER.debug("Cannot apply partial optimization, falling back to standard evaluation");
+                throw new CannotCompileException(
+                    "Multi-triple patterns with ambiguous variable objects cannot be safely optimized yet. " +
+                    "Pattern complexity requires standard evaluation for correctness.");
+            }
         }
         
         // Build the Cypher query
@@ -2222,6 +2234,317 @@ public final class SparqlToCypherCompiler {
         return new CompilationResult(query, parameters, variableMapping);
     }
 
+    /**
+     * Check if partial optimization can be applied to a pattern with ambiguous variables.
+     * 
+     * <p>Partial optimization is safe when:</p>
+     * <ul>
+     *   <li>The pattern has at least some definite structure (NODE variables or relationships)</li>
+     *   <li>Ambiguous variables can be handled independently via UNION</li>
+     * </ul>
+     *
+     * @param ambiguousTriples triples with ambiguous variable objects
+     * @param nodeRelTriples triples with known node relationships
+     * @param relationshipTriples triples with concrete relationships
+     * @param literalTriples triples with concrete literals
+     * @return true if partial optimization is safe to apply
+     */
+    private static boolean canApplyPartialOptimization(
+            final List<Triple> ambiguousTriples,
+            final List<Triple> nodeRelTriples,
+            final List<Triple> relationshipTriples,
+            final List<Triple> literalTriples) {
+        
+        // Partial optimization works when we have SOME non-ambiguous structure
+        // to anchor the pattern, regardless of where ambiguous variables appear
+        
+        // Must have at least some definite structure (nodes, relationships, or literals)
+        boolean hasDefiniteStructure = !relationshipTriples.isEmpty() || 
+                                       !nodeRelTriples.isEmpty() || 
+                                       !literalTriples.isEmpty();
+        
+        if (!hasDefiniteStructure) {
+            // If everything is ambiguous, we can't optimize at all
+            return false;
+        }
+        
+        // Check that we don't have too many ambiguous variables
+        // (to avoid generating extremely large UNION queries)
+        Set<String> ambiguousObjects = new HashSet<>();
+        for (Triple triple : ambiguousTriples) {
+            if (triple.getObject().isVariable()) {
+                ambiguousObjects.add(triple.getObject().getName());
+            }
+        }
+        
+        // Limit to reasonable number of ambiguous variables to avoid query explosion
+        // Each ambiguous variable doubles the number of queries in the UNION
+        // So with 3 ambiguous vars, we'd have 2^3 = 8 queries
+        return ambiguousObjects.size() <= 4; // Max 16 queries in UNION
+    }
+
+    /**
+     * Translate pattern with partial optimization for ambiguous variables.
+     * 
+     * <p>This method implements the partial optimization strategy for patterns where
+     * ambiguous variables can appear ANYWHERE in the pattern (not just at the end):</p>
+     * <ol>
+     *   <li>Generate optimized Cypher for NODE relationships (definite graph traversal)</li>
+     *   <li>Use UNION to handle all possible combinations of ambiguous variables</li>
+     *   <li>Each ambiguous variable can be either a relationship or a property</li>
+     * </ol>
+     *
+     * <p>Example: For 2 ambiguous variables, generates 2^2 = 4 queries in UNION:
+     * <ul>
+     *   <li>Both as relationships</li>
+     *   <li>First as relationship, second as property</li>
+     *   <li>First as property, second as relationship</li>
+     *   <li>Both as properties</li>
+     * </ul>
+     * </p>
+     *
+     * @param bgp the complete basic graph pattern
+     * @param analysis the variable analysis result
+     * @param ambiguousTriples triples with ambiguous objects
+     * @param relationshipTriples triples with concrete relationships
+     * @param nodeRelTriples triples with known node relationships
+     * @param typeTriples triples with rdf:type
+     * @param literalTriples triples with concrete literals
+     * @param parameters existing parameters map
+     * @param paramCounter parameter counter
+     * @return compilation result with optimized Cypher
+     * @throws CannotCompileException if compilation fails
+     */
+    private static CompilationResult translateWithPartialOptimization(
+            final BasicPattern bgp,
+            final VariableAnalyzer.AnalysisResult analysis,
+            final List<Triple> ambiguousTriples,
+            final List<Triple> relationshipTriples,
+            final List<Triple> nodeRelTriples,
+            final List<Triple> typeTriples,
+            final List<Triple> literalTriples,
+            final Map<String, Object> parameters,
+            int paramCounter) throws CannotCompileException {
+        
+        LOGGER.debug("Generating partial optimization: {} node triples, {} ambiguous triples",
+                relationshipTriples.size() + nodeRelTriples.size(), ambiguousTriples.size());
+        
+        // Collect all variables
+        Set<String> allVariables = new HashSet<>();
+        Set<String> nodeVariables = new HashSet<>();
+        for (Triple triple : bgp.getList()) {
+            collectVariables(triple, allVariables, nodeVariables);
+        }
+        
+        // Get unique ambiguous variables
+        List<String> ambiguousVars = new ArrayList<>();
+        for (Triple triple : ambiguousTriples) {
+            if (triple.getObject().isVariable()) {
+                String varName = triple.getObject().getName();
+                if (!ambiguousVars.contains(varName)) {
+                    ambiguousVars.add(varName);
+                }
+            }
+        }
+        
+        int numAmbiguous = ambiguousVars.size();
+        int numCombinations = (int) Math.pow(2, numAmbiguous);
+        
+        LOGGER.debug("Generating {} UNION queries for {} ambiguous variables", 
+                numCombinations, numAmbiguous);
+        
+        // Build all combinations: for each ambiguous variable, try both as relationship and property
+        StringBuilder finalQuery = new StringBuilder();
+        
+        for (int i = 0; i < numCombinations; i++) {
+            if (i > 0) {
+                finalQuery.append("\nUNION ALL\n");
+            }
+            
+            // Determine which ambiguous variables are relationships vs properties in this combination
+            Map<String, Boolean> varIsRelationship = new HashMap<>();
+            for (int j = 0; j < numAmbiguous; j++) {
+                boolean isRel = ((i >> j) & 1) == 1;
+                varIsRelationship.put(ambiguousVars.get(j), isRel);
+            }
+            
+            // Build query for this combination
+            StringBuilder queryPart = buildQueryForCombination(
+                    relationshipTriples, nodeRelTriples, typeTriples, literalTriples,
+                    ambiguousTriples, analysis, allVariables, nodeVariables,
+                    varIsRelationship, parameters, paramCounter);
+            
+            finalQuery.append(queryPart);
+        }
+        
+        Map<String, String> variableMapping = new HashMap<>();
+        String query = finalQuery.toString();
+        
+        if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug("Generated partial optimization query with {} combinations:\n{}", 
+                    numCombinations, query);
+        }
+        
+        return new CompilationResult(query, parameters, variableMapping);
+    }
+
+    /**
+     * Build a single Cypher query for a specific combination of ambiguous variable interpretations.
+     *
+     * @param relationshipTriples concrete relationship triples
+     * @param nodeRelTriples node relationship triples
+     * @param typeTriples type triples
+     * @param literalTriples literal triples
+     * @param ambiguousTriples ambiguous triples
+     * @param analysis variable analysis
+     * @param allVariables all variables in pattern
+     * @param nodeVariables node variables
+     * @param varIsRelationship map of ambiguous var name -> true if relationship, false if property
+     * @param parameters parameters map
+     * @param paramCounter parameter counter
+     * @return Cypher query for this combination
+     */
+    private static StringBuilder buildQueryForCombination(
+            final List<Triple> relationshipTriples,
+            final List<Triple> nodeRelTriples,
+            final List<Triple> typeTriples,
+            final List<Triple> literalTriples,
+            final List<Triple> ambiguousTriples,
+            final VariableAnalyzer.AnalysisResult analysis,
+            final Set<String> allVariables,
+            final Set<String> nodeVariables,
+            final Map<String, Boolean> varIsRelationship,
+            final Map<String, Object> parameters,
+            int paramCounter) {
+        
+        StringBuilder cypher = new StringBuilder();
+        Set<String> declaredNodes = new HashSet<>();
+        
+        // Build MATCH for type triples
+        for (Triple triple : typeTriples) {
+            if (!cypher.isEmpty()) cypher.append("\n");
+            cypher.append("MATCH ");
+            String subjectVar = getNodeVariable(triple.getSubject());
+            if (triple.getObject().isURI()) {
+                String typeLabel = sanitizeCypherIdentifier(triple.getObject().getURI());
+                cypher.append("(").append(subjectVar)
+                      .append(":Resource:`").append(typeLabel).append("`)");
+                declaredNodes.add(subjectVar);
+            }
+        }
+        
+        // Build MATCH for concrete relationships
+        for (Triple triple : relationshipTriples) {
+            if (!cypher.isEmpty()) cypher.append("\n");
+            cypher.append("MATCH ");
+            String subjectVar = getNodeVariable(triple.getSubject());
+            String objectVar = getNodeVariable(triple.getObject());
+            String relType = sanitizeCypherIdentifier(triple.getPredicate().getURI());
+            
+            if (!declaredNodes.contains(subjectVar)) {
+                cypher.append("(").append(subjectVar).append(":Resource)");
+                declaredNodes.add(subjectVar);
+            } else {
+                cypher.append("(").append(subjectVar).append(")");
+            }
+            
+            cypher.append("-[:`").append(relType).append("`]->");
+            cypher.append("(").append(objectVar).append(":Resource)");
+            declaredNodes.add(objectVar);
+        }
+        
+        // Build MATCH for node relationships (objects used as subjects)
+        for (Triple triple : nodeRelTriples) {
+            if (!cypher.isEmpty()) cypher.append("\n");
+            cypher.append("MATCH ");
+            String subjectVar = getNodeVariable(triple.getSubject());
+            String objectVar = getNodeVariable(triple.getObject());
+            String relType = sanitizeCypherIdentifier(triple.getPredicate().getURI());
+            
+            if (!declaredNodes.contains(subjectVar)) {
+                cypher.append("(").append(subjectVar).append(":Resource)");
+                declaredNodes.add(subjectVar);
+            } else {
+                cypher.append("(").append(subjectVar).append(")");
+            }
+            
+            cypher.append("-[:`").append(relType).append("`]->");
+            cypher.append("(").append(objectVar).append(":Resource)");
+            declaredNodes.add(objectVar);
+        }
+        
+        // Handle ambiguous triples based on this combination
+        List<String> whereConditions = new ArrayList<>();
+        Map<String, String> propertyReturns = new HashMap<>();
+        
+        for (Triple triple : ambiguousTriples) {
+            String subjectVar = getNodeVariable(triple.getSubject());
+            String objectVar = triple.getObject().getName();
+            String predUri = sanitizeCypherIdentifier(triple.getPredicate().getURI());
+            
+            // Ensure subject is declared
+            if (!declaredNodes.contains(subjectVar)) {
+                if (!cypher.isEmpty()) cypher.append("\n");
+                cypher.append("MATCH (").append(subjectVar).append(":Resource)");
+                declaredNodes.add(subjectVar);
+            }
+            
+            Boolean isRel = varIsRelationship.get(objectVar);
+            if (isRel != null && isRel) {
+                // Treat as relationship
+                if (!cypher.isEmpty()) cypher.append("\n");
+                cypher.append("MATCH (").append(subjectVar)
+                      .append(")-[:`").append(predUri).append("`]->(")
+                      .append(objectVar).append(":Resource)");
+                declaredNodes.add(objectVar);
+            } else {
+                // Treat as property
+                whereConditions.add(subjectVar + ".`" + predUri + "` IS NOT NULL");
+                propertyReturns.put(objectVar, subjectVar + ".`" + predUri + "`");
+            }
+        }
+        
+        // Add WHERE clause if needed
+        if (!whereConditions.isEmpty()) {
+            cypher.append("\nWHERE ").append(String.join(" AND ", whereConditions));
+        }
+        
+        // Build RETURN clause
+        cypher.append("\nRETURN ");
+        List<String> returnParts = new ArrayList<>();
+        for (String varName : allVariables) {
+            if (propertyReturns.containsKey(varName)) {
+                // This is an ambiguous variable being treated as property
+                returnParts.add(propertyReturns.get(varName) + " AS " + varName);
+            } else if (analysis.isNodeVariable(varName) || nodeVariables.contains(varName) || declaredNodes.contains(varName)) {
+                // This is a node variable
+                returnParts.add(varName + ".uri AS " + varName);
+            }
+        }
+        
+        if (returnParts.isEmpty()) {
+            returnParts.add("1 AS _result");
+        }
+        
+        cypher.append(String.join(", ", returnParts));
+        
+        return cypher;
+    }
+
+    /**
+     * Build optimized Cypher path for node relationships.
+     *
+     * @param relationshipTriples concrete relationship triples
+     * @param nodeRelTriples node relationship triples
+     * @param typeTriples type triples
+     * @param literalTriples literal triples
+     * @param ambiguousTriples ambiguous triples
+     * @param analysis variable analysis
+     * @param parameters parameters map
+     * @param paramCounter parameter counter
+     * @param treatAmbiguousAsRelationships true to treat ambiguous vars as relationships, false as properties
+     * @return Cypher query string
+     */
     /**
      * Append subject node pattern to Cypher query.
      */

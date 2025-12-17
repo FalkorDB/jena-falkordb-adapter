@@ -2350,6 +2350,64 @@ SELECT ?a ?b ?c ?d WHERE {
 
 The first three variables are known nodes, but `?d` is ambiguous. Currently falls back to standard evaluation for correctness.
 
+**Partial Optimization Strategy:**
+
+Even though `?d` is ambiguous, we can still optimize the first three hops using pushdown:
+
+1. **Split the pattern** into optimizable (NODE variables) and non-optimizable (AMBIGUOUS variables) parts:
+   - Optimizable: `?a foaf:knows ?b . ?b foaf:knows ?c . ?c foaf:knows ?d` (first 2.5 triples)
+   - Treat `?d` specially with UNION at the end
+
+2. **Generate Cypher with partial pushdown**:
+```cypher
+// Optimize the first 3 hops as pure relationships
+MATCH (a:Resource)-[:`http://xmlns.com/foaf/0.1/knows`]->(b:Resource)
+      -[:`http://xmlns.com/foaf/0.1/knows`]->(c:Resource)
+
+// Handle ambiguous ?d with UNION for relationship vs property
+MATCH (c)-[:`http://xmlns.com/foaf/0.1/knows`]->(d:Resource)
+RETURN a.uri AS a, b.uri AS b, c.uri AS c, d.uri AS d
+UNION ALL
+MATCH (a:Resource)-[:`http://xmlns.com/foaf/0.1/knows`]->(b:Resource)
+      -[:`http://xmlns.com/foaf/0.1/knows`]->(c:Resource)
+WHERE c.`http://xmlns.com/foaf/0.1/knows` IS NOT NULL
+RETURN a.uri AS a, b.uri AS b, c.uri AS c, 
+       c.`http://xmlns.com/foaf/0.1/knows` AS d
+```
+
+3. **Benefits of partial optimization**:
+   - First two relationships use efficient graph traversal (no N+1 problem)
+   - Only the last hop with ambiguous `?d` uses UNION
+   - Much better than full fallback which would evaluate all triples separately
+   - Performance scales with graph depth: O(1) pushdown query vs O(n²) standard evaluation
+
+4. **Implementation approach**:
+```java
+// Pseudo-code for partial optimization
+if (hasAmbiguousVariables && hasNodeVariables) {
+    // Identify last ambiguous variable
+    List<Triple> nodeTriples = extractNodeTriples(analysis);
+    List<Triple> ambiguousTriples = extractAmbiguousTriples(analysis);
+    
+    // Generate pushdown Cypher for node triples
+    String nodeCypher = generateNodePathCypher(nodeTriples);
+    
+    // Generate UNION for last ambiguous variable
+    String unionCypher = generateUnionForAmbiguous(ambiguousTriples);
+    
+    // Combine: nodeCypher + unionCypher
+    return combinePartialOptimization(nodeCypher, unionCypher);
+}
+```
+
+5. **When to apply partial optimization**:
+   - Pattern has both NODE and AMBIGUOUS variables
+   - AMBIGUOUS variables appear at the "end" of the traversal path
+   - No FILTER expressions that span NODE and AMBIGUOUS variables
+   - Expected to provide 2-10x performance improvement over full fallback
+
+**Future Enhancement:** The `translateWithAmbiguousVariables` method can be enhanced to implement this partial optimization strategy, providing significant performance benefits while maintaining correctness.
+
 ### Implementation Architecture
 
 **1. VariableAnalyzer Class**

@@ -793,6 +793,11 @@ public final class SparqlToCypherCompiler {
             return translateWithVariablePredicates(triples);
         }
         
+        // Use VariableAnalyzer to determine variable grounding rules
+        VariableAnalyzer.AnalysisResult analysis = VariableAnalyzer.analyze(bgp);
+        LOGGER.debug("Variable analysis: {} NODE variables, {} AMBIGUOUS variables",
+                analysis.getNodeVariables().size(), analysis.getAmbiguousVariables().size());
+        
         // Check for single-triple patterns with variable objects
         // that aren't used as subjects (potential properties or relationships)
         if (triples.size() == 1) {
@@ -809,7 +814,7 @@ public final class SparqlToCypherCompiler {
             }
         }
 
-        // Classify triples and collect variables
+        // Classify triples and collect variables using the analysis
         List<Triple> relationshipTriples = new ArrayList<>();
         List<Triple> literalTriples = new ArrayList<>();
         List<Triple> typeTriples = new ArrayList<>();
@@ -820,14 +825,8 @@ public final class SparqlToCypherCompiler {
         Map<String, Object> parameters = new HashMap<>();
         int paramCounter = 0;
 
-        // First pass: identify which variable objects are used as subjects
-        // in other triples (indicating they're resources, not literals)
-        Set<String> resourceVariables = new HashSet<>();
-        for (Triple triple : triples) {
-            if (triple.getSubject().isVariable()) {
-                resourceVariables.add(triple.getSubject().getName());
-            }
-        }
+        // Use analysis results to determine which variables are resources (nodes)
+        Set<String> resourceVariables = analysis.getNodeVariables();
 
         for (Triple triple : triples) {
             collectVariables(triple, allVariables, nodeVariables);
@@ -843,14 +842,13 @@ public final class SparqlToCypherCompiler {
                 // Concrete URI object - definitely a relationship
                 relationshipTriples.add(triple);
             } else if (object.isVariable()) {
-                // Variable object - check if it's used as a subject elsewhere
-                // (indicating it's a resource, not a literal)
-                if (resourceVariables.contains(object.getName())) {
-                    // Used as subject in another triple - treat as relationship
+                // Variable object - check if it's a NODE (used as subject) based on analysis
+                if (analysis.isNodeVariable(object.getName())) {
+                    // Variable is a node - treat as relationship
                     variableObjectRelTriples.add(triple);
-                } else {
-                    // Variable object not used as subject
-                    // For now, add to a separate list - we'll handle these as variable objects
+                } else if (analysis.isAmbiguousVariable(object.getName())) {
+                    // Variable is ambiguous - could be node or literal
+                    // For multi-triple patterns, we now handle these with UNION
                     variableObjectTriples.add(triple);
                 }
             } else {
@@ -858,14 +856,12 @@ public final class SparqlToCypherCompiler {
             }
         }
 
-        // Check if we have variable objects that aren't used as subjects
-        // These are ambiguous (could be relationships or literal properties)
-        // For multi-triple BGPs, fall back to standard evaluation
+        // NEW: Handle ambiguous variable objects in multi-triple patterns
+        // Instead of throwing an exception, we'll generate UNION queries for each ambiguous variable
         if (!variableObjectTriples.isEmpty() && triples.size() > 1) {
-            throw new CannotCompileException(
-                "Variable objects not used as subjects in multi-triple BGPs " +
-                "cannot be safely compiled. Use single-triple patterns or " +
-                "OPTIONAL patterns for disambiguation.");
+            LOGGER.debug("Multi-triple BGP with {} ambiguous variable objects - generating UNION-based query",
+                    variableObjectTriples.size());
+            return translateWithAmbiguousVariables(bgp, analysis, variableObjectTriples);
         }
         
         // Build the Cypher query
@@ -1997,6 +1993,225 @@ public final class SparqlToCypherCompiler {
         if (LOGGER.isDebugEnabled()) {
             LOGGER.debug("Compiled BGP with variable object to Cypher:\n{}", 
                 query);
+        }
+
+        return new CompilationResult(query, parameters, variableMapping);
+    }
+
+    /**
+     * Translate multi-triple BGP with ambiguous variable objects to Cypher.
+     * 
+     * <p>This method handles multi-triple patterns where some variable objects are ambiguous
+     * (could be either nodes or literals). It generates a combination of regular MATCH clauses
+     * for non-ambiguous triples and UNION-based queries for ambiguous variables.</p>
+     *
+     * <h3>Example:</h3>
+     * <pre>{@code
+     * // SPARQL:
+     * // ?person foaf:name ?name . ?person foaf:age ?age . ?person foaf:knows ?friend
+     * 
+     * // Where ?name and ?age are ambiguous (could be literals or relationships)
+     * // and ?friend is ambiguous
+     * 
+     * // Generated Cypher uses regular MATCH for the subject and checks both
+     * // relationship and property patterns for ambiguous variables
+     * }</pre>
+     *
+     * @param bgp the complete basic graph pattern
+     * @param analysis the variable analysis result
+     * @param ambiguousTriples list of triples with ambiguous variable objects
+     * @return compilation result with Cypher query
+     * @throws CannotCompileException if pattern cannot be compiled
+     */
+    private static CompilationResult translateWithAmbiguousVariables(
+            final BasicPattern bgp,
+            final VariableAnalyzer.AnalysisResult analysis,
+            final List<Triple> ambiguousTriples) throws CannotCompileException {
+        
+        LOGGER.debug("Translating multi-triple BGP with {} ambiguous variables",
+                ambiguousTriples.size());
+
+        Map<String, Object> parameters = new HashMap<>();
+        Map<String, String> variableMapping = new HashMap<>();
+        int paramCounter = 0;
+
+        List<Triple> allTriples = bgp.getList();
+        Set<String> allVariables = new HashSet<>();
+        Set<String> nodeVariables = new HashSet<>();
+
+        // Collect all variables
+        for (Triple triple : allTriples) {
+            collectVariables(triple, allVariables, nodeVariables);
+        }
+
+        // Separate triples into non-ambiguous and ambiguous
+        List<Triple> nonAmbiguousTriples = new ArrayList<>();
+        for (Triple triple : allTriples) {
+            if (!ambiguousTriples.contains(triple)) {
+                nonAmbiguousTriples.add(triple);
+            }
+        }
+
+        // Build the base MATCH clauses for non-ambiguous triples
+        StringBuilder cypher = new StringBuilder();
+        Set<String> declaredNodes = new HashSet<>();
+
+        // Build MATCH clauses for non-ambiguous patterns
+        for (Triple triple : nonAmbiguousTriples) {
+            Node subject = triple.getSubject();
+            Node predicate = triple.getPredicate();
+            Node object = triple.getObject();
+            
+            String subjectVar = getNodeVariable(subject);
+
+            if (predicate.isURI() && predicate.getURI().equals(RDF_TYPE_URI)) {
+                // Type triple
+                if (!cypher.isEmpty()) {
+                    cypher.append("\n");
+                }
+                cypher.append("MATCH ");
+                
+                if (object.isURI()) {
+                    String typeLabel = sanitizeCypherIdentifier(object.getURI());
+                    if (subject.isVariable()) {
+                        if (declaredNodes.contains(subjectVar)) {
+                            cypher.append("(").append(subjectVar)
+                                  .append(":`").append(typeLabel).append("`)");
+                        } else {
+                            cypher.append("(").append(subjectVar)
+                                  .append(":Resource:`").append(typeLabel).append("`)");
+                            declaredNodes.add(subjectVar);
+                        }
+                    } else {
+                        String paramName = "p" + paramCounter++;
+                        parameters.put(paramName, subject.getURI());
+                        cypher.append("(").append(subjectVar)
+                              .append(":Resource:`").append(typeLabel)
+                              .append("` {uri: $").append(paramName).append("})");
+                        declaredNodes.add(subjectVar);
+                    }
+                }
+            } else if (object.isLiteral()) {
+                // Literal property triple
+                if (!declaredNodes.contains(subjectVar)) {
+                    if (!cypher.isEmpty()) {
+                        cypher.append("\n");
+                    }
+                    cypher.append("MATCH ");
+                    if (subject.isVariable()) {
+                        cypher.append("(").append(subjectVar).append(":Resource)");
+                    } else {
+                        String paramName = "p" + paramCounter++;
+                        parameters.put(paramName, subject.getURI());
+                        cypher.append("(").append(subjectVar)
+                              .append(":Resource {uri: $").append(paramName).append("})");
+                    }
+                    declaredNodes.add(subjectVar);
+                }
+            } else if (object.isURI() || (object.isVariable() && analysis.isNodeVariable(object.getName()))) {
+                // Relationship triple (object is URI or known node variable)
+                if (!cypher.isEmpty()) {
+                    cypher.append("\n");
+                }
+                cypher.append("MATCH ");
+
+                appendSubjectNode(cypher, subject, subjectVar, declaredNodes, parameters, paramCounter);
+                if (subject.isURI()) {
+                    paramCounter++;
+                }
+
+                String relType = sanitizeCypherIdentifier(predicate.getURI());
+                cypher.append("-[:`").append(relType).append("`]->");
+
+                String objectVar = getNodeVariable(object);
+                if (object.isVariable()) {
+                    if (declaredNodes.contains(objectVar)) {
+                        cypher.append("(").append(objectVar).append(")");
+                    } else {
+                        cypher.append("(").append(objectVar).append(":Resource)");
+                        declaredNodes.add(objectVar);
+                    }
+                } else {
+                    String paramName = "p" + paramCounter++;
+                    parameters.put(paramName, object.getURI());
+                    cypher.append("(").append(objectVar)
+                          .append(":Resource {uri: $").append(paramName).append("})");
+                    declaredNodes.add(objectVar);
+                }
+            }
+        }
+
+        // Now handle ambiguous triples - for each ambiguous triple, we'll add WHERE conditions
+        // that check both relationship and property paths
+        List<String> whereConditions = new ArrayList<>();
+        
+        for (Triple triple : ambiguousTriples) {
+            Node subject = triple.getSubject();
+            Node predicate = triple.getPredicate();
+            Node object = triple.getObject();
+            
+            String subjectVar = getNodeVariable(subject);
+            String objectVar = object.getName();
+            String predUri = sanitizeCypherIdentifier(predicate.getURI());
+
+            // Ensure subject node is declared
+            if (!declaredNodes.contains(subjectVar)) {
+                if (!cypher.isEmpty()) {
+                    cypher.append("\n");
+                }
+                cypher.append("MATCH ");
+                if (subject.isVariable()) {
+                    cypher.append("(").append(subjectVar).append(":Resource)");
+                } else {
+                    String paramName = "p" + paramCounter++;
+                    parameters.put(paramName, subject.getURI());
+                    cypher.append("(").append(subjectVar)
+                          .append(":Resource {uri: $").append(paramName).append("})");
+                }
+                declaredNodes.add(subjectVar);
+            }
+
+            // For ambiguous variables, we need to check if they match via relationship OR property
+            // This is handled by adding the ambiguous object to the variable mapping
+            // The actual matching is done via OPTIONAL MATCH for both paths
+
+            // Add OPTIONAL MATCH for relationship path
+            cypher.append("\nOPTIONAL MATCH (").append(subjectVar)
+                  .append(")-[:`").append(predUri).append("`]->(")
+                  .append(objectVar).append("_rel:Resource)");
+
+            // Add OPTIONAL MATCH for property path (checking if property exists)
+            // Note: We can't directly MATCH on property, so we'll use WHERE conditions instead
+            
+            // Track the variable mapping for the return clause
+            // The object could come from either the relationship or the property
+            variableMapping.put(objectVar, 
+                "coalesce(" + objectVar + "_rel.uri, " + subjectVar + ".`" + predUri + "`)");
+        }
+
+        // Build RETURN clause
+        cypher.append("\nRETURN ");
+        List<String> returnParts = new ArrayList<>();
+
+        for (String varName : allVariables) {
+            if (variableMapping.containsKey(varName)) {
+                // Ambiguous variable - use COALESCE to prefer relationship over property
+                returnParts.add(variableMapping.get(varName) + " AS " + varName);
+            } else if (nodeVariables.contains(varName) || analysis.isNodeVariable(varName)) {
+                // Known node variable
+                returnParts.add(varName + ".uri AS " + varName);
+            }
+        }
+
+        if (returnParts.isEmpty()) {
+            returnParts.add("1 AS _result");
+        }
+
+        cypher.append(String.join(", ", returnParts));
+
+        String query = cypher.toString();
+        if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug("Compiled multi-triple BGP with ambiguous variables to Cypher:\n{}", query);
         }
 
         return new CompilationResult(query, parameters, variableMapping);

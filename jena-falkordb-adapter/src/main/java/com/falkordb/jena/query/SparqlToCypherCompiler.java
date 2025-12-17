@@ -2239,7 +2239,7 @@ public final class SparqlToCypherCompiler {
      * 
      * <p>Partial optimization is safe when:</p>
      * <ul>
-     *   <li>The pattern has at least some definite structure (NODE variables or relationships)</li>
+     *   <li>The pattern has at least some definite structure OR some NODE variables</li>
      *   <li>Ambiguous variables can be handled independently via UNION</li>
      * </ul>
      *
@@ -2255,21 +2255,17 @@ public final class SparqlToCypherCompiler {
             final List<Triple> relationshipTriples,
             final List<Triple> literalTriples) {
         
-        // Partial optimization works when we have SOME non-ambiguous structure
-        // to anchor the pattern, regardless of where ambiguous variables appear
+        // Partial optimization works when we can generate meaningful Cypher
+        // Even if all objects are ambiguous, we can optimize if we have:
+        // - Some node relationships (object variables used as subjects)
+        // - Some concrete relationships or literals
+        // - Or just multiple ambiguous variables (all combinations via UNION)
         
-        // Must have at least some definite structure (nodes, relationships, or literals)
         boolean hasDefiniteStructure = !relationshipTriples.isEmpty() || 
                                        !nodeRelTriples.isEmpty() || 
                                        !literalTriples.isEmpty();
         
-        if (!hasDefiniteStructure) {
-            // If everything is ambiguous, we can't optimize at all
-            return false;
-        }
-        
-        // Check that we don't have too many ambiguous variables
-        // (to avoid generating extremely large UNION queries)
+        // Get unique ambiguous variables
         Set<String> ambiguousObjects = new HashSet<>();
         for (Triple triple : ambiguousTriples) {
             if (triple.getObject().isVariable()) {
@@ -2277,10 +2273,18 @@ public final class SparqlToCypherCompiler {
             }
         }
         
-        // Limit to reasonable number of ambiguous variables to avoid query explosion
-        // Each ambiguous variable doubles the number of queries in the UNION
-        // So with 3 ambiguous vars, we'd have 2^3 = 8 queries
-        return ambiguousObjects.size() <= 4; // Max 16 queries in UNION
+        // If we have definite structure, we can always optimize
+        if (hasDefiniteStructure) {
+            // Limit to reasonable number of ambiguous variables to avoid query explosion
+            // Each ambiguous variable doubles the number of queries in the UNION
+            return ambiguousObjects.size() <= 4; // Max 16 queries in UNION
+        }
+        
+        // Even without definite structure, we can optimize if:
+        // - We have at least one ambiguous variable (generates 2 queries in UNION)
+        // - And not too many (to avoid explosion)
+        // This handles patterns like: ?s ?p ?o1 . ?s ?p2 ?o2 where all objects are ambiguous
+        return !ambiguousObjects.isEmpty() && ambiguousObjects.size() <= 4;
     }
 
     /**

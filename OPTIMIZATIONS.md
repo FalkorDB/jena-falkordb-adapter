@@ -2402,11 +2402,11 @@ if (hasAmbiguousVariables && hasNodeVariables) {
 
 5. **When to apply partial optimization**:
    - Pattern has both NODE and AMBIGUOUS variables
-   - AMBIGUOUS variables appear at the "end" of the traversal path
-   - No FILTER expressions that span NODE and AMBIGUOUS variables
+   - AMBIGUOUS variables can appear anywhere in the pattern (not restricted to end)
+   - No more than 4 AMBIGUOUS variables (to avoid query explosion with 2^N combinations)
    - Expected to provide 2-10x performance improvement over full fallback
 
-**Future Enhancement:** The `translateWithAmbiguousVariables` method can be enhanced to implement this partial optimization strategy, providing significant performance benefits while maintaining correctness.
+**Status:** ✅ **IMPLEMENTED** in `translateWithPartialOptimization` method. The partial optimization strategy is now active for patterns with graph structure.
 
 ### Implementation Architecture
 
@@ -2448,11 +2448,17 @@ for (Triple triple : triples) {
 - Single-triple patterns with ambiguous variables (uses UNION)
 - Multi-triple patterns where all variables are nodes
 - Closed-chain patterns (mutual references)
+- **Multi-triple patterns with ambiguous variables + graph structure** → Partial optimization with UNION queries
 
-⚠️ **Partial / Conservative:**
-- Multi-triple patterns with ambiguous variables → Falls back to standard evaluation
-- Foundation for full optimization is in place (`translateWithAmbiguousVariables` method)
-- Needs refinement to handle FILTER expressions correctly
+⚠️ **Conservative Fallback (Intentional):**
+- Multi-triple patterns with ONLY ambiguous variables (no graph structure) → Falls back to standard evaluation
+- Pure property patterns without NODE relationships → Falls back to avoid FILTER expression issues
+- Patterns with more than 4 ambiguous variables → Falls back to avoid query explosion
+
+**Implementation Details:**
+- `translateWithPartialOptimization` method generates 2^N UNION queries for N ambiguous variables
+- `canApplyPartialOptimization` checks for graph structure (NODE relationships) before applying optimization
+- Conservative approach ensures correctness with FILTER expressions that constrain ambiguous variables
 
 ### Java Usage Example
 
@@ -2555,21 +2561,27 @@ Variable analysis is logged via the compiler's trace spans:
 
 ### Future Enhancements
 
-The foundation is complete. Future work includes:
+The partial optimization is implemented and working. Future enhancements could include:
 
-1. **Complete `translateWithAmbiguousVariables` Method**
-   - Handle FILTER expressions without creating duplicate rows
-   - Generate precise Cypher for mixed literal/relationship patterns
-   - Support OPTIONAL clauses with ambiguous variables
+1. **Optimize Pure Property Patterns**
+   - Currently falls back for patterns with no graph structure
+   - Could implement FILTER-aware optimization to handle these cases
+   - Would need to analyze FILTER expressions at compile time
 
 2. **Runtime Type Hints**
    - Use query statistics to predict if ambiguous variables are likely literals
    - Generate optimized Cypher based on data distribution
+   - Could reduce UNION queries when one path is much more common
 
 3. **Extended Analysis**
    - Analyze across multiple BGPs in complex queries
    - Cross-BGP variable dependency tracking
    - Support for more SPARQL algebra operations (BIND, VALUES, etc.)
+
+4. **Increase Ambiguous Variable Limit**
+   - Currently limited to 4 ambiguous variables (max 16 UNION queries)
+   - Could use heuristics or sampling to handle more variables
+   - Trade-off between query complexity and optimization benefit
 
 ### Comparison: Before vs After
 
@@ -2580,15 +2592,20 @@ The foundation is complete. Future work includes:
 throw new CannotCompileException("Variable objects not supported");
 ```
 
-**After Variable Analysis:**
+**After Variable Analysis + Partial Optimization:**
 ```java
-// ?friend not used as subject → Correctly classified as AMBIGUOUS
-// Falls back to standard evaluation for correctness
-// Foundation in place for future full optimization
+// ?friend used as subject → Classified as NODE
+// ?age not used as subject → Classified as AMBIGUOUS
+// Pattern: ?person foaf:knows ?friend . ?friend foaf:age ?age .
 VariableAnalyzer.AnalysisResult analysis = VariableAnalyzer.analyze(bgp);
-if (analysis.isAmbiguousVariable("friend")) {
-    // Log decision and use fallback
-    LOGGER.debug("Ambiguous variable detected, using fallback");
+
+// ?friend is NODE, ?age is AMBIGUOUS
+// Partial optimization applies: optimizes ?friend, generates UNION for ?age
+if (canApplyPartialOptimization(...)) {
+    return translateWithPartialOptimization(...);
+    // Generates 2 UNION queries:
+    // 1. ?age as relationship: (friend)-[:age]->(age:Resource)
+    // 2. ?age as property: friend.age
 }
 ```
 
@@ -2604,17 +2621,28 @@ if (analysis.isAmbiguousVariable("friend")) {
 
 **Issue**: Query with multi-triple pattern falls back to standard evaluation
 
-**Solution**: This is expected behavior. The VariableAnalyzer correctly identifies ambiguous variables, but the full optimization is not yet active. The fallback ensures correct results. Check DEBUG logs:
+**Solution**: Check if your pattern meets the criteria for partial optimization:
+
+1. **Has graph structure?** Pattern needs NODE relationships (object variables used as subjects) OR concrete URI relationships
+2. **Too many ambiguous variables?** Limited to 4 ambiguous variables (more causes fallback)
+3. **Pure property pattern?** Patterns with ONLY ambiguous objects (no graph structure) fall back to avoid FILTER issues
+
+Check DEBUG logs to see why:
 
 ```
 DEBUG SparqlToCypherCompiler - Variable analysis: 2 NODE variables, 1 AMBIGUOUS variables
-DEBUG SparqlToCypherCompiler - Multi-triple BGP with 1 ambiguous variable objects - falling back
+DEBUG SparqlToCypherCompiler - Applying partial optimization for multi-triple pattern
+```
+
+Or if falling back:
+```
+DEBUG SparqlToCypherCompiler - Cannot apply partial optimization, falling back to standard evaluation
 ```
 
 **Issue**: Want to force pushdown for performance
 
-**Solution**: Restructure query to eliminate ambiguous variables:
-- Ensure all object variables are used as subjects elsewhere
-- Use concrete values where possible
-- Break complex queries into simpler sub-queries
+**Solution**: Restructure query to add graph structure:
+- Ensure some object variables are used as subjects elsewhere (makes them NODE variables)
+- Use concrete URI relationships where possible
+- For pure property queries, accept the conservative fallback (ensures correctness with FILTERs)
 

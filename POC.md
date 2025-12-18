@@ -49,6 +49,7 @@ You can configure Fuseki to automatically load data files when the server starts
 :dataset_rdf rdf:type ja:RDFDataset ;
     ja:defaultGraph :inf_model ;
     # Load data files on startup (can specify multiple files)
+    # Both files are used in the examples below (see sections 1 and 3)
     ja:data <file:data/fathers_father_sample.ttl> ;
     ja:data <file:data/social_network.ttl> .
 ```
@@ -68,7 +69,7 @@ The data files will be automatically loaded into the database when the server st
 - **Multiple files**: You can specify multiple `ja:data` properties to load multiple files.
 - **File formats**: Supported formats include Turtle (`.ttl`), RDF/XML (`.rdf`), N-Triples (`.nt`), and others. The format is auto-detected from the file extension.
 - **Inference rules**: If you have inference rules enabled (like in the default config), inferred triples will be materialized automatically as the data is loaded.
-- **One-time loading**: Data is loaded only once at startup. If the database already contains the data from a previous run, it will be loaded again (creating duplicates). For persistent data, consider loading data manually via the REST API after the first startup.
+- **Restart behavior**: Data is loaded fresh on every server startup. If the database already contains the data from a previous run (FalkorDB is persistent), the same data will be loaded again, creating duplicates. To avoid this, either clear the database between restarts or load data manually via the REST API after the initial startup only.
 
 ### Example: Loading Sample Data
 

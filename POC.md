@@ -35,6 +35,69 @@ This document demonstrates key features of the Jena-FalkorDB adapter with practi
 
 ---
 
+## Loading Data on Startup
+
+You can configure Fuseki to automatically load data files when the server starts by adding a `ja:data` property to your dataset configuration. This is useful for initializing your database with seed data or test data.
+
+### How to Load Data on Startup
+
+1. **Edit the configuration file** (`config-falkordb.ttl`) and add the `ja:data` property to the RDF dataset definition:
+
+```turtle
+# RDF Dataset wrapping the inference model
+# This is needed because GeoSPARQL expects a Dataset, not a Model
+:dataset_rdf rdf:type ja:RDFDataset ;
+    ja:defaultGraph :inf_model ;
+    # Load data files on startup (can specify multiple files)
+    ja:data <file:data/fathers_father_sample.ttl> ;
+    ja:data <file:data/social_network.ttl> .
+```
+
+2. **Start Fuseki with the modified config file**:
+
+```bash
+java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
+     --config jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl
+```
+
+The data files will be automatically loaded into the database when the server starts.
+
+### Important Notes
+
+- **File paths**: Use `file:` prefix for local files. Paths can be absolute or relative to the working directory where you start Fuseki.
+- **Multiple files**: You can specify multiple `ja:data` properties to load multiple files.
+- **File formats**: Supported formats include Turtle (`.ttl`), RDF/XML (`.rdf`), N-Triples (`.nt`), and others. The format is auto-detected from the file extension.
+- **Inference rules**: If you have inference rules enabled (like in the default config), inferred triples will be materialized automatically as the data is loaded.
+- **One-time loading**: Data is loaded only once at startup. If the database already contains the data from a previous run, it will be loaded again (creating duplicates). For persistent data, consider loading data manually via the REST API after the first startup.
+
+### Example: Loading Sample Data
+
+To load the fathers_father_sample.ttl file on startup, modify the `:dataset_rdf` section in your config file:
+
+```turtle
+:dataset_rdf rdf:type ja:RDFDataset ;
+    ja:defaultGraph :inf_model ;
+    ja:data <file:data/fathers_father_sample.ttl> .
+```
+
+Then start the server normally:
+
+```bash
+mvn clean install
+java -jar jena-fuseki-falkordb/target/jena-fuseki-falkordb-0.2.0-SNAPSHOT.jar \
+     --config jena-fuseki-falkordb/src/main/resources/config-falkordb.ttl
+```
+
+The data will be loaded automatically, and inference rules will be applied immediately (forward chaining). You can verify the data is loaded by querying:
+
+```bash
+curl -G http://localhost:3330/falkor/query \
+  -H "Accept: application/sparql-results+json" \
+  --data-urlencode 'query=SELECT (COUNT(*) as ?count) WHERE { ?s ?p ?o }'
+```
+
+---
+
 ## Accessing Fuseki
 
 ### Fuseki Web UI

@@ -4,7 +4,7 @@
 [![Release](https://img.shields.io/github/release/FalkorDB/jena-falkordb-adapter.svg)](https://github.com/FalkorDB/jena-falkordb-adapter/releases/latest)
 [![Javadocs](https://www.javadoc.io/badge/com.falkordb/jena-falkordb-adapter.svg)](https://www.javadoc.io/doc/com.falkordb/jena-falkordb-adapter)
 
-[![Discord](https://img.shields.io/discord/1146782921294884966?style=flat-square)](https://discord.gg/ErBEqN9E)
+[![Discord](https://img.shields.io/discord/1146782921294884966?style=flat-square)](https://discord.gg/6M4QwDXn2w)
 [![Discuss the project](https://img.shields.io/badge/discussions-FalkorDB-brightgreen.svg)](https://github.com/FalkorDB/FalkorDB/discussions)
 [![codecov](https://codecov.io/gh/FalkorDB/jena-falkordb-adapter/graph/badge.svg?token=kQg1yvyp0u)](https://codecov.io/gh/FalkorDB/jena-falkordb-adapter)
 

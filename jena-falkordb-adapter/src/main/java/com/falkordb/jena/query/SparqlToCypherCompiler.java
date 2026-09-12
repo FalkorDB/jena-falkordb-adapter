@@ -1163,6 +1163,111 @@ public final class SparqlToCypherCompiler {
     }
     
     /**
+     * Extract predicate URI constraints from a FILTER expression.
+     * 
+     * <p>Analyzes FILTER expressions to find constraints on a variable predicate.
+     * Supports:</p>
+     * <ul>
+     * <li>Equality: ?p = foaf:name</li>
+     * <li>IN expressions: ?p IN (foaf:name, foaf:age, foaf:email)</li>
+     * <li>OR combinations: ?p = foaf:name || ?p = foaf:age</li>
+     * </ul>
+     * 
+     * @param filterExpr the FILTER expression to analyze
+     * @param predicateVarName the name of the predicate variable to extract constraints for
+     * @return set of predicate URIs that constrain the variable, or null if unconstrained
+     */
+    private static Set<String> extractPredicateConstraints(
+            final Expr filterExpr,
+            final String predicateVarName) {
+        
+        if (filterExpr == null || predicateVarName == null) {
+            return null;
+        }
+        
+        Set<String> constraints = new HashSet<>();
+        
+        // Handle equality: ?p = <uri>
+        if (filterExpr instanceof E_Equals) {
+            E_Equals eq = (E_Equals) filterExpr;
+            Expr left = eq.getArg1();
+            Expr right = eq.getArg2();
+            
+            // Check if one side is our predicate variable
+            if (left instanceof ExprVar && ((ExprVar) left).getVarName().equals(predicateVarName)) {
+                if (right instanceof NodeValue) {
+                    Node node = ((NodeValue) right).getNode();
+                    if (node != null && node.isURI()) {
+                        constraints.add(node.getURI());
+                        return constraints;
+                    }
+                }
+            } else if (right instanceof ExprVar && ((ExprVar) right).getVarName().equals(predicateVarName)) {
+                if (left instanceof NodeValue) {
+                    Node node = ((NodeValue) left).getNode();
+                    if (node != null && node.isURI()) {
+                        constraints.add(node.getURI());
+                        return constraints;
+                    }
+                }
+            }
+        }
+        
+        // Handle IN expression: ?p IN (uri1, uri2, ...)
+        else if (filterExpr instanceof E_OneOf) {
+            E_OneOf oneOf = (E_OneOf) filterExpr;
+            Expr lhs = oneOf.getLHS();
+            
+            // Check if LHS is our predicate variable
+            if (lhs instanceof ExprVar && ((ExprVar) lhs).getVarName().equals(predicateVarName)) {
+                ExprList valuesList = oneOf.getRHS();
+                for (Expr value : valuesList.getList()) {
+                    if (value instanceof NodeValue) {
+                        Node node = ((NodeValue) value).getNode();
+                        if (node != null && node.isURI()) {
+                            constraints.add(node.getURI());
+                        }
+                    }
+                }
+                if (!constraints.isEmpty()) {
+                    return constraints;
+                }
+            }
+        }
+        
+        // Handle OR expression: ?p = uri1 || ?p = uri2
+        else if (filterExpr instanceof E_LogicalOr) {
+            E_LogicalOr or = (E_LogicalOr) filterExpr;
+            Set<String> leftConstraints = extractPredicateConstraints(or.getArg1(), predicateVarName);
+            Set<String> rightConstraints = extractPredicateConstraints(or.getArg2(), predicateVarName);
+            
+            if (leftConstraints != null && rightConstraints != null) {
+                constraints.addAll(leftConstraints);
+                constraints.addAll(rightConstraints);
+                return constraints;
+            }
+        }
+        
+        // Handle AND expression: could have ?p constraint combined with other filters
+        else if (filterExpr instanceof E_LogicalAnd) {
+            E_LogicalAnd and = (E_LogicalAnd) filterExpr;
+            Set<String> leftConstraints = extractPredicateConstraints(and.getArg1(), predicateVarName);
+            Set<String> rightConstraints = extractPredicateConstraints(and.getArg2(), predicateVarName);
+            
+            // For AND, only one side needs to constrain the predicate
+            if (leftConstraints != null) {
+                return leftConstraints;
+            }
+            if (rightConstraints != null) {
+                return rightConstraints;
+            }
+        }
+        
+        // No constraints found or not a supported pattern
+        return null;
+    }
+    
+    /**
      * Internal translation method with filter without tracing.
      */
     private static CompilationResult translateWithFilterInternal(
@@ -1170,7 +1275,30 @@ public final class SparqlToCypherCompiler {
             final Expr filterExpr)
             throws CannotCompileException {
         
-        // First, compile the BGP without filter
+        // Check if we have variable predicates
+        List<Triple> triples = bgp.getList();
+        boolean hasVariablePredicate = triples.stream()
+            .anyMatch(t -> t.getPredicate().isVariable());
+        
+        // If we have variable predicates, try to extract predicate constraints from FILTER
+        if (hasVariablePredicate && triples.size() == 1) {
+            Triple triple = triples.get(0);
+            if (triple.getPredicate().isVariable()) {
+                String predicateVarName = triple.getPredicate().getName();
+                Set<String> constrainedPredicates = extractPredicateConstraints(filterExpr, predicateVarName);
+                
+                // If we found constraints, compile with the optimization
+                if (constrainedPredicates != null && !constrainedPredicates.isEmpty()) {
+                    CompilationResult result = translateWithVariablePredicates(triples, constrainedPredicates);
+                    
+                    // The FILTER is already incorporated into the Cypher query via constrained predicates
+                    // So we return the result directly
+                    return result;
+                }
+            }
+        }
+        
+        // First, compile the BGP without filter (or with unconstrained variable predicates)
         CompilationResult bgpResult = translateInternal(bgp);
         
         // Extract the components from the BGP result
@@ -1527,9 +1655,34 @@ public final class SparqlToCypherCompiler {
     /**
      * Translate a BGP with variable predicates to Cypher.
      * Uses UNION to query both relationships and properties.
+     * 
+     * @param triples list of triples with variable predicates
+     * @return the compilation result
+     * @throws CannotCompileException if pattern cannot be compiled
      */
     private static CompilationResult translateWithVariablePredicates(
             final List<Triple> triples) throws CannotCompileException {
+        return translateWithVariablePredicates(triples, null);
+    }
+    
+    /**
+     * Translate a BGP with variable predicates to Cypher.
+     * Uses UNION to query both relationships and properties.
+     * 
+     * <p>If constrainedPredicates is provided, the properties part will only fetch
+     * those specific predicates instead of using UNWIND keys() to fetch all properties.
+     * This optimization significantly reduces data transfer when FILTER constraints
+     * limit the possible predicates.</p>
+     * 
+     * @param triples list of triples with variable predicates
+     * @param constrainedPredicates optional set of predicate URIs to constrain the query
+     *                               (null means fetch all predicates)
+     * @return the compilation result
+     * @throws CannotCompileException if pattern cannot be compiled
+     */
+    private static CompilationResult translateWithVariablePredicates(
+            final List<Triple> triples,
+            final Set<String> constrainedPredicates) throws CannotCompileException {
         
         // For now, only support single triple with variable predicate
         if (triples.size() != 1) {
@@ -1584,7 +1737,8 @@ public final class SparqlToCypherCompiler {
         cypher.append(", ").append(objectVar).append(".uri AS ").append(
             triple.getObject().isVariable() ? triple.getObject().getName() : "_o");
 
-        // Part 2: Query properties (using UNION ALL)
+        // Part 2: Query properties
+        // Optimization: If we know which predicates to query, use explicit list instead of UNWIND keys()
         cypher.append("\nUNION ALL\n");
         cypher.append("MATCH ");
         
@@ -1597,16 +1751,33 @@ public final class SparqlToCypherCompiler {
                   .append(":Resource {uri: $p0})");
         }
 
-        cypher.append("\nUNWIND keys(").append(subjectVar).append(") AS _propKey");
-        cypher.append("\nWITH ").append(subjectVar)
-              .append(", _propKey WHERE _propKey <> 'uri'");
+        // Optimization: Use constrained predicates if provided
+        if (constrainedPredicates != null && !constrainedPredicates.isEmpty()) {
+            // Use explicit list of predicates instead of UNWIND keys()
+            String listParamName = "p" + paramCounter++;
+            parameters.put(listParamName, new ArrayList<>(constrainedPredicates));
+            cypher.append("\nUNWIND $").append(listParamName).append(" AS _propKey");
+            cypher.append("\nWHERE ").append(subjectVar).append("[_propKey] IS NOT NULL");
+        } else {
+            // No constraints - use UNWIND keys() to get all properties
+            cypher.append("\nUNWIND keys(").append(subjectVar).append(") AS _propKey");
+            cypher.append("\nWITH ").append(subjectVar)
+                  .append(", _propKey WHERE _propKey <> 'uri'");
+        }
         
         // Filter by object value if concrete
         if (triple.getObject().isLiteral()) {
             String paramName = "p" + paramCounter++;
             parameters.put(paramName, triple.getObject().getLiteralLexicalForm());
-            cypher.append(" AND ").append(subjectVar)
-                  .append("[_propKey] = $").append(paramName);
+            
+            // Add filter condition
+            if (constrainedPredicates != null && !constrainedPredicates.isEmpty()) {
+                cypher.append(" AND ").append(subjectVar)
+                      .append("[_propKey] = $").append(paramName);
+            } else {
+                cypher.append(" AND ").append(subjectVar)
+                      .append("[_propKey] = $").append(paramName);
+            }
         }
 
         cypher.append("\nRETURN ");

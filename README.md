@@ -168,7 +168,7 @@ published artifact, see the "Using from Maven" section below.
 
 ## Using from Maven
 
-If the project artifacts are published to Maven Central or OSSRH snapshots, you can add
+If the project artifacts are published to Maven Central or Central Portal snapshots, you can add
 the adapter as a dependency in your own project's `pom.xml`.
 
 ### Adapter Library
@@ -246,7 +246,7 @@ dependencies {
 }
 ```
 
-Note: snapshots live in the OSSRH snapshots repository; once a release is published to Maven Central you can rely on `mavenCentral()` without adding extra repositories.
+Note: snapshots live in the Central Portal snapshots repository (`https://central.sonatype.com/repository/maven-snapshots/`); once a release is published to Maven Central you can rely on `mavenCentral()` without adding extra repositories.
 
 ## How to Run Locally
 
@@ -1221,7 +1221,7 @@ Developer notes:
 - The adapter code lives under `jena-falkordb-adapter/src/main/java/com/falkordb/jena/`
 - The Fuseki server code lives under `jena-fuseki-falkordb/src/main/java/com/falkordb/`
 - Tests that interact with FalkorDB assume a local FalkorDB instance; tests use `FalkorDBGraph.clear()` to keep the test graph isolated.
-- CI publishes snapshots to OSSRH; see `.github/workflows` for publishing details.
+- CI publishes snapshots to the Central Portal snapshots repository; see `.github/workflows` for publishing details.
 
 ## Contributing
 
@@ -1419,7 +1419,7 @@ Releases are automatically published to Maven Central when you create a GitHub r
 - Builds and packages the library
 - Generates source and javadoc JARs
 - Signs artifacts with GPG
-- Deploys to OSSRH/Maven Central
+- Deploys to Maven Central (via the Central Portal)
 
 See [CICD_SETUP.md](CICD_SETUP.md) for detailed setup instructions.
 

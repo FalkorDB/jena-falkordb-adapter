@@ -1,6 +1,6 @@
 [![CI](https://github.com/FalkorDB/jena-falkordb-adapter/actions/workflows/ci.yml/badge.svg)](https://github.com/FalkorDB/jena-falkordb-adapter/actions/workflows/ci.yml)
 [![Maven Central](https://img.shields.io/maven-central/v/com.falkordb/jena-falkordb-adapter.svg)](https://central.sonatype.com/artifact/com.falkordb/jena-falkordb-adapter)
-[![license](https://img.shields.io/github/license/FalkorDB/jena-falkordb-adapter.svg)](https://github.com/FalkorDB/jena-falkordb-adapter/blob/master/LICENSE)
+[![license](https://img.shields.io/github/license/FalkorDB/jena-falkordb-adapter.svg)](https://github.com/FalkorDB/jena-falkordb-adapter/blob/main/LICENSE)
 [![Release](https://img.shields.io/github/release/FalkorDB/jena-falkordb-adapter.svg)](https://github.com/FalkorDB/jena-falkordb-adapter/releases/latest)
 [![Javadocs](https://www.javadoc.io/badge/com.falkordb/jena-falkordb-adapter.svg)](https://www.javadoc.io/doc/com.falkordb/jena-falkordb-adapter)
 
@@ -168,7 +168,7 @@ published artifact, see the "Using from Maven" section below.
 
 ## Using from Maven
 
-If the project artifacts are published to Maven Central or OSSRH snapshots, you can add
+If the project artifacts are published to Maven Central or Central Portal snapshots, you can add
 the adapter as a dependency in your own project's `pom.xml`.
 
 ### Adapter Library
@@ -178,8 +178,10 @@ For the snapshot (development) version:
 ```xml
 <repositories>
     <repository>
-        <id>ossrh</id>
-        <url>https://oss.sonatype.org/content/repositories/snapshots</url>
+        <id>central-snapshots</id>
+        <url>https://central.sonatype.com/repository/maven-snapshots/</url>
+        <releases><enabled>false</enabled></releases>
+        <snapshots><enabled>true</enabled></snapshots>
     </repository>
 </repositories>
 
@@ -223,11 +225,11 @@ Gradle (Groovy) example:
 ```groovy
 repositories {
     mavenCentral()
-    maven { url 'https://oss.sonatype.org/content/repositories/snapshots' }
+    maven { url 'https://central.sonatype.com/repository/maven-snapshots/' }
 }
 
 dependencies {
-    implementation 'com.falkordb:jena-falkordb-adapter:1.0-SNAPSHOT'
+    implementation 'com.falkordb:jena-falkordb-adapter:0.2.0-SNAPSHOT'
 }
 ```
 
@@ -236,15 +238,15 @@ Gradle (Kotlin DSL) example:
 ```kotlin
 repositories {
     mavenCentral()
-    maven("https://oss.sonatype.org/content/repositories/snapshots")
+    maven("https://central.sonatype.com/repository/maven-snapshots/")
 }
 
 dependencies {
-    implementation("com.falkordb:jena-falkordb-adapter:1.0-SNAPSHOT")
+    implementation("com.falkordb:jena-falkordb-adapter:0.2.0-SNAPSHOT")
 }
 ```
 
-Note: snapshots live in the OSSRH snapshots repository; once a release is published to Maven Central you can rely on `mavenCentral()` without adding extra repositories.
+Note: snapshots live in the Central Portal snapshots repository (`https://central.sonatype.com/repository/maven-snapshots/`); once a release is published to Maven Central you can rely on `mavenCentral()` without adding extra repositories.
 
 ## How to Run Locally
 
@@ -1219,7 +1221,7 @@ Developer notes:
 - The adapter code lives under `jena-falkordb-adapter/src/main/java/com/falkordb/jena/`
 - The Fuseki server code lives under `jena-fuseki-falkordb/src/main/java/com/falkordb/`
 - Tests that interact with FalkorDB assume a local FalkorDB instance; tests use `FalkorDBGraph.clear()` to keep the test graph isolated.
-- CI publishes snapshots to OSSRH; see `.github/workflows` for publishing details.
+- CI publishes snapshots to the Central Portal snapshots repository; see `.github/workflows` for publishing details.
 
 ## Contributing
 
@@ -1417,7 +1419,7 @@ Releases are automatically published to Maven Central when you create a GitHub r
 - Builds and packages the library
 - Generates source and javadoc JARs
 - Signs artifacts with GPG
-- Deploys to OSSRH/Maven Central
+- Deploys to Maven Central (via the Central Portal)
 
 See [CICD_SETUP.md](CICD_SETUP.md) for detailed setup instructions.
 
